@@ -1,0 +1,307 @@
+{
+  "common": {
+    "confirm": "确认",
+    "cancel": "取消",
+    "submit": "提交",
+    "save": "保存",
+    "delete": "删除",
+    "edit": "编辑",
+    "view": "查看",
+    "loading": "加载中...",
+    "error": "发生错误",
+    "success": "操作成功",
+    "search": "搜索",
+    "refresh": "刷新",
+    "back": "返回",
+    "next": "下一步",
+    "previous": "上一步",
+    "close": "关闭",
+    "open": "打开"
+  },
+  "auth": {
+    "login": "登录",
+    "register": "注册",
+    "logout": "退出登录",
+    "email": "邮箱",
+    "password": "密码",
+    "confirmPassword": "确认密码",
+    "verificationCode": "验证码",
+    "sendCode": "发送验证码",
+    "loginSuccess": "登录成功",
+    "registerSuccess": "注册成功，请检查邮箱验证码",
+    "logoutSuccess": "退出登录成功",
+    "invalidCredentials": "邮箱或密码错误",
+    "emailRequired": "请输入邮箱",
+    "passwordRequired": "请输入密码",
+    "emailFormat": "请输入有效的邮箱地址",
+    "passwordLength": "密码长度至少6位",
+    "passwordsNotMatch": "两次输入的密码不一致",
+    "verificationCodeRequired": "请输入验证码",
+    "forgotPassword": "忘记密码",
+    "rememberMe": "记住我"
+  },
+  "chat": {
+    "newSession": "新建对话",
+    "sessionTitle": "对话标题",
+    "sendMessage": "发送消息",
+    "uploadFile": "上传文件",
+    "chatHistory": "聊天记录",
+    "askQuestion": "在这里输入你的问题...",
+    "aiTyping": "AI正在思考...",
+    "sessionList": "对话列表",
+    "deleteSession": "删除对话",
+    "clearHistory": "清除历史",
+    "exportHistory": "导出记录",
+    "messageType": "消息类型",
+    "attachFile": "附件",
+    "copyMessage": "复制消息",
+    "regenerateResponse": "重新生成回答"
+  },
+  "files": {
+    "uploadSuccess": "文件上传成功",
+    "uploadFailed": "文件上传失败",
+    "fileSizeLimit": "文件大小不能超过10MB",
+    "supportedFormats": "支持的文件格式：PDF, DOC, DOCX, TXT",
+    "fileList": "文件列表",
+    "fileName": "文件名",
+    "fileSize": "文件大小",
+    "uploadTime": "上传时间",
+    "fileType": "文件类型",
+    "deleteFile": "删除文件",
+    "downloadFile": "下载文件",
+    "processStatus": "处理状态",
+    "processing": "处理中",
+    "completed": "已完成",
+    "failed": "处理失败",
+    "pending": "等待处理"
+  },
+  "study": {
+    "generateQuestions": "生成练习题",
+    "createPlan": "创建学习计划",
+    "studyTools": "学习工具",
+    "questionDifficulty": "题目难度",
+    "easy": "简单",
+    "medium": "中等",
+    "hard": "困难",
+    "questionType": "题目类型",
+    "multipleChoice": "选择题",
+    "shortAnswer": "简答题",
+    "essay": "论述题",
+    "studyPlan": "学习计划",
+    "planTitle": "计划标题",
+    "deadline": "截止日期",
+    "topics": "学习主题",
+    "progress": "学习进度",
+    "completed": "已完成",
+    "inProgress": "进行中",
+    "notStarted": "未开始"
+  },
+  "admin": {
+    "title": "管理面板",
+    "tabs": {
+      "overview": "系统概览",
+      "users": "用户管理",
+      "logs": "系统日志",
+      "settings": "系统设置"
+    },
+    "stats": {
+      "totalUsers": "用户总数",
+      "activeUsers": "活跃用户",
+      "totalSessions": "会话总数",
+      "totalFiles": "文件总数"
+    },
+    "storage": {
+      "title": "存储使用情况"
+    },
+    "activity": {
+      "title": "用户活跃度",
+      "daily": "日活跃",
+      "weekly": "周活跃",
+      "monthly": "月活跃"
+    },
+    "user": {
+      "management": "用户管理",
+      "email": "邮箱",
+      "role": "角色",
+      "status": "状态",
+      "lastLogin": "最后登录",
+      "statistics": "统计信息",
+      "sessions": "会话数",
+      "files": "文件数",
+      "actions": "操作",
+      "active": "活跃",
+      "inactive": "非活跃",
+      "verified": "已验证",
+      "unverified": "未验证",
+      "roles": {
+        "student": "学生",
+        "admin": "管理员"
+      },
+      "searchPlaceholder": "搜索用户邮箱...",
+      "filterRole": "筛选角色",
+      "filterStatus": "筛选状态",
+      "deleteConfirm": "确定要删除该用户吗？",
+      "deleteSuccess": "用户删除成功",
+      "updateSuccess": "用户信息更新成功",
+      "editTitle": "编辑用户",
+      "viewTitle": "查看用户详情"
+    },
+    "logs": {
+      "title": "系统日志",
+      "type": "类型",
+      "message": "消息",
+      "timestamp": "时间",
+      "user": "用户",
+      "types": {
+        "info": "信息",
+        "warning": "警告",
+        "error": "错误"
+      }
+    },
+    "settings": {
+      "system": "系统设置",
+      "ai": "AI设置",
+      "maintenanceMode": "维护模式",
+      "maintenanceModeDesc": "启用后将阻止普通用户访问系统",
+      "registrationEnabled": "允许注册",
+      "registrationEnabledDesc": "是否允许新用户注册",
+      "emailVerificationRequired": "邮箱验证必需",
+      "emailVerificationRequiredDesc": "新用户是否必须验证邮箱",
+      "aiModel": "AI模型",
+      "maxTokens": "最大Token数",
+      "temperature": "Temperature"
+    },
+    "filter": {
+      "all": "全部"
+    },
+    "export": {
+      "users": "导出用户",
+      "starting": "开始导出数据..."
+    },
+    "pagination": {
+      "total": "共 {{total}} 条记录"
+    }
+  },
+  "navigation": {
+    "home": "首页",
+    "chat": "智能对话",
+    "files": "文件管理",
+    "study": "学习工具",
+    "admin": "管理",
+    "profile": "个人资料",
+    "settings": "设置",
+    "help": "帮助",
+    "about": "关于"
+  },
+  "profile": {
+    "title": "个人资料",
+    "tabs": {
+      "profile": "基本信息",
+      "security": "安全设置",
+      "stats": "学习统计",
+      "data": "数据管理"
+    },
+    "role": {
+      "admin": "管理员",
+      "student": "学生"
+    },
+    "verified": "已验证",
+    "updateSuccess": "个人资料更新成功",
+    "avatar": {
+      "change": "更换头像",
+      "uploadSuccess": "头像上传成功",
+      "uploadError": "头像上传失败"
+    },
+    "info": {
+      "title": "基本信息"
+    },
+    "form": {
+      "name": "姓名",
+      "nameRequired": "请输入姓名",
+      "email": "邮箱",
+      "language": "语言",
+      "timezone": "时区",
+      "university": "学校",
+      "major": "专业",
+      "studyYear": "年级",
+      "year1": "大一",
+      "year2": "大二",
+      "year3": "大三",
+      "year4": "大四",
+      "graduate": "研究生",
+      "phd": "博士生",
+      "bio": "个人简介"
+    },
+    "security": {
+      "title": "安全设置",
+      "updateSuccess": "安全设置更新成功",
+      "twoFactor": "双因素认证",
+      "twoFactorDesc": "启用双因素认证以提高账户安全性",
+      "emailNotifications": "邮件通知",
+      "emailNotificationsDesc": "接收重要账户活动的邮件通知",
+      "loginAlerts": "登录提醒",
+      "loginAlertsDesc": "当有新设备登录时发送提醒",
+      "sessionTimeout": "会话超时时间",
+      "sessionTimeoutDesc": "设置自动登出的空闲时间",
+      "minutes": "分钟",
+      "hour": "小时",
+      "hours": "小时"
+    },
+    "password": {
+      "change": "修改密码",
+      "current": "当前密码",
+      "new": "新密码",
+      "confirm": "确认新密码",
+      "currentRequired": "请输入当前密码",
+      "newRequired": "请输入新密码",
+      "confirmRequired": "请确认新密码",
+      "minLength": "密码长度至少6位",
+      "mismatch": "两次输入的密码不一致",
+      "changeSuccess": "密码修改成功",
+      "changeError": "密码修改失败"
+    },
+    "activity": {
+      "recent": "最近活动",
+      "viewAll": "查看全部"
+    },
+    "stats": {
+      "totalSessions": "总会话数",
+      "totalTime": "总学习时间",
+      "averageScore": "平均得分",
+      "studyStreak": "连续学习",
+      "days": "天",
+      "completedQuizzes": "完成的测验",
+      "filesUploaded": "上传的文件",
+      "progress": "学习进度",
+      "favoriteTopics": "常用主题"
+    },
+    "data": {
+      "export": "导出数据",
+      "exportDesc": "导出您的所有个人数据，包括聊天记录、文件和学习统计。",
+      "exportButton": "导出我的数据",
+      "exportStarted": "数据导出已开始，请稍后查收邮件",
+      "delete": "删除账户",
+      "deleteWarning": "警告：此操作不可逆",
+      "deleteDesc": "删除账户将永久删除您的所有数据，包括聊天记录、文件和学习进度。",
+      "deleteButton": "删除我的账户"
+    },
+    "account": {
+      "deleteTitle": "删除账户",
+      "deleteWarningTitle": "危险操作",
+      "deleteWarningDesc": "删除账户后，您的所有数据将被永久删除且无法恢复。",
+      "deleteConfirmText": "请确认您要删除账户。此操作无法撤销。",
+      "deleteConfirm": "确认删除",
+      "deleteSuccess": "账户删除成功"
+    }
+  },
+  "settings": {
+    "language": "语言设置",
+    "theme": "主题设置",
+    "notification": "通知设置",
+    "privacy": "隐私设置",
+    "account": "账户设置",
+    "changePassword": "修改密码",
+    "emailNotification": "邮件通知",
+    "pushNotification": "推送通知"
+  }
+}

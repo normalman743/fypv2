@@ -1,0 +1,4 @@
+ip: 584743.xyz
+CREATE USER 'secure_user'@'localhost' IDENTIFIED BY 'S3cure@Pass!';
+ALTER USER 'secure_user'@'localhost' IDENTIFIED BY 'New@Str0ngPass!';
+

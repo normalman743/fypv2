@@ -1,0 +1,218 @@
+/* Chat page enhanced styles */
+.chat-card {
+  transition: all 0.3s ease;
+}
+
+.chat-card:hover {
+  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.15) !important;
+}
+
+.session-card {
+  transition: all 0.3s ease;
+}
+
+.session-card:hover {
+  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.15) !important;
+}
+
+.quick-question-btn {
+  transition: all 0.3s ease;
+  background: rgba(102, 126, 234, 0.05);
+  border-radius: 16px;
+}
+
+.quick-question-btn:hover {
+  background: rgba(102, 126, 234, 0.1) !important;
+  border-color: #764ba2 !important;
+  color: #764ba2 !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+}
+
+.chat-input {
+  transition: all 0.3s ease;
+}
+
+.chat-input:focus {
+  border-color: #764ba2 !important;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1) !important;
+}
+
+/* Typing animation */
+.typing-animation {
+  position: relative;
+}
+
+.typing-animation::after {
+  content: '';
+  display: inline-block;
+  width: 3px;
+  height: 16px;
+  background: #52c41a;
+  margin-left: 4px;
+  animation: typing-cursor 1.2s infinite;
+}
+
+@keyframes typing-cursor {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+/* 打字指示器动画 */
+.typing-indicator {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.typing-indicator span {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background-color: #999;
+  animation: typing 1.4s infinite;
+}
+
+.typing-indicator span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-indicator span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes typing {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  30% {
+    transform: translateY(-10px);
+    opacity: 1;
+  }
+}
+
+/* Message animations */
+.message-bubble {
+  transition: all 0.3s ease;
+  transform-origin: center;
+}
+
+.message-bubble:hover {
+  transform: scale(1.02);
+}
+
+/* Session list enhanced animations */
+.ant-list-item {
+  transition: all 0.3s ease !important;
+  border-radius: 8px;
+  margin: 4px 8px;
+}
+
+.ant-list-item:hover {
+  background: rgba(102, 126, 234, 0.05) !important;
+  transform: translateX(4px);
+}
+
+.ant-list-item.ant-list-item-active {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%) !important;
+  border-left: 4px solid #667eea;
+}
+
+/* Upload modal enhanced styles */
+.ant-upload-drag {
+  border-color: #667eea !important;
+  transition: all 0.3s ease;
+}
+
+.ant-upload-drag:hover {
+  border-color: #764ba2 !important;
+  background: rgba(102, 126, 234, 0.02) !important;
+}
+
+.ant-upload-drag-icon {
+  color: #667eea !important;
+}
+
+/* Enhanced button styles */
+.ant-btn-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  border: none !important;
+  transition: all 0.3s ease !important;
+}
+
+.ant-btn-primary:hover {
+  background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3) !important;
+}
+
+/* Enhanced input styles */
+.ant-input:focus, .ant-input-focused {
+  border-color: #667eea !important;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1) !important;
+}
+
+/* 文件上传区域 */
+.upload-area {
+  border: 2px dashed #d9d9d9;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.upload-area:hover {
+  border-color: #667eea;
+  background-color: rgba(102, 126, 234, 0.02);
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .quick-question-btn {
+    font-size: 12px;
+    padding: 4px 8px;
+  }
+  
+  .message-bubble {
+    max-width: 90% !important;
+  }
+  
+  .chat-message-bubble {
+    max-width: 90% !important;
+  }
+  
+  .session-item:hover {
+    transform: none;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .chat-card, .session-card {
+    background: #1f1f1f !important;
+    border-color: rgba(102, 126, 234, 0.2) !important;
+  }
+  
+  .quick-question-btn {
+    background: rgba(102, 126, 234, 0.1);
+    color: #b4c6fc !important;
+  }
+}
+
+/* Scroll bar styling */
+.ant-card-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.ant-card-body::-webkit-scrollbar-track {
+  background: rgba(102, 126, 234, 0.05);
+  border-radius: 3px;
+}
+
+.ant-card-body::-webkit-scrollbar-thumb {
+  background: rgba(102, 126, 234, 0.3);
+  border-radius: 3px;
+}
+
+.ant-card-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(102, 126, 234, 0.5);
+}

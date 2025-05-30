@@ -1,0 +1,307 @@
+{
+  "common": {
+    "confirm": "確認",
+    "cancel": "取消",
+    "submit": "提交",
+    "save": "保存",
+    "delete": "刪除",
+    "edit": "編輯",
+    "view": "查看",
+    "loading": "載入中...",
+    "error": "發生錯誤",
+    "success": "操作成功",
+    "search": "搜尋",
+    "refresh": "刷新",
+    "back": "返回",
+    "next": "下一步",
+    "previous": "上一步",
+    "close": "關閉",
+    "open": "打開"
+  },
+  "auth": {
+    "login": "登入",
+    "register": "註冊",
+    "logout": "退出登入",
+    "email": "郵箱",
+    "password": "密碼",
+    "confirmPassword": "確認密碼",
+    "verificationCode": "驗證碼",
+    "sendCode": "發送驗證碼",
+    "loginSuccess": "登入成功",
+    "registerSuccess": "註冊成功，請檢查郵箱驗證碼",
+    "logoutSuccess": "退出登入成功",
+    "invalidCredentials": "郵箱或密碼錯誤",
+    "emailRequired": "請輸入郵箱",
+    "passwordRequired": "請輸入密碼",
+    "emailFormat": "請輸入有效的郵箱地址",
+    "passwordLength": "密碼長度至少6位",
+    "passwordsNotMatch": "兩次輸入的密碼不一致",
+    "verificationCodeRequired": "請輸入驗證碼",
+    "forgotPassword": "忘記密碼",
+    "rememberMe": "記住我"
+  },
+  "chat": {
+    "newSession": "新建對話",
+    "sessionTitle": "對話標題",
+    "sendMessage": "發送訊息",
+    "uploadFile": "上傳檔案",
+    "chatHistory": "聊天記錄",
+    "askQuestion": "在這裡輸入你的問題...",
+    "aiTyping": "AI正在思考...",
+    "sessionList": "對話列表",
+    "deleteSession": "刪除對話",
+    "clearHistory": "清除歷史",
+    "exportHistory": "匯出記錄",
+    "messageType": "訊息類型",
+    "attachFile": "附件",
+    "copyMessage": "複製訊息",
+    "regenerateResponse": "重新生成回答"
+  },
+  "files": {
+    "uploadSuccess": "檔案上傳成功",
+    "uploadFailed": "檔案上傳失敗",
+    "fileSizeLimit": "檔案大小不能超過10MB",
+    "supportedFormats": "支援的檔案格式：PDF, DOC, DOCX, TXT",
+    "fileList": "檔案列表",
+    "fileName": "檔案名稱",
+    "fileSize": "檔案大小",
+    "uploadTime": "上傳時間",
+    "fileType": "檔案類型",
+    "deleteFile": "刪除檔案",
+    "downloadFile": "下載檔案",
+    "processStatus": "處理狀態",
+    "processing": "處理中",
+    "completed": "已完成",
+    "failed": "處理失敗",
+    "pending": "等待處理"
+  },
+  "study": {
+    "generateQuestions": "生成練習題",
+    "createPlan": "建立學習計劃",
+    "studyTools": "學習工具",
+    "questionDifficulty": "題目難度",
+    "easy": "簡單",
+    "medium": "中等",
+    "hard": "困難",
+    "questionType": "題目類型",
+    "multipleChoice": "選擇題",
+    "shortAnswer": "簡答題",
+    "essay": "論述題",
+    "studyPlan": "學習計劃",
+    "planTitle": "計劃標題",
+    "deadline": "截止日期",
+    "topics": "學習主題",
+    "progress": "學習進度",
+    "completed": "已完成",
+    "inProgress": "進行中",
+    "notStarted": "未開始"
+  },
+  "admin": {
+    "title": "管理面板",
+    "tabs": {
+      "overview": "系統概覽",
+      "users": "用戶管理",
+      "logs": "系統日誌",
+      "settings": "系統設定"
+    },
+    "stats": {
+      "totalUsers": "用戶總數",
+      "activeUsers": "活躍用戶",
+      "totalSessions": "會話總數",
+      "totalFiles": "檔案總數"
+    },
+    "storage": {
+      "title": "儲存使用情況"
+    },
+    "activity": {
+      "title": "用戶活躍度",
+      "daily": "日活躍",
+      "weekly": "週活躍",
+      "monthly": "月活躍"
+    },
+    "user": {
+      "management": "用戶管理",
+      "email": "郵箱",
+      "role": "角色",
+      "status": "狀態",
+      "lastLogin": "最後登入",
+      "statistics": "統計資訊",
+      "sessions": "會話數",
+      "files": "檔案數",
+      "actions": "操作",
+      "active": "活躍",
+      "inactive": "非活躍",
+      "verified": "已驗證",
+      "unverified": "未驗證",
+      "roles": {
+        "student": "學生",
+        "admin": "管理員"
+      },
+      "searchPlaceholder": "搜尋用戶郵箱...",
+      "filterRole": "篩選角色",
+      "filterStatus": "篩選狀態",
+      "deleteConfirm": "確定要刪除該用戶嗎？",
+      "deleteSuccess": "用戶刪除成功",
+      "updateSuccess": "用戶資訊更新成功",
+      "editTitle": "編輯用戶",
+      "viewTitle": "查看用戶詳情"
+    },
+    "logs": {
+      "title": "系統日誌",
+      "type": "類型",
+      "message": "訊息",
+      "timestamp": "時間",
+      "user": "用戶",
+      "types": {
+        "info": "資訊",
+        "warning": "警告",
+        "error": "錯誤"
+      }
+    },
+    "settings": {
+      "system": "系統設定",
+      "ai": "AI設定",
+      "maintenanceMode": "維護模式",
+      "maintenanceModeDesc": "啟用後將阻止普通用戶存取系統",
+      "registrationEnabled": "允許註冊",
+      "registrationEnabledDesc": "是否允許新用戶註冊",
+      "emailVerificationRequired": "郵箱驗證必需",
+      "emailVerificationRequiredDesc": "新用戶是否必須驗證郵箱",
+      "aiModel": "AI模型",
+      "maxTokens": "最大Token數",
+      "temperature": "Temperature"
+    },
+    "filter": {
+      "all": "全部"
+    },
+    "export": {
+      "users": "匯出用戶",
+      "starting": "開始匯出資料..."
+    },
+    "pagination": {
+      "total": "共 {{total}} 條記錄"
+    }
+  },
+  "navigation": {
+    "home": "首頁",
+    "chat": "智能對話",
+    "files": "檔案管理",
+    "study": "學習工具",
+    "admin": "管理",
+    "profile": "個人資料",
+    "settings": "設定",
+    "help": "說明",
+    "about": "關於"
+  },
+  "profile": {
+    "title": "個人資料",
+    "tabs": {
+      "profile": "基本資訊",
+      "security": "安全設定",
+      "stats": "學習統計",
+      "data": "資料管理"
+    },
+    "role": {
+      "admin": "管理員",
+      "student": "學生"
+    },
+    "verified": "已驗證",
+    "updateSuccess": "個人資料更新成功",
+    "avatar": {
+      "change": "更換頭像",
+      "uploadSuccess": "頭像上傳成功",
+      "uploadError": "頭像上傳失敗"
+    },
+    "info": {
+      "title": "基本資訊"
+    },
+    "form": {
+      "name": "姓名",
+      "nameRequired": "請輸入姓名",
+      "email": "郵箱",
+      "language": "語言",
+      "timezone": "時區",
+      "university": "學校",
+      "major": "專業",
+      "studyYear": "年級",
+      "year1": "大一",
+      "year2": "大二",
+      "year3": "大三",
+      "year4": "大四",
+      "graduate": "研究生",
+      "phd": "博士生",
+      "bio": "個人簡介"
+    },
+    "security": {
+      "title": "安全設定",
+      "updateSuccess": "安全設定更新成功",
+      "twoFactor": "雙因素認證",
+      "twoFactorDesc": "啟用雙因素認證以提高帳戶安全性",
+      "emailNotifications": "郵件通知",
+      "emailNotificationsDesc": "接收重要帳戶活動的郵件通知",
+      "loginAlerts": "登入提醒",
+      "loginAlertsDesc": "當有新裝置登入時發送提醒",
+      "sessionTimeout": "會話超時時間",
+      "sessionTimeoutDesc": "設定自動登出的閒置時間",
+      "minutes": "分鐘",
+      "hour": "小時",
+      "hours": "小時"
+    },
+    "password": {
+      "change": "修改密碼",
+      "current": "目前密碼",
+      "new": "新密碼",
+      "confirm": "確認新密碼",
+      "currentRequired": "請輸入目前密碼",
+      "newRequired": "請輸入新密碼",
+      "confirmRequired": "請確認新密碼",
+      "minLength": "密碼長度至少6位",
+      "mismatch": "兩次輸入的密碼不一致",
+      "changeSuccess": "密碼修改成功",
+      "changeError": "密碼修改失敗"
+    },
+    "activity": {
+      "recent": "最近活動",
+      "viewAll": "查看全部"
+    },
+    "stats": {
+      "totalSessions": "總會話數",
+      "totalTime": "總學習時間",
+      "averageScore": "平均得分",
+      "studyStreak": "連續學習",
+      "days": "天",
+      "completedQuizzes": "完成的測驗",
+      "filesUploaded": "上傳的檔案",
+      "progress": "學習進度",
+      "favoriteTopics": "常用主題"
+    },
+    "data": {
+      "export": "匯出資料",
+      "exportDesc": "匯出您的所有個人資料，包括聊天記錄、檔案和學習統計。",
+      "exportButton": "匯出我的資料",
+      "exportStarted": "資料匯出已開始，請稍後查收郵件",
+      "delete": "刪除帳戶",
+      "deleteWarning": "警告：此操作不可逆",
+      "deleteDesc": "刪除帳戶將永久刪除您的所有資料，包括聊天記錄、檔案和學習進度。",
+      "deleteButton": "刪除我的帳戶"
+    },
+    "account": {
+      "deleteTitle": "刪除帳戶",
+      "deleteWarningTitle": "危險操作",
+      "deleteWarningDesc": "刪除帳戶後，您的所有資料將被永久刪除且無法復原。",
+      "deleteConfirmText": "請確認您要刪除帳戶。此操作無法撤銷。",
+      "deleteConfirm": "確認刪除",
+      "deleteSuccess": "帳戶刪除成功"
+    }
+  },
+  "settings": {
+    "language": "語言設定",
+    "theme": "主題設定",
+    "notification": "通知設定",
+    "privacy": "隱私設定",
+    "account": "帳戶設定",
+    "changePassword": "修改密碼",
+    "emailNotification": "郵件通知",
+    "pushNotification": "推送通知"
+  }
+}
