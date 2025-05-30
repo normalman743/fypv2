@@ -4,6 +4,7 @@
 
 ![项目状态](https://img.shields.io/badge/状态-开发中-green)
 ![前端](https://img.shields.io/badge/前端-React%2018%20%2B%20TypeScript-blue)
+https://test.cuhk-student.584743.xyz
 ![后端](https://img.shields.io/badge/后端-Python%20%2B%20Flask-yellow)
 ![UI库](https://img.shields.io/badge/UI-Ant%20Design-orange)
 
