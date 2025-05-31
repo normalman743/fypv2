@@ -15,8 +15,8 @@ Thumbs.db
 *~
 
 # Build artifacts
-frontend/build/
 frontend/dist/
+# frontend/build/  # 不再忽略build目录，用于部署
 backend/__pycache__/
 backend/*.pyc
 backend/venv/
