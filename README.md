@@ -665,11 +665,11 @@ A: 这是正常现象，OpenAI API 有时会较慢，系统已实现流式传输
 
 ## 📄 许可证
 
-本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情。
+非开源项目
 
 ## 📞 联系方式
 
-项目链接: [https://github.com/Starbest2025/fyp](https://github.com/Starbest2025/fyp)
+项目链接: [[[https://github.com/Starbest2025/fyp](https://github.com/normalman743/fyp](https://github.com/Starbest2025/fyp](https://github.com/normalman743/fyp)
 
 ## 🙏 致谢
 
