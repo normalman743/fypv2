@@ -9,6 +9,11 @@ import {
   Typography, 
   Avatar,
   Space,
+  Select,
+  Dropdown,
+  MenuProps,
+  Upload,
+  message,
 } from 'antd';
 import {
   SendOutlined,
@@ -18,23 +23,57 @@ import {
   SearchOutlined,
   PlusOutlined,
   DeleteOutlined,
+  HomeOutlined,
+  BookOutlined,
+  DashboardOutlined,
+  LogoutOutlined,
+  SettingOutlined,
+  GlobalOutlined,
+  PaperClipOutlined,
+  FileTextOutlined,
+  FileImageOutlined,
+  DeleteOutlined as DeleteFileOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import ChatMessageComponent from '../components/chat/ChatMessage';
+import WelcomeInterface from '../components/chat/WelcomeInterface';
 import PageHeader from '../components/common/PageHeader';
 import LoadingSpinner from '../components/common/LoadingSpinner';
+import { useAuth } from '../context/AuthContext';
 import '../components/chat/ChatStyles.css';
 
 const { Text, Title } = Typography;
 const { TextArea } = Input;
+const { Option } = Select;
 
-// 简化的数据接口
+// 消息数据接口 - 支持树状结构
 interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  parentId?: string; // 父消息ID，用于构建消息树
+  children?: string[]; // 子消息ID列表
+  isEditing?: boolean; // 是否正在编辑状态
+  attachments?: FileAttachment[]; // 附件
+}
+
+interface FileAttachment {
+  id: string;
+  name: string;
+  type: 'image' | 'text';
+  size: number;
+  url: string;
+}
+
+interface MessageBranch {
+  messageId: string;
+  branchIndex: number; // 当前选择的分支索引
+  totalBranches: number; // 总分支数
 }
 
 interface ChatSession {
@@ -42,10 +81,14 @@ interface ChatSession {
   title: string;
   messageCount: number;
   lastUpdated: Date;
+  messageTree: { [key: string]: ChatMessage }; // 消息树结构
+  currentPath: string[]; // 当前对话路径
 }
 
 const ChatPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [currentMessage, setCurrentMessage] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sessions, setSessions] = useState<ChatSession[]>([
@@ -53,24 +96,34 @@ const ChatPage: React.FC = () => {
       id: '1',
       title: '宿舍网络问题咨询',
       messageCount: 5,
-      lastUpdated: new Date(Date.now() - 86400000)
+      lastUpdated: new Date(Date.now() - 86400000),
+      messageTree: {},
+      currentPath: []
     },
     {
       id: '2', 
       title: '图书馆借阅流程',
       messageCount: 3,
-      lastUpdated: new Date(Date.now() - 172800000)
+      lastUpdated: new Date(Date.now() - 172800000),
+      messageTree: {},
+      currentPath: []
     },
     {
       id: '3',
       title: '食堂用餐时间',
       messageCount: 2,
-      lastUpdated: new Date(Date.now() - 259200000)
+      lastUpdated: new Date(Date.now() - 259200000),
+      messageTree: {},
+      currentPath: []
     }
   ]);
-  const [selectedSession, setSelectedSession] = useState<string>('1');
+  const [selectedSession, setSelectedSession] = useState<string | null>(null); // 改为null，表示新对话
   const [isLoading, setIsLoading] = useState(false);
   const [sessionSearchTerm, setSessionSearchTerm] = useState('');
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingContent, setEditingContent] = useState('');
+  const [uploadedFiles, setUploadedFiles] = useState<FileAttachment[]>([]);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false); // 默认展开侧边栏
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // 初始化当前会话的消息
@@ -91,6 +144,7 @@ const ChatPage: React.FC = () => {
         }
       ]);
     } else {
+      // 新对话或其他会话，显示空消息
       setMessages([]);
     }
   }, [selectedSession]);
@@ -103,18 +157,88 @@ const ChatPage: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  // 创建新对话 - 重置到新对话状态
+  const createNewSession = () => {
+    setSelectedSession(null); // 设置为null表示新对话状态
+    setMessages([]);
+    setUploadedFiles([]);
+  };
+
+  // 文件上传处理
+  const handleFileUpload = (file: File) => {
+    // 检查文件大小 (10MB = 10 * 1024 * 1024 bytes)
+    const maxSize = 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+      message.error('文件大小不能超过10MB');
+      return false;
+    }
+
+    // 检查文件类型
+    const isImage = file.type.startsWith('image/');
+    const isText = file.type.startsWith('text/') || 
+                   file.name.endsWith('.txt') || 
+                   file.name.endsWith('.md') || 
+                   file.name.endsWith('.doc') || 
+                   file.name.endsWith('.docx');
+
+    if (!isImage && !isText) {
+      message.error('只支持图片和文本文件');
+      return false;
+    }
+
+    // 创建文件URL (在实际应用中，这里应该上传到服务器)
+    const fileUrl = URL.createObjectURL(file);
+    
+    const newAttachment: FileAttachment = {
+      id: Date.now().toString(),
+      name: file.name,
+      type: isImage ? 'image' : 'text',
+      size: file.size,
+      url: fileUrl
+    };
+
+    setUploadedFiles(prev => [...prev, newAttachment]);
+    message.success(`文件 "${file.name}" 上传成功`);
+    return false; // 阻止默认上传行为
+  };
+
+  // 删除已上传文件
+  const removeUploadedFile = (fileId: string) => {
+    setUploadedFiles(prev => prev.filter(file => file.id !== fileId));
+  };
+
   const handleSendMessage = async () => {
-    if (!currentMessage.trim()) return;
+    if (!currentMessage.trim() && uploadedFiles.length === 0) return;
+
+    let currentSessionId = selectedSession;
+
+    // 如果是新对话状态（selectedSession为null），创建新会话
+    if (!selectedSession) {
+      const newSessionId = `session_${Date.now()}`;
+      const newSession: ChatSession = {
+        id: newSessionId,
+        title: currentMessage.slice(0, 20) + (currentMessage.length > 20 ? '...' : '') || '新对话',
+        messageCount: 0,
+        lastUpdated: new Date(),
+        messageTree: {},
+        currentPath: []
+      };
+      setSessions(prev => [newSession, ...prev]);
+      setSelectedSession(newSessionId);
+      currentSessionId = newSessionId;
+    }
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
       role: 'user',
       content: currentMessage,
-      timestamp: new Date()
+      timestamp: new Date(),
+      attachments: uploadedFiles.length > 0 ? [...uploadedFiles] : undefined
     };
 
     setMessages(prev => [...prev, userMessage]);
     setCurrentMessage('');
+    setUploadedFiles([]); // 清空已上传文件
     setIsLoading(true);
 
     // 模拟AI响应
@@ -130,6 +254,63 @@ const ChatPage: React.FC = () => {
     }, 1500);
   };
 
+  const handleResendMessage = (messageId: string) => {
+    const message = messages.find(m => m.id === messageId);
+    if (message && message.role === 'user') {
+      setEditingMessageId(messageId);
+      setEditingContent(message.content);
+    }
+  };
+
+  const handleEditConfirm = async () => {
+    if (!editingMessageId || !editingContent.trim()) return;
+
+    // 找到要编辑的消息
+    const editingMessage = messages.find(m => m.id === editingMessageId);
+    if (!editingMessage) return;
+
+    // 找到这个消息在数组中的位置
+    const messageIndex = messages.findIndex(m => m.id === editingMessageId);
+    if (messageIndex === -1) return;
+
+    // 创建新的分支消息
+    const newMessageId = `${editingMessageId}_${Date.now()}`;
+    const newUserMessage: ChatMessage = {
+      id: newMessageId,
+      role: 'user',
+      content: editingContent,
+      timestamp: new Date(),
+      parentId: editingMessage.parentId
+    };
+
+    // 移除原消息之后的所有消息（包括AI回复）
+    const newMessages = messages.slice(0, messageIndex);
+    newMessages.push(newUserMessage);
+
+    setMessages(newMessages);
+    setEditingMessageId(null);
+    setEditingContent('');
+    setIsLoading(true);
+
+    // 模拟AI响应
+    setTimeout(() => {
+      const aiMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: `基于您重新编辑的问题："${editingContent}"，我来为您提供更准确的回答。\n\n这是一个重新生成的回复，会根据您修改后的问题内容提供相应的帮助和建议。`,
+        timestamp: new Date(),
+        parentId: newMessageId
+      };
+      setMessages(prev => [...prev, aiMessage]);
+      setIsLoading(false);
+    }, 1500);
+  };
+
+  const handleEditCancel = () => {
+    setEditingMessageId(null);
+    setEditingContent('');
+  };
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -137,219 +318,519 @@ const ChatPage: React.FC = () => {
     }
   };
 
-  const createNewSession = () => {
-    const newSession: ChatSession = {
-      id: Date.now().toString(),
-      title: '新对话',
-      messageCount: 0,
-      lastUpdated: new Date()
-    };
-    setSessions(prev => [newSession, ...prev]);
-    setSelectedSession(newSession.id);
-    setMessages([]);
+  const handleLanguageChange = (value: string) => {
+    i18n.changeLanguage(value);
+    localStorage.setItem('language', value);
   };
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
+  // 导航菜单项
+  const navigationItems = [
+    {
+      key: 'home',
+      icon: <HomeOutlined />,
+      label: t('navigation.home'),
+      onClick: () => navigate('/'),
+    },
+    {
+      key: 'chat',
+      icon: <MessageOutlined />,
+      label: '校园生活助手',
+      onClick: () => {
+        // 重置到新对话状态
+        setSelectedSession(null);
+        setMessages([]);
+        setUploadedFiles([]);
+        setSidebarCollapsed(false); // 确保侧边栏是展开的
+      },
+    },
+    {
+      key: 'study',
+      icon: <BookOutlined />,
+      label: t('navigation.studyAssistant'),
+      onClick: () => navigate('/study'),
+    },
+    ...(user?.role === 'admin' ? [{
+      key: 'admin',
+      icon: <DashboardOutlined />,
+      label: t('navigation.admin'),
+      onClick: () => navigate('/admin'),
+    }] : []),
+  ];
+
+  // 用户下拉菜单
+  const userMenuItems: MenuProps['items'] = [
+    {
+      key: 'profile',
+      icon: <UserOutlined />,
+      label: t('navigation.profile'),
+      onClick: () => navigate('/profile'),
+    },
+    {
+      key: 'settings',
+      icon: <SettingOutlined />,
+      label: t('navigation.settings'),
+    },
+    {
+      type: 'divider',
+    },
+    {
+      key: 'logout',
+      icon: <LogoutOutlined />,
+      label: t('auth.logout'),
+      onClick: handleLogout,
+    },
+  ];
 
   const filteredSessions = sessions.filter(session =>
     session.title.toLowerCase().includes(sessionSearchTerm.toLowerCase())
   );
 
+  // 快速开始对话
+  const handleQuickStart = (message: string) => {
+    setCurrentMessage(message);
+    // 直接发送这个消息
+    setTimeout(() => {
+      handleSendMessage();
+    }, 100);
+  };
+
   return (
     <div style={{
-      minHeight: '100vh',
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      padding: '24px 0'
+      height: '100vh',
+      display: 'flex',
+      backgroundColor: '#f9f9f9'
     }}>
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 24px' }}>
-        <PageHeader
-          title={t('navigation.campusChat')}
-          subtitle="校园生活AI助手 - 为您解答校园生活中的各种问题"
-        />
+      {/* 左侧边栏 - 类似OpenAI风格 */}
+      <div style={{
+        width: sidebarCollapsed ? '0px' : '280px',
+        backgroundColor: '#000',
+        color: '#fff',
+        display: 'flex',
+        flexDirection: 'column',
+        borderRight: '1px solid #333',
+        transition: 'width 0.3s ease',
+        overflow: 'hidden'
+      }}>
+        {/* 新对话按钮 */}
+        <div style={{ padding: '16px' }}>
+          <Button
+            type="default"
+            block
+            icon={<PlusOutlined />}
+            onClick={createNewSession}
+            style={{
+              backgroundColor: 'transparent',
+              borderColor: '#444',
+              color: '#fff',
+              borderRadius: '8px'
+            }}
+          >
+            新对话
+          </Button>
+        </div>
 
-        <Row gutter={[24, 24]}>
-          {/* 左侧 - 对话历史 */}
-          <Col xs={24} md={8}>
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.5 }}
+        {/* 搜索框 */}
+        <div style={{ padding: '0 16px 16px 16px' }}>
+          <Input.Search
+            placeholder="搜索对话..."
+            onChange={(e) => setSessionSearchTerm(e.target.value)}
+            style={{
+              backgroundColor: '#333',
+              borderColor: '#444'
+            }}
+            className="dark-search"
+          />
+        </div>
+
+        {/* 对话历史列表 */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '0 8px' }}>
+          {filteredSessions.map((session) => (
+            <div
+              key={session.id}
+              onClick={() => setSelectedSession(session.id)}
+              style={{
+                padding: '12px 16px',
+                margin: '4px 0',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                backgroundColor: selectedSession === session.id ? '#2a2a2a' : 'transparent',
+                transition: 'all 0.2s ease',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+              }}
+              onMouseEnter={(e) => {
+                if (selectedSession !== session.id) {
+                  e.currentTarget.style.backgroundColor = '#1a1a1a';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (selectedSession !== session.id) {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }
+              }}
             >
-              <Card
-                title={
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <MessageOutlined style={{ color: '#667eea' }} />
-                    对话历史
-                  </div>
-                }
-                extra={
-                  <Button
-                    type="primary"
-                    size="small"
-                    icon={<PlusOutlined />}
-                    onClick={createNewSession}
-                  >
-                    新对话
-                  </Button>
-                }
-                style={{
-                  borderRadius: '12px',
-                  boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
-                  border: 'none'
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  color: '#fff',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis'
+                }}>
+                  {session.title}
+                </div>
+                <div style={{
+                  fontSize: '12px',
+                  color: '#888',
+                  marginTop: '2px'
+                }}>
+                  {session.messageCount} 条消息
+                </div>
+              </div>
+              <Button
+                type="text"
+                size="small"
+                icon={<DeleteOutlined />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSessions(prev => prev.filter(s => s.id !== session.id));
                 }}
-              >
-                <Input.Search
-                  placeholder="搜索对话..."
-                  style={{ marginBottom: 16 }}
-                  onChange={(e) => setSessionSearchTerm(e.target.value)}
-                  prefix={<SearchOutlined />}
-                />
-                <List
-                  size="small"
-                  dataSource={filteredSessions}
-                  renderItem={(session) => (
-                    <List.Item
-                      style={{
-                        cursor: 'pointer',
-                        borderRadius: '8px',
-                        marginBottom: '8px',
-                        padding: '12px',
-                        backgroundColor: selectedSession === session.id ? '#f0f7ff' : 'transparent',
-                        border: selectedSession === session.id ? '2px solid #667eea' : '1px solid #f0f0f0'
-                      }}
-                      onClick={() => setSelectedSession(session.id)}
-                      actions={[
-                        <Button
-                          type="text"
-                          size="small"
-                          icon={<DeleteOutlined />}
-                          danger
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSessions(prev => prev.filter(s => s.id !== session.id));
-                          }}
-                        />
-                      ]}
-                    >
-                      <List.Item.Meta
-                        title={
-                          <Text strong style={{ fontSize: '14px' }}>
-                            {session.title}
-                          </Text>
-                        }
-                        description={
-                          <Space direction="vertical" size={0}>
-                            <Text type="secondary" style={{ fontSize: '12px' }}>
-                              {session.messageCount} 条消息
-                            </Text>
-                            <Text type="secondary" style={{ fontSize: '12px' }}>
-                              {session.lastUpdated.toLocaleDateString()}
-                            </Text>
-                          </Space>
-                        }
-                      />
-                    </List.Item>
-                  )}
-                />
-              </Card>
-            </motion.div>
-          </Col>
-
-          {/* 右侧 - 聊天界面 */}
-          <Col xs={24} md={16}>
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-            >
-              <Card
-                title={
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <RobotOutlined style={{ color: '#667eea' }} />
-                    AI助手对话
-                  </div>
-                }
                 style={{
-                  borderRadius: '12px',
-                  boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+                  color: '#888',
                   border: 'none',
-                  height: '600px',
-                  display: 'flex',
-                  flexDirection: 'column'
+                  padding: '4px'
                 }}
-                bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column', padding: 0 }}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 右侧主聊天区域 */}
+      <div style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        backgroundColor: '#fff'
+      }}>
+        {/* 聊天标题栏 - 融合导航功能 */}
+        <div style={{
+          padding: '12px 24px',
+          borderBottom: '1px solid #e5e5e5',
+          backgroundColor: '#fff',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between'
+        }}>
+          {/* 左侧：侧边栏切换按钮和导航菜单 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            {/* 侧边栏切换按钮 */}
+            <Button
+              type="text"
+              icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              style={{
+                color: '#666',
+                border: 'none',
+                padding: '6px 8px',
+                borderRadius: '6px'
+              }}
+              title={sidebarCollapsed ? '展开侧边栏' : '折叠侧边栏'}
+            />
+            
+            {navigationItems.map((item) => (
+              <Button
+                key={item.key}
+                type="text"
+                icon={item.icon}
+                onClick={item.onClick}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  color: '#666',
+                  border: 'none',
+                  padding: '6px 12px',
+                  borderRadius: '6px'
+                }}
               >
-                {/* 聊天消息区域 */}
-                <div
-                  style={{
-                    flex: 1,
-                    overflowY: 'auto',
-                    padding: '16px',
-                    background: '#fafafa',
-                    borderRadius: '8px 8px 0 0'
-                  }}
-                >
-                  {messages.length === 0 ? (
+                {item.label}
+              </Button>
+            ))}
+          </div>
+
+          {/* 中间：AI助手信息 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <RobotOutlined style={{ fontSize: '20px', color: '#10a37f' }} />
+            <div>
+              <div style={{ fontSize: '16px', fontWeight: 600, color: '#333' }}>
+                校园生活AI助手
+              </div>
+              <div style={{ fontSize: '12px', color: '#888' }}>
+                为您解答校园生活中的各种问题
+              </div>
+            </div>
+          </div>
+
+          {/* 右侧：语言选择和用户信息 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {/* 语言切换 */}
+            <Select
+              value={i18n.language}
+              onChange={handleLanguageChange}
+              style={{ width: 120 }}
+              size="small"
+              suffixIcon={<GlobalOutlined />}
+            >
+              <Option value="zh-CN">简体中文</Option>
+              <Option value="zh-TW">繁體中文</Option>
+              <Option value="en-US">English</Option>
+            </Select>
+
+            {/* 用户信息 */}
+            <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
+              <Space style={{ cursor: 'pointer' }}>
+                <Avatar 
+                  size="small" 
+                  icon={<UserOutlined />} 
+                  style={{ 
+                    backgroundColor: user?.role === 'admin' ? '#ff7875' : '#87d068' 
+                  }} 
+                />
+                <Text>{user?.email}</Text>
+              </Space>
+            </Dropdown>
+          </div>
+        </div>
+
+        {/* 聊天消息区域 */}
+        <div style={{
+          flex: 1,
+          overflowY: 'auto',
+          padding: '0',
+          backgroundColor: '#fff',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center'
+        }}>
+          {messages.length === 0 ? (
+            // 新对话的美观欢迎界面
+            <WelcomeInterface onQuickStart={handleQuickStart} />
+          ) : (
+            // 有消息时的正常聊天界面
+            <div style={{
+              width: '100%',
+              maxWidth: '768px',
+              padding: '24px 16px'
+            }}>
+              {messages.map((message) => (
+                <div key={message.id}>
+                  {editingMessageId === message.id ? (
+                    // 编辑模式
                     <div style={{
-                      textAlign: 'center',
-                      paddingTop: '100px',
-                      color: '#999'
+                      marginBottom: '24px',
+                      padding: '16px',
+                      border: '2px solid #0084ff',
+                      borderRadius: '12px',
+                      backgroundColor: '#f8faff'
                     }}>
-                      <RobotOutlined style={{ fontSize: '48px', marginBottom: '16px' }} />
-                      <div>开始与AI助手对话吧！</div>
-                      <div style={{ fontSize: '12px', marginTop: '8px' }}>
-                        您可以询问关于宿舍、食堂、图书馆、课程等校园生活问题
+                      <div style={{
+                        fontSize: '14px',
+                        fontWeight: 500,
+                        color: '#0084ff',
+                        marginBottom: '8px'
+                      }}>
+                        重新编辑消息
+                      </div>
+                      <TextArea
+                        value={editingContent}
+                        onChange={(e) => setEditingContent(e.target.value)}
+                        autoSize={{ minRows: 2, maxRows: 6 }}
+                        style={{
+                          marginBottom: '12px',
+                          borderRadius: '8px'
+                        }}
+                      />
+                      <div style={{
+                        display: 'flex',
+                        gap: '8px',
+                        justifyContent: 'flex-end'
+                      }}>
+                        <Button size="small" onClick={handleEditCancel}>
+                          取消
+                        </Button>
+                        <Button 
+                          size="small" 
+                          type="primary" 
+                          onClick={handleEditConfirm}
+                          disabled={!editingContent.trim()}
+                        >
+                          确认重发
+                        </Button>
                       </div>
                     </div>
                   ) : (
-                    <>
-                      {messages.map((message) => (
-                        <ChatMessageComponent
-                          key={message.id}
-                          message={message}
-                        />
-                      ))}
-                      {isLoading && (
-                        <div style={{ textAlign: 'center', padding: '20px' }}>
-                          <LoadingSpinner size="small" />
-                          <Text type="secondary" style={{ marginLeft: '8px' }}>
-                            AI正在思考中...
-                          </Text>
-                        </div>
-                      )}
-                    </>
-                  )}
-                  <div ref={messagesEndRef} />
-                </div>
-
-                {/* 输入区域 */}
-                <div style={{ padding: '16px', borderTop: '1px solid #f0f0f0' }}>
-                  <Space.Compact style={{ width: '100%' }}>
-                    <TextArea
-                      value={currentMessage}
-                      onChange={(e) => setCurrentMessage(e.target.value)}
-                      onPressEnter={handleKeyPress}
-                      placeholder="输入您的校园生活问题..."
-                      autoSize={{ minRows: 1, maxRows: 3 }}
-                      style={{ resize: 'none' }}
+                    // 正常显示模式
+                    <ChatMessageComponent
+                      key={message.id}
+                      message={message}
+                      onResend={handleResendMessage}
                     />
-                    <Button
-                      type="primary"
-                      icon={<SendOutlined />}
-                      onClick={handleSendMessage}
-                      disabled={!currentMessage.trim() || isLoading}
+                  )}
+                </div>
+              ))}
+              {isLoading && (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '16px 0',
+                  color: '#666'
+                }}>
+                  <LoadingSpinner size="small" />
+                  <span style={{ marginLeft: '12px', fontSize: '14px' }}>
+                    AI正在思考中...
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* 底部输入区域 */}
+        <div style={{
+          borderTop: '1px solid #e5e5e5',
+          backgroundColor: '#fff',
+          display: 'flex',
+          justifyContent: 'center'
+        }}>
+          <div style={{
+            width: '100%',
+            maxWidth: '768px'
+          }}>
+            {/* 已上传文件显示区域 */}
+            {uploadedFiles.length > 0 && (
+              <div style={{
+                padding: '12px 24px 0',
+                borderBottom: '1px solid #f0f0f0'
+              }}>
+                <div style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: '8px'
+                }}>
+                  {uploadedFiles.map((file) => (
+                    <div
+                      key={file.id}
                       style={{
-                        height: 'auto',
-                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                        border: 'none'
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '6px 12px',
+                        backgroundColor: '#f5f5f5',
+                        borderRadius: '16px',
+                        fontSize: '12px',
+                        border: '1px solid #e0e0e0'
                       }}
                     >
-                      发送
-                    </Button>
-                  </Space.Compact>
+                      {file.type === 'image' ? (
+                        <FileImageOutlined style={{ color: '#52c41a' }} />
+                      ) : (
+                        <FileTextOutlined style={{ color: '#1890ff' }} />
+                      )}
+                      <span style={{ maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {file.name}
+                      </span>
+                      <Button
+                        type="text"
+                        size="small"
+                        icon={<DeleteFileOutlined />}
+                        onClick={() => removeUploadedFile(file.id)}
+                        style={{
+                          padding: 0,
+                          minWidth: 'auto',
+                          width: '16px',
+                          height: '16px',
+                          color: '#999'
+                        }}
+                      />
+                    </div>
+                  ))}
                 </div>
-              </Card>
-            </motion.div>
-          </Col>
-        </Row>
+              </div>
+            )}
+            
+            {/* 输入框和按钮区域 */}
+            <div style={{
+              padding: '16px 24px 24px',
+              display: 'flex',
+              alignItems: 'flex-end',
+              gap: '12px'
+            }}>
+              <Upload
+                beforeUpload={handleFileUpload}
+                showUploadList={false}
+                multiple={false}
+                accept="image/*,.txt,.md,.doc,.docx,text/*"
+              >
+                <Button
+                  icon={<PaperClipOutlined />}
+                  style={{
+                    borderRadius: '12px',
+                    height: '40px',
+                    width: '40px',
+                    padding: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    border: '1px solid #d1d5db'
+                  }}
+                  title="上传文件（支持图片和文本文件，最大10MB）"
+                />
+              </Upload>
+              
+              <TextArea
+                value={currentMessage}
+                onChange={(e) => setCurrentMessage(e.target.value)}
+                onPressEnter={handleKeyPress}
+                placeholder="输入您的校园生活问题..."
+                autoSize={{ minRows: 1, maxRows: 4 }}
+                style={{
+                  flex: 1,
+                  borderRadius: '12px',
+                  border: '1px solid #d1d5db',
+                  boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
+                  resize: 'none'
+                }}
+              />
+              
+              <Button
+                type="primary"
+                icon={<SendOutlined />}
+                onClick={handleSendMessage}
+                disabled={(!currentMessage.trim() && uploadedFiles.length === 0) || isLoading}
+                style={{
+                  borderRadius: '12px',
+                  backgroundColor: '#10a37f',
+                  borderColor: '#10a37f',
+                  height: '40px',
+                  width: '40px',
+                  padding: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              />
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

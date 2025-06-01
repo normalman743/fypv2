@@ -43,6 +43,7 @@ import {
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
+import TopNavigation from '../components/common/TopNavigation';
 import type { UploadProps } from 'antd';
 
 const { Title, Text, Paragraph } = Typography;
@@ -298,10 +299,15 @@ const ProfilePage: React.FC = () => {
   };
 
   return (
-    <div style={{ padding: '24px' }}>
-      <Title level={2}>{t('profile.title')}</Title>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#f5f5f5' }}>
+      <TopNavigation 
+        title={t('profile.title')}
+        subtitle="管理您的个人信息和设置"
+        icon={<UserOutlined />}
+      />
       
-      <Tabs defaultActiveKey="profile">
+      <div style={{ flex: 1, overflow: 'auto', padding: '24px' }}>
+        <Tabs defaultActiveKey="profile">
         <TabPane tab={t('profile.tabs.profile')} key="profile">
           <Row gutter={24}>
             <Col span={8}>
@@ -745,6 +751,7 @@ const ProfilePage: React.FC = () => {
           {t('profile.account.deleteConfirmText')}
         </Paragraph>
       </Modal>
+      </div>
     </div>
   );
 };

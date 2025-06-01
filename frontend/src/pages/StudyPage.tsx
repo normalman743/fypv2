@@ -19,6 +19,9 @@ import {
   Breadcrumb,
   Popconfirm,
   Tooltip,
+  Tabs,
+  Tree,
+  Avatar,
 } from 'antd';
 import {
   BookOutlined,
@@ -38,10 +41,14 @@ import {
   ArrowLeftOutlined,
   InboxOutlined,
   HomeOutlined,
+  MessageOutlined,
+  FolderOutlined,
+  SendOutlined,
+  RobotOutlined,
 } from '@ant-design/icons';
 import { motion } from 'framer-motion';
 import dayjs, { Dayjs } from 'dayjs';
-import PageHeader from '../components/common/PageHeader';
+import TopNavigation from '../components/common/TopNavigation';
 import StatCard from '../components/common/StatCard';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 
@@ -81,9 +88,30 @@ interface StudyFile {
 }
 
 interface NavigationState {
-  level: 'semester' | 'course' | 'files';
+  level: 'semester' | 'course' | 'files' | 'courseDetail'; // 添加 courseDetail 级别
   selectedSemester?: string;
   selectedCourse?: string;
+}
+
+interface CourseFolder {
+  id: string;
+  courseId: string;
+  name: string;
+  type: 'outline' | 'tutorial' | 'lecture' | 'note' | 'custom';
+  parentId?: string;
+  icon?: string;
+  color?: string;
+}
+
+interface CourseMaterial {
+  id: string;
+  courseId: string;
+  folderId: string;
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+  uploadDate: Date;
+  filePath: string;
 }
 
 const StudyPage: React.FC = () => {
@@ -179,8 +207,27 @@ const StudyPage: React.FC = () => {
     },
   ]);
 
+  // 自动计算当前学期
+  const getCurrentSemesterByDate = (): string => {
+    const now = new Date();
+    const month = now.getMonth() + 1; // getMonth() 返回 0-11，需要 +1
+    
+    // 根据月份判断学期
+    if (month >= 9 || month <= 1) {
+      // 9月-1月：第一学期
+      return '3'; // 2025-26学年 第一学期
+    } else if (month >= 2 && month <= 6) {
+      // 2月-6月：第二学期  
+      return '1'; // 2024-25学年 第二学期
+    } else {
+      // 7月-8月：第三学期
+      return '2'; // 2024-25学年 第三学期
+    }
+  };
+
   const [navigation, setNavigation] = useState<NavigationState>({
-    level: 'semester',
+    level: 'course', // 默认进入课程选择页面
+    selectedSemester: getCurrentSemesterByDate(), // 自动选择当前学期
   });
 
   const [loading, setLoading] = useState(false);
@@ -188,9 +235,26 @@ const StudyPage: React.FC = () => {
     course: false,
     file: false,
     filePreview: false,
+    folder: false, // 添加文件夹创建模态框
   });
   const [selectedFile, setSelectedFile] = useState<StudyFile | null>(null);
   const [form] = Form.useForm();
+  const [folderForm] = Form.useForm(); // 文件夹表单
+  
+  // 新增：课程详情页面状态
+  const [activeTab, setActiveTab] = useState<'materials' | 'chat'>('materials');
+  const [courseFolders, setCourseFolders] = useState<CourseFolder[]>([
+    // 预设文件夹
+    { id: '1', courseId: '1', name: 'Outline', type: 'outline', icon: '📋', color: '#1890ff' },
+    { id: '2', courseId: '1', name: 'Tutorial', type: 'tutorial', icon: '📚', color: '#52c41a' },
+    { id: '3', courseId: '1', name: 'Lecture', type: 'lecture', icon: '🎯', color: '#722ed1' },
+    { id: '4', courseId: '1', name: 'Note', type: 'note', icon: '📝', color: '#fa8c16' },
+    { id: '5', courseId: '2', name: 'Outline', type: 'outline', icon: '📋', color: '#1890ff' },
+    { id: '6', courseId: '2', name: 'Tutorial', type: 'tutorial', icon: '📚', color: '#52c41a' },
+    { id: '7', courseId: '2', name: 'Lecture', type: 'lecture', icon: '🎯', color: '#722ed1' },
+    { id: '8', courseId: '2', name: 'Note', type: 'note', icon: '📝', color: '#fa8c16' },
+  ]);
+  const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
 
   // Helper functions
   const formatFileSize = (bytes: number): string => {
@@ -228,6 +292,38 @@ const StudyPage: React.FC = () => {
       setNavigation({ level: 'course', selectedSemester: id });
     } else if (level === 'files' && id) {
       setNavigation({ ...navigation, level: 'files', selectedCourse: id });
+    } else if (level === 'courseDetail' && id) {
+      setNavigation({ ...navigation, level: 'courseDetail', selectedCourse: id });
+      setActiveTab('materials'); // 默认显示资料管理
+    }
+  };
+
+  // 获取当前课程的文件夹
+  const getCurrentCourseFolders = () => {
+    if (!navigation.selectedCourse) return [];
+    return courseFolders.filter(f => f.courseId === navigation.selectedCourse);
+  };
+
+  // 创建自定义文件夹
+  const handleCreateFolder = async (values: any) => {
+    try {
+      setLoading(true);
+      const newFolder: CourseFolder = {
+        id: Date.now().toString(),
+        courseId: navigation.selectedCourse!,
+        name: values.name,
+        type: 'custom',
+        icon: values.icon || '📁',
+        color: values.color || '#1890ff',
+      };
+      setCourseFolders(prev => [...prev, newFolder]);
+      folderForm.resetFields();
+      setModals({ ...modals, folder: false });
+      message.success('文件夹创建成功');
+    } catch (error) {
+      message.error('创建文件夹失败');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -355,7 +451,16 @@ const StudyPage: React.FC = () => {
     if (navigation.selectedCourse) {
       const course = getCurrentCourse();
       items.push({
-        title: <span>{course?.name}</span>,
+        title: navigation.level === 'courseDetail' ? (
+          <span>{course?.name}</span>
+        ) : (
+          <Button 
+            type="link" 
+            onClick={() => handleNavigate('courseDetail', navigation.selectedCourse)}
+          >
+            {course?.name}
+          </Button>
+        ),
       });
     }
 
@@ -421,7 +526,7 @@ const StudyPage: React.FC = () => {
               >
                 <Card
                   hoverable
-                  onClick={() => handleNavigate('files', course.id)}
+                  onClick={() => handleNavigate('courseDetail', course.id)}
                   actions={[
                     <FileTextOutlined key="files" />,
                     <Text key="count">{course.fileCount} 个文件</Text>,
@@ -541,11 +646,274 @@ const StudyPage: React.FC = () => {
     );
   };
 
+  // 渲染课程详情页面（资料管理 + 聊天）
+  const renderCourseDetailView = () => {
+    const currentCourse = getCurrentCourse();
+    const currentFolders = getCurrentCourseFolders();
+    
+    const tabItems = [
+      {
+        key: 'materials',
+        label: (
+          <span>
+            <FolderOutlined />
+            课程资料
+          </span>
+        ),
+        children: renderMaterialsTab(currentFolders),
+      },
+      {
+        key: 'chat',
+        label: (
+          <span>
+            <MessageOutlined />
+            课程问答
+          </span>
+        ),
+        children: renderChatTab(currentCourse),
+      },
+    ];
+
+    return (
+      <div>
+        {/* 课程信息头部 */}
+        <Card style={{ marginBottom: 16 }}>
+          <Row align="middle" justify="space-between">
+            <Col>
+              <Space>
+                <BookOutlined style={{ fontSize: 24, color: '#1890ff' }} />
+                <div>
+                  <Title level={3} style={{ margin: 0 }}>
+                    {currentCourse?.name}
+                  </Title>
+                  <Text type="secondary">
+                    {currentCourse?.code} • {currentCourse?.instructor}
+                  </Text>
+                </div>
+              </Space>
+            </Col>
+            <Col>
+              <Button
+                icon={<ArrowLeftOutlined />}
+                onClick={() => handleNavigate('course', navigation.selectedSemester)}
+              >
+                返回课程列表
+              </Button>
+            </Col>
+          </Row>
+        </Card>
+
+        {/* 标签页内容 */}
+        <Card>
+          <Tabs
+            activeKey={activeTab}
+            onChange={(key) => setActiveTab(key as 'materials' | 'chat')}
+            items={tabItems}
+            size="large"
+          />
+        </Card>
+      </div>
+    );
+  };
+
+  // 渲染资料管理标签页
+  const renderMaterialsTab = (folders: CourseFolder[]) => (
+    <div>
+      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+        <Col>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => setModals({ ...modals, folder: true })}
+          >
+            创建文件夹
+          </Button>
+        </Col>
+        <Col>
+          <Button
+            icon={<UploadOutlined />}
+            onClick={() => setModals({ ...modals, file: true })}
+            disabled={!selectedFolder}
+          >
+            上传文件
+          </Button>
+        </Col>
+      </Row>
+
+      <Row gutter={[16, 16]}>
+        {/* 文件夹列表 */}
+        <Col xs={24} lg={8}>
+          <Card title="文件夹" size="small">
+            <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+              {folders.map(folder => (
+                <div
+                  key={folder.id}
+                  style={{
+                    padding: '12px',
+                    margin: '8px 0',
+                    backgroundColor: selectedFolder === folder.id ? '#e6f7ff' : '#fafafa',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    border: selectedFolder === folder.id ? '2px solid #1890ff' : '1px solid #d9d9d9',
+                    transition: 'all 0.3s ease'
+                  }}
+                  onClick={() => setSelectedFolder(selectedFolder === folder.id ? null : folder.id)}
+                >
+                  <Space>
+                    <span style={{ fontSize: '18px' }}>{folder.icon}</span>
+                    <Text strong={selectedFolder === folder.id}>
+                      {folder.name}
+                    </Text>
+                    <Tag color={folder.color}>
+                      {folder.type}
+                    </Tag>
+                  </Space>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </Col>
+
+        {/* 文件列表 */}
+        <Col xs={24} lg={16}>
+          <Card 
+            title={selectedFolder ? `文件列表 - ${folders.find(f => f.id === selectedFolder)?.name}` : '请选择文件夹'} 
+            size="small"
+          >
+            {selectedFolder ? (
+              <div style={{ minHeight: '300px' }}>
+                {getCurrentFiles().length > 0 ? (
+                  <List
+                    itemLayout="horizontal"
+                    dataSource={getCurrentFiles()}
+                    renderItem={(file) => (
+                      <List.Item
+                        actions={[
+                          <Button type="text" icon={<EyeOutlined />} />,
+                          <Button type="text" icon={<DownloadOutlined />} />,
+                          <Button type="text" icon={<DeleteOutlined />} danger />,
+                        ]}
+                      >
+                        <List.Item.Meta
+                          avatar={getFileIcon(file.type)}
+                          title={file.name}
+                          description={`${formatFileSize(file.size)} • ${file.uploadDate}`}
+                        />
+                      </List.Item>
+                    )}
+                  />
+                ) : (
+                  <div style={{ 
+                    textAlign: 'center', 
+                    padding: '50px',
+                    color: '#999'
+                  }}>
+                    <InboxOutlined style={{ fontSize: '48px', marginBottom: '16px' }} />
+                    <div>该文件夹暂无文件</div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div style={{ 
+                textAlign: 'center', 
+                padding: '50px',
+                color: '#999'
+              }}>
+                <FolderOutlined style={{ fontSize: '48px', marginBottom: '16px' }} />
+                <div>请先选择一个文件夹</div>
+              </div>
+            )}
+          </Card>
+        </Col>
+      </Row>
+    </div>
+  );
+
+  // 渲染聊天标签页
+  const renderChatTab = (course: Course | undefined) => (
+    <div style={{ height: '500px', display: 'flex', flexDirection: 'column' }}>
+      {/* 聊天消息区域 */}
+      <div style={{ 
+        flex: 1, 
+        padding: '16px',
+        backgroundColor: '#fafafa',
+        borderRadius: '8px',
+        marginBottom: '16px',
+        overflowY: 'auto'
+      }}>
+        {/* 欢迎消息 */}
+        <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+          <Avatar size={64} icon={<RobotOutlined />} style={{ backgroundColor: '#52c41a' }} />
+          <Title level={4} style={{ marginTop: '8px' }}>
+            {course?.name} AI助手
+          </Title>
+          <Text type="secondary">
+            我可以帮您解答关于这门课程的任何问题，包括课程内容、作业要求、学习建议等。
+          </Text>
+        </div>
+
+        {/* 快速问题按钮 */}
+        <Row gutter={[8, 8]} style={{ marginBottom: '20px' }}>
+          {[
+            '这门课的学习目标是什么？',
+            '有哪些重要的作业和考试？',
+            '推荐的学习资料有哪些？',
+            '如何更好地掌握课程内容？'
+          ].map((question, index) => (
+            <Col key={index}>
+              <Button 
+                size="small" 
+                style={{ borderRadius: '16px' }}
+                onClick={() => {
+                  // 这里可以添加快速问题的处理逻辑
+                  message.info(`您问了：${question}`);
+                }}
+              >
+                {question}
+              </Button>
+            </Col>
+          ))}
+        </Row>
+      </div>
+
+      {/* 消息输入区域 */}
+      <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: '16px' }}>
+        <Row gutter={8}>
+          <Col flex={1}>
+            <Input.TextArea
+              placeholder={`向 ${course?.name} AI助手提问...`}
+              autoSize={{ minRows: 1, maxRows: 3 }}
+              style={{ borderRadius: '8px' }}
+            />
+          </Col>
+          <Col>
+            <Button 
+              type="primary" 
+              icon={<SendOutlined />}
+              style={{ height: '100%', borderRadius: '8px' }}
+            >
+              发送
+            </Button>
+          </Col>
+        </Row>
+        
+        {/* 资料引用区域 */}
+        <div style={{ marginTop: '8px' }}>
+          <Text type="secondary" style={{ fontSize: '12px' }}>
+            💡 提示：您可以在问题中引用课程资料，AI助手会基于这些资料为您提供更准确的答案
+          </Text>
+        </div>
+      </div>
+    </div>
+  );
+
   const renderMainContent = () => {
     if (navigation.level === 'semester') {
       return renderSemesterView();
     } else if (navigation.level === 'course') {
       return renderCourseView();
+    } else if (navigation.level === 'courseDetail') {
+      return renderCourseDetailView();
     } else {
       return renderFilesView();
     }
@@ -554,6 +922,7 @@ const StudyPage: React.FC = () => {
   const getPageTitle = () => {
     if (navigation.level === 'semester') return '学习助手';
     if (navigation.level === 'course') return '课程管理';
+    if (navigation.level === 'courseDetail') return getCurrentCourse()?.name || '课程详情';
     return '文件管理';
   };
 
@@ -585,33 +954,36 @@ const StudyPage: React.FC = () => {
   };
 
   return (
-    <div className="study-page">
-      <PageHeader 
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#f5f5f5' }}>
+      <TopNavigation 
         title={getPageTitle()}
         subtitle="管理您的学习资料和课程安排"
+        icon={<BookOutlined />}
       />
+      
+      <div style={{ flex: 1, overflow: 'auto', padding: '24px' }}>
+        {/* Stats Cards */}
+        <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+          {getStatsData().map((stat, index) => (
+            <Col xs={24} sm={8} key={index}>
+              <StatCard {...stat} />
+            </Col>
+          ))}
+        </Row>
 
-      {/* Stats Cards */}
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        {getStatsData().map((stat, index) => (
-          <Col xs={24} sm={8} key={index}>
-            <StatCard {...stat} />
-          </Col>
-        ))}
-      </Row>
+        {/* Breadcrumb */}
+        {navigation.level !== 'semester' && renderBreadcrumb()}
 
-      {/* Breadcrumb */}
-      {navigation.level !== 'semester' && renderBreadcrumb()}
-
-      {/* Main Content */}
-      <motion.div
-        key={navigation.level}
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-      >
-        {renderMainContent()}
-      </motion.div>
+        {/* Main Content */}
+        <motion.div
+          key={navigation.level}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          {renderMainContent()}
+        </motion.div>
+      </div>
 
       {/* Course Creation Modal */}
       <Modal
@@ -683,6 +1055,63 @@ const StudyPage: React.FC = () => {
             支持单个或批量上传，文件大小限制为10MB
           </p>
         </Dragger>
+      </Modal>
+
+      {/* Folder Creation Modal */}
+      <Modal
+        title="创建文件夹"
+        open={modals.folder}
+        onCancel={() => setModals({ ...modals, folder: false })}
+        footer={null}
+      >
+        <Form
+          form={folderForm}
+          layout="vertical"
+          onFinish={handleCreateFolder}
+        >
+          <Form.Item
+            name="name"
+            label="文件夹名称"
+            rules={[{ required: true, message: '请输入文件夹名称' }]}
+          >
+            <Input placeholder="请输入文件夹名称" />
+          </Form.Item>
+
+          <Form.Item name="icon" label="文件夹图标">
+            <Select placeholder="选择图标（可选）" allowClear>
+              <Option value="📁">📁 默认文件夹</Option>
+              <Option value="📚">📚 书籍</Option>
+              <Option value="📝">📝 笔记</Option>
+              <Option value="🎯">🎯 重点</Option>
+              <Option value="📋">📋 列表</Option>
+              <Option value="🔬">🔬 实验</Option>
+              <Option value="📊">📊 图表</Option>
+              <Option value="🎨">🎨 创意</Option>
+            </Select>
+          </Form.Item>
+
+          <Form.Item name="color" label="文件夹颜色">
+            <Select placeholder="选择颜色（可选）" allowClear>
+              <Option value="#1890ff">🔵 蓝色</Option>
+              <Option value="#52c41a">🟢 绿色</Option>
+              <Option value="#722ed1">🟣 紫色</Option>
+              <Option value="#fa8c16">🟠 橙色</Option>
+              <Option value="#f5222d">🔴 红色</Option>
+              <Option value="#13c2c2">🟡 青色</Option>
+            </Select>
+          </Form.Item>
+
+          <Form.Item>
+            <Space>
+              <Button type="primary" htmlType="submit" loading={loading}>
+                创建文件夹
+              </Button>
+              <Button onClick={() => setModals({ ...modals, folder: false })}>
+                取消
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
       </Modal>
 
       {/* File Preview Modal */}

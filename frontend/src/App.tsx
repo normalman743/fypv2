@@ -59,41 +59,31 @@ function App() {
               {/* Protected routes */}
               <Route path="/" element={
                 <ProtectedRoute>
-                  <Layout>
-                    <HomePage />
-                  </Layout>
+                  <HomePage />
                 </ProtectedRoute>
               } />
               
               <Route path="/chat" element={
                 <ProtectedRoute>
-                  <Layout>
-                    <ChatPage />
-                  </Layout>
+                  <ChatPage />
                 </ProtectedRoute>
               } />
               
               <Route path="/study" element={
                 <ProtectedRoute>
-                  <Layout>
-                    <StudyPage />
-                  </Layout>
+                  <StudyPage />
                 </ProtectedRoute>
               } />
               
               <Route path="/admin" element={
                 <ProtectedRoute requireAdmin>
-                  <Layout>
-                    <AdminPage />
-                  </Layout>
+                  <AdminPage />
                 </ProtectedRoute>
               } />
               
               <Route path="/profile" element={
                 <ProtectedRoute>
-                  <Layout>
-                    <ProfilePage />
-                  </Layout>
+                  <ProfilePage />
                 </ProtectedRoute>
               } />
               

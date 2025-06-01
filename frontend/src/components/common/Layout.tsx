@@ -36,9 +36,10 @@ interface LayoutProps {
 }
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
-  const [collapsed, setCollapsed] = useState(false);
-  const navigate = useNavigate();
+  // 根据当前路径决定侧边栏是否默认收起
   const location = useLocation();
+  const [collapsed, setCollapsed] = useState(location.pathname === '/chat');
+  const navigate = useNavigate();
   const { t, i18n } = useTranslation();
   const { user, logout } = useAuth();
 
@@ -165,7 +166,13 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             {/* 用户信息 */}
             <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
               <Space style={{ cursor: 'pointer' }}>
-                <Avatar size="small" icon={<UserOutlined />} />
+                <Avatar 
+                  size="small" 
+                  icon={<UserOutlined />} 
+                  style={{ 
+                    backgroundColor: user?.role === 'admin' ? '#ff7875' : '#87d068' 
+                  }} 
+                />
                 <Text>{user?.email}</Text>
               </Space>
             </Dropdown>

@@ -45,6 +45,7 @@ import {
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
+import TopNavigation from '../components/common/TopNavigation';
 import type { ColumnsType } from 'antd/es/table';
 
 const { Title, Text, Paragraph } = Typography;
@@ -399,10 +400,15 @@ const AdminPage: React.FC = () => {
   }
 
   return (
-    <div style={{ padding: '24px' }}>
-      <Title level={2}>{t('admin.title')}</Title>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#f5f5f5' }}>
+      <TopNavigation 
+        title={t('admin.title')}
+        subtitle="系统管理与监控"
+        icon={<SettingOutlined />}
+      />
       
-      <Tabs defaultActiveKey="overview">
+      <div style={{ flex: 1, overflow: 'auto', padding: '24px' }}>
+        <Tabs defaultActiveKey="overview">
         <TabPane tab={t('admin.tabs.overview')} key="overview">
           {/* 系统统计 */}
           <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
@@ -668,6 +674,7 @@ const AdminPage: React.FC = () => {
           </Form>
         )}
       </Modal>
+      </div>
     </div>
   );
 };
