@@ -1,5 +1,5 @@
-import React from 'react';
-import { Button, Dropdown, Avatar, Space, Select, Typography, MenuProps } from 'antd';
+import React, { useState } from 'react';
+import { Button, Avatar, Select, Typography } from 'antd';
 import {
   HomeOutlined,
   MessageOutlined,
@@ -9,6 +9,7 @@ import {
   LogoutOutlined,
   SettingOutlined,
   GlobalOutlined,
+  DownOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -26,8 +27,9 @@ interface TopNavigationProps {
 const TopNavigation: React.FC<TopNavigationProps> = ({ title, subtitle, icon }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { t, i18n } = useTranslation();
+  const { i18n } = useTranslation();
   const { user, logout } = useAuth();
+  const [userMenuVisible, setUserMenuVisible] = useState(false);
 
   const handleLanguageChange = (value: string) => {
     i18n.changeLanguage(value);
@@ -67,40 +69,19 @@ const TopNavigation: React.FC<TopNavigationProps> = ({ title, subtitle, icon }) 
     }] : []),
   ];
 
-  // 用户下拉菜单
-  const userMenuItems: MenuProps['items'] = [
-    {
-      key: 'profile',
-      icon: <UserOutlined />,
-      label: t('navigation.profile'),
-      onClick: () => navigate('/profile'),
-    },
-    {
-      key: 'settings',
-      icon: <SettingOutlined />,
-      label: t('navigation.settings'),
-    },
-    {
-      type: 'divider',
-    },
-    {
-      key: 'logout',
-      icon: <LogoutOutlined />,
-      label: t('auth.logout'),
-      onClick: handleLogout,
-    },
-  ];
-
   return (
-    <div style={{
-      padding: '16px 24px',
-      borderBottom: '1px solid #e5e5e5',
-      backgroundColor: '#fff',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      boxShadow: '0 1px 4px rgba(0,21,41,.08)'
-    }}>
+    <div 
+      style={{
+        padding: '16px 24px',
+        borderBottom: '1px solid #e5e5e5',
+        backgroundColor: '#fff',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        boxShadow: '0 1px 4px rgba(0,21,41,.08)',
+        position: 'relative',
+      }}
+    >
       {/* 左侧：导航链接 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
         {navigationItems.map((item) => (
@@ -160,9 +141,20 @@ const TopNavigation: React.FC<TopNavigationProps> = ({ title, subtitle, icon }) 
           <Option value="en-US">English</Option>
         </Select>
 
-        {/* 用户信息 */}
-        <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
-          <Space style={{ cursor: 'pointer' }}>
+        {/* 用户信息 - 简单的原生下拉菜单 */}
+        <div style={{ position: 'relative' }}>
+          <div
+            style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '8px',
+              cursor: 'pointer',
+              padding: '4px 8px',
+              borderRadius: '6px',
+              backgroundColor: userMenuVisible ? '#f5f5f5' : 'transparent'
+            }}
+            onClick={() => setUserMenuVisible(!userMenuVisible)}
+          >
             <Avatar 
               size="small" 
               icon={<UserOutlined />} 
@@ -171,9 +163,100 @@ const TopNavigation: React.FC<TopNavigationProps> = ({ title, subtitle, icon }) 
               }} 
             />
             <Text>{user?.email}</Text>
-          </Space>
-        </Dropdown>
+            <DownOutlined style={{ fontSize: '12px', color: '#999' }} />
+          </div>
+
+          {/* 简单的下拉菜单 */}
+          {userMenuVisible && (
+            <div
+              style={{
+                position: 'absolute',
+                top: '100%',
+                right: 0,
+                marginTop: '4px',
+                backgroundColor: 'white',
+                border: '1px solid #d9d9d9',
+                borderRadius: '6px',
+                boxShadow: '0 6px 16px 0 rgba(0, 0, 0, 0.08), 0 3px 6px -4px rgba(0, 0, 0, 0.12), 0 9px 28px 8px rgba(0, 0, 0, 0.05)',
+                minWidth: '160px',
+                zIndex: 1000,
+              }}
+            >
+              <div
+                style={{
+                  padding: '8px 12px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                onClick={() => {
+                  navigate('/profile');
+                  setUserMenuVisible(false);
+                }}
+              >
+                <UserOutlined />
+                个人资料
+              </div>
+              <div
+                style={{
+                  padding: '8px 12px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                onClick={() => {
+                  navigate('/profile');
+                  setUserMenuVisible(false);
+                }}
+              >
+                <SettingOutlined />
+                设置
+              </div>
+              <div style={{ borderTop: '1px solid #f0f0f0', margin: '4px 0' }} />
+              <div
+                style={{
+                  padding: '8px 12px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  color: '#ff4d4f'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                onClick={() => {
+                  handleLogout();
+                  setUserMenuVisible(false);
+                }}
+              >
+                <LogoutOutlined />
+                退出登录
+              </div>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* 点击其他地方关闭菜单 */}
+      {userMenuVisible && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 999,
+          }}
+          onClick={() => setUserMenuVisible(false)}
+        />
+      )}
     </div>
   );
 };
