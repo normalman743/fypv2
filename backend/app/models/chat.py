@@ -16,4 +16,4 @@ class Chat(Base):
 
     course = relationship("Course", back_populates="chats")
     user = relationship("User", back_populates="chats")
-    messages = relationship("Message", back_populates="chat") 
+    messages = relationship("Message", back_populates="chat", cascade="all, delete-orphan") 

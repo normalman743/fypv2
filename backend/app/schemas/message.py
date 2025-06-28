@@ -1,8 +1,15 @@
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
+from app.schemas.common import SuccessResponse
 
-class RagSource(BaseModel):
+class FileAttachment(BaseModel):
+    id: int
+    filename: str
+    original_name: str
+    file_size: int
+
+class RAGSource(BaseModel):
     source_file: str
     chunk_id: int
 
@@ -10,28 +17,25 @@ class MessageResponse(BaseModel):
     id: int
     chat_id: int
     content: str
-    role: str
-    tokens_used: Optional[int]
-    cost: Optional[float]
+    role: str  # "user" or "assistant"
+    tokens_used: Optional[int] = None
+    cost: Optional[float] = None
     created_at: datetime
-    file_attachments: List[dict] = []
-    rag_sources: Optional[List[RagSource]] = None
+    file_attachments: List[FileAttachment] = []
+    rag_sources: Optional[List[RAGSource]] = []
 
-class MessageListResponse(BaseModel):
-    messages: List[MessageResponse]
+class MessageListResponse(SuccessResponse):
+    data: dict  # {"messages": List[MessageResponse]}
 
 class SendMessageRequest(BaseModel):
     content: str
-    file_ids: Optional[List[int]] = None
+    file_ids: Optional[List[int]] = []
 
-class SendMessageResponse(BaseModel):
-    user_message: MessageResponse
-    ai_message: MessageResponse
-    chat_title_updated: bool
-    new_chat_title: Optional[str] = None
-
-class UpdateMessageRequest(BaseModel):
+class EditMessageRequest(BaseModel):
     content: str
 
-class UpdateMessageResponse(BaseModel):
-    message: dict  # 包含id, content, updated_at 
+class MessageSendResponse(SuccessResponse):
+    data: dict  # {"user_message": MessageResponse, "ai_message": MessageResponse, "chat_title_updated": bool, "new_chat_title": str}
+
+class MessageUpdateResponse(SuccessResponse):
+    data: dict  # {"message": {"id": int, "content": str, "updated_at": datetime}} 

@@ -62,7 +62,7 @@ async def root():
     }
 
 # 导入路由
-from app.api.v1 import auth, semesters, courses, folders, files
+from app.api.v1 import auth, semesters, courses, folders, files, chats, messages
 
 # 注册路由
 app.include_router(auth.router, prefix="/api/v1")
@@ -70,6 +70,8 @@ app.include_router(semesters.router, prefix="/api/v1")
 app.include_router(courses.router, prefix="/api/v1")
 app.include_router(folders.router, prefix="/api/v1")
 app.include_router(files.router, prefix="/api/v1")
+app.include_router(chats.router, prefix="/api/v1")
+app.include_router(messages.router, prefix="/api/v1")
 
 if __name__ == "__main__":
     import uvicorn
