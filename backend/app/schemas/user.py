@@ -1,4 +1,5 @@
 from typing import Optional
+from datetime import datetime
 from pydantic import BaseModel, EmailStr
 
 class UserBase(BaseModel):
@@ -26,8 +27,8 @@ class UserInDBBase(UserBase):
     balance: float
     total_spent: float
     last_opened_semester_id: Optional[int] = None
-    created_at: str # Will be datetime, but Pydantic handles str conversion
-    updated_at: str # Will be datetime, but Pydantic handles str conversion
+    created_at: datetime # Changed to datetime
+    updated_at: datetime # Changed to datetime
 
     class Config:
         from_attributes = True # For Pydantic v2, use from_attributes=True instead of orm_mode=True
@@ -56,7 +57,7 @@ class UserPublic(BaseModel):
     preferred_language: str
     preferred_theme: str
     last_opened_semester_id: Optional[int] = None
-    created_at: str
+    created_at: datetime # Changed to datetime
 
     class Config:
         from_attributes = True
