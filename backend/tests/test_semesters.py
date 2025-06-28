@@ -197,8 +197,20 @@ class TestSemesters:
 
     def test_delete_semester_admin_success(self):
         """测试管理员删除学期"""
+        # Ensure semester exists by creating a new one for this test
         token = get_admin_token()
-        resp = client.delete("/api/v1/semesters/1", 
+        create_resp = client.post("/api/v1/semesters", 
+                                headers={"Authorization": f"Bearer {token}"},
+                                json={
+                                    "name": "Delete Test Semester",
+                                    "code": "DELETE_TEST",
+                                    "start_date": "2025-01-01T00:00:00Z",
+                                    "end_date": "2025-06-30T23:59:59Z"
+                                })
+        assert create_resp.status_code == 200
+        semester_id = create_resp.json()["data"]["semester"]["id"]
+        
+        resp = client.delete(f"/api/v1/semesters/{semester_id}", 
                            headers={"Authorization": f"Bearer {token}"})
         assert resp.status_code == 200
         data = resp.json()

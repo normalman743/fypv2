@@ -235,8 +235,20 @@ class TestCourses:
 
     def test_delete_course_success(self):
         """测试删除课程"""
+        # Ensure course exists by creating a new one for this test
         token = get_user_token()
-        resp = client.delete("/api/v1/courses/1", 
+        create_resp = client.post("/api/v1/courses", 
+                                headers={"Authorization": f"Bearer {token}"},
+                                json={
+                                    "name": "Delete Test Course",
+                                    "code": "DELETE_TEST",
+                                    "description": "Course for delete test",
+                                    "semester_id": 1
+                                })
+        assert create_resp.status_code == 200
+        course_id = create_resp.json()["data"]["course"]["id"]
+        
+        resp = client.delete(f"/api/v1/courses/{course_id}", 
                            headers={"Authorization": f"Bearer {token}"})
         assert resp.status_code == 200
         data = resp.json()
@@ -249,6 +261,18 @@ class TestCourses:
 
     def test_delete_course_not_owner(self):
         """测试非课程所有者不能删除"""
+        # 创建另一个用户
+        db: Session = SessionLocal()
+        other_user = User(
+            username="otheruser2",
+            email="other2@example.com", 
+            hashed_password=get_password_hash("otherpass"),
+            role="user"
+        )
+        db.add(other_user)
+        db.commit()
+        db.close()
+        
         token = create_access_token(data={"sub": 2})  # 其他用户ID
         resp = client.delete("/api/v1/courses/1", 
                            headers={"Authorization": f"Bearer {token}"})
