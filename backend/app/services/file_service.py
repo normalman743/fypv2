@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError
 import hashlib
@@ -11,7 +11,7 @@ from app.models.file import File
 from app.models.folder import Folder
 from app.models.course import Course
 from app.core.exceptions import NotFoundError, ForbiddenError, BadRequestError
-from app.services.cloud_storage_service import mock_cloud_storage
+from app.services.local_file_storage import local_file_storage
 
 # Import RAG service
 try:
@@ -57,11 +57,11 @@ class FileService:
         if not folder:
             raise NotFoundError("Folder not found or does not belong to course", "FOLDER_NOT_FOUND")
 
-        # 上传到云存储
+        # 上传到本地存储
         try:
-            cloud_url, local_path = mock_cloud_storage.upload_file(file, course_id, folder_id)
+            file_path, local_path = local_file_storage.upload_file(file, course_id, folder_id)
         except Exception as e:
-            raise BadRequestError(f"Failed to upload file to cloud storage: {e}", "CLOUD_UPLOAD_FAILED")
+            raise BadRequestError(f"Failed to upload file to local storage: {e}", "LOCAL_UPLOAD_FAILED")
 
         # Read file content for processing (reset file pointer)
         file.file.seek(0)
@@ -75,7 +75,7 @@ class FileService:
         file_type = self._determine_file_type(file.filename, file.content_type)
 
         try:
-            # Create file record with cloud URL
+            # Create file record with local file path
             file_record = File(
                 original_name=file.filename,
                 file_type=file_type,
@@ -86,7 +86,7 @@ class FileService:
                 user_id=user_id,
                 is_processed=False,
                 processing_status="pending",
-                cloud_url=cloud_url
+                file_path=file_path  # 文件本地存储路径
             )
             
             self.db.add(file_record)
@@ -99,8 +99,8 @@ class FileService:
             return file_record
         except IntegrityError:
             self.db.rollback()
-            # 如果数据库操作失败，删除已上传的云文件
-            mock_cloud_storage.delete_file(cloud_url)
+            # 如果数据库操作失败，删除已上传的本地文件
+            local_file_storage.delete_file(file_path)
             raise BadRequestError("Failed to upload file", "FILE_UPLOAD_FAILED")
 
     def _start_async_rag_processing(self, file_record: File, file_content: bytes) -> str:
@@ -191,9 +191,19 @@ class FileService:
 
         return file_record
 
-    def download_file(self, file_id: int, user_id: int) -> File:
+    def download_file(self, file_id: int, user_id: int) -> Tuple[File, bytes]:
         """Get file for download (check access via course ownership)"""
-        return self.get_file_preview(file_id, user_id)  # Same access logic
+        file_record = self.get_file_preview(file_id, user_id)  # Same access logic
+        
+        # 从本地存储读取文件内容
+        if not file_record.file_path:
+            raise BadRequestError("File path not found", "FILE_PATH_NOT_FOUND")
+        
+        file_content = local_file_storage.download_file(file_record.file_path)
+        if file_content is None:
+            raise BadRequestError("Failed to read file from local storage", "LOCAL_READ_FAILED")
+        
+        return file_record, file_content
 
     def delete_file(self, file_id: int, user_id: int) -> bool:
         """Delete file (check access via course ownership)"""
@@ -209,7 +219,13 @@ class FileService:
         if file_record.course.user_id != user_id:
             raise ForbiddenError("You don't have permission to delete this file")
 
-        # TODO: Implement actual file deletion from storage here
+        # 删除本地存储中的文件
+        if file_record.file_path:
+            try:
+                local_file_storage.delete_file(file_record.file_path)
+            except Exception as e:
+                print(f"⚠️ Failed to delete file from local storage: {e}")
+                # 继续删除数据库记录，即使本地文件删除失败
         
         self.db.delete(file_record)
         self.db.commit()

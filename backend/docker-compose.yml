@@ -21,9 +21,11 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - UPLOAD_DIR=/app/storage/uploads
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
+      - ./storage:/app/storage
     depends_on:
       - redis
     restart: unless-stopped
@@ -37,9 +39,11 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - UPLOAD_DIR=/app/storage/uploads
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
+      - ./storage:/app/storage
     depends_on:
       - redis
     restart: unless-stopped

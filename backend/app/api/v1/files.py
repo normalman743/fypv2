@@ -197,18 +197,14 @@ async def download_file(
 ):
     """Download file"""
     service = FileService(db)
-    file_record = service.download_file(file_id, current_user.id)
-    
-    # TODO: Implement actual file serving from storage
-    # For now, return a placeholder response
-    fake_content = f"Content of {file_record.original_name}".encode()
+    file_record, file_content = service.download_file(file_id, current_user.id)
     
     # Encode filename properly for Content-Disposition header
     from urllib.parse import quote
     encoded_filename = quote(file_record.original_name.encode('utf-8'))
     
     return StreamingResponse(
-        io.BytesIO(fake_content),
+        io.BytesIO(file_content),
         media_type=file_record.mime_type,
         headers={
             "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
