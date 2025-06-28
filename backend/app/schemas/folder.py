@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
+from app.schemas.common import SuccessResponse
 
 class FolderStats(BaseModel):
     file_count: int
@@ -14,15 +15,15 @@ class FolderResponse(BaseModel):
     created_at: datetime
     stats: FolderStats
 
-class FolderListResponse(BaseModel):
-    folders: List[FolderResponse]
+class FolderListResponse(SuccessResponse):
+    data: dict  # {"folders": List[FolderResponse]}
 
 class CreateFolderRequest(BaseModel):
     name: str
     folder_type: str
 
-class CreateFolderResponse(BaseModel):
-    folder: dict  # 包含id和created_at
+class CreateFolderResponse(SuccessResponse):
+    data: dict  # {"folder": {"id": int, "created_at": datetime}}
 
 class UpdateFolderRequest(BaseModel):
     name: Optional[str] = None

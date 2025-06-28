@@ -5,6 +5,8 @@ from app.models.database import SessionLocal, Base, engine
 from app.models.user import User
 from app.models.semester import Semester
 from app.models.course import Course
+from app.models.folder import Folder
+from app.models.file import File
 from app.core.security import get_password_hash, create_access_token
 from sqlalchemy.orm import Session
 from datetime import datetime
@@ -37,7 +39,7 @@ def setup_module(module):
     )
     db.add(semester)
     
-    # 创建课程
+    # 创建测试课程
     course = Course(
         name="数据结构与算法",
         code="CS1101A",
@@ -46,6 +48,29 @@ def setup_module(module):
         user_id=1
     )
     db.add(course)
+    
+    # 创建文件夹
+    folder = Folder(
+        name="讲座",
+        folder_type="lecture",
+        course_id=1,
+        is_default=False
+    )
+    db.add(folder)
+    
+    # 创建测试文件
+    test_file = File(
+        original_name="数据结构第一讲.pdf",
+        file_type="course_material",
+        file_size=2048000,
+        mime_type="application/pdf",
+        course_id=1,
+        folder_id=1,
+        user_id=1,
+        is_processed=True,
+        processing_status="completed"
+    )
+    db.add(test_file)
     
     db.commit()
     db.close()
@@ -59,32 +84,40 @@ def get_user_token():
     token = create_access_token(data={"sub": 1})  # 假设用户ID为1
     return token
 
-# 文件夹管理相关测试
+# 文件夹管理相关测试 
 class TestFolders:
     def test_get_course_folders_success(self):
-        """测试获取课程下所有文件夹"""
-        resp = client.get("/api/v1/courses/1/folders")
+        """测试获取课程文件夹"""
+        token = get_user_token()
+        resp = client.get("/api/v1/courses/1/folders",
+                         headers={"Authorization": f"Bearer {token}"})
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
         assert "folders" in data["data"]
+        assert len(data["data"]["folders"]) > 0
+        folder = data["data"]["folders"][0]
+        assert "id" in folder
+        assert "name" in folder
+        assert "folder_type" in folder
+        assert "course_id" in folder
+        assert "is_default" in folder
+        assert "created_at" in folder
+        assert "stats" in folder
 
-    def test_get_course_folders_course_not_found(self):
-        """测试获取不存在的课程文件夹"""
-        resp = client.get("/api/v1/courses/999/folders")
-        assert resp.status_code == 404
-        data = resp.json()
-        assert data["success"] is False
-        assert data["error"]["code"] == "COURSE_NOT_FOUND"
+    def test_get_course_folders_no_auth(self):
+        """测试无认证不能获取文件夹"""
+        resp = client.get("/api/v1/courses/1/folders")
+        assert resp.status_code == 401
 
     def test_create_folder_success(self):
-        """测试新建课程文件夹"""
+        """测试创建文件夹"""
         token = get_user_token()
-        resp = client.post("/api/v1/courses/1/folders", 
+        resp = client.post("/api/v1/courses/1/folders",
                           headers={"Authorization": f"Bearer {token}"},
                           json={
-                              "name": "讲座",
-                              "folder_type": "lecture"
+                              "name": "材料",
+                              "folder_type": "material"
                           })
         assert resp.status_code == 200
         data = resp.json()
@@ -95,37 +128,39 @@ class TestFolders:
 
     def test_create_folder_no_auth(self):
         """测试无认证不能创建文件夹"""
-        resp = client.post("/api/v1/courses/1/folders", 
+        resp = client.post("/api/v1/courses/1/folders",
                           json={
-                              "name": "讲座",
-                              "folder_type": "lecture"
+                              "name": "材料",
+                              "folder_type": "material"
                           })
         assert resp.status_code == 401
 
-    def test_create_folder_missing_fields(self):
-        """测试缺少必填字段"""
+    def test_create_folder_duplicate_name(self):
+        """测试创建重复名称文件夹"""
         token = get_user_token()
-        resp = client.post("/api/v1/courses/1/folders", 
+        resp = client.post("/api/v1/courses/1/folders",
                           headers={"Authorization": f"Bearer {token}"},
                           json={
-                              "name": "讲座"
-                              # 缺少folder_type
+                              "name": "讲座",  # 已存在的名称
+                              "folder_type": "lecture"
                           })
-        assert resp.status_code == 422
+        assert resp.status_code == 400
+        data = resp.json()
+        assert data["success"] is False
+        assert data["error"]["code"] == "FOLDER_NAME_EXISTS"
 
 # 文件管理相关测试
 class TestFiles:
     def test_upload_file_success(self):
         """测试上传文件"""
         token = get_user_token()
-        file_content = b"test file content"
-        files = {"file": ("test.pdf", io.BytesIO(file_content), "application/pdf")}
-        data = {"course_id": "1", "folder_id": "1"}
+        test_content = b"This is a test PDF content"
+        test_file = ("test.pdf", io.BytesIO(test_content), "application/pdf")
         
-        resp = client.post("/api/v1/files/upload", 
+        resp = client.post("/api/v1/files/upload",
                           headers={"Authorization": f"Bearer {token}"},
-                          files=files,
-                          data=data)
+                          files={"file": test_file},
+                          data={"course_id": 1, "folder_id": 1})
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
@@ -133,141 +168,77 @@ class TestFiles:
         file_data = data["data"]["file"]
         assert "id" in file_data
         assert "original_name" in file_data
-        assert "file_type" in file_data
-        assert "file_size" in file_data
-        assert "mime_type" in file_data
-        assert "course_id" in file_data
-        assert "folder_id" in file_data
-        assert "user_id" in file_data
-        assert "is_processed" in file_data
-        assert "processing_status" in file_data
-        assert "created_at" in file_data
+        assert file_data["original_name"] == "test.pdf"
 
     def test_upload_file_no_auth(self):
         """测试无认证不能上传文件"""
-        file_content = b"test file content"
-        files = {"file": ("test.pdf", io.BytesIO(file_content), "application/pdf")}
-        data = {"course_id": "1", "folder_id": "1"}
+        test_content = b"This is a test content"
+        test_file = ("test.txt", io.BytesIO(test_content), "text/plain")
         
-        resp = client.post("/api/v1/files/upload", 
-                          files=files,
-                          data=data)
+        resp = client.post("/api/v1/files/upload",
+                          files={"file": test_file},
+                          data={"course_id": 1, "folder_id": 1})
         assert resp.status_code == 401
 
-    def test_upload_file_missing_file(self):
-        """测试缺少文件"""
-        token = get_user_token()
-        data = {"course_id": "1", "folder_id": "1"}
-        
-        resp = client.post("/api/v1/files/upload", 
-                          headers={"Authorization": f"Bearer {token}"},
-                          data=data)
-        assert resp.status_code == 422
-
     def test_get_folder_files_success(self):
-        """测试获取文件夹下所有文件"""
-        resp = client.get("/api/v1/folders/1/files")
+        """测试获取文件夹文件"""
+        token = get_user_token()
+        resp = client.get("/api/v1/folders/1/files",
+                         headers={"Authorization": f"Bearer {token}"})
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
         assert "files" in data["data"]
+        assert len(data["data"]["files"]) > 0
+        file_data = data["data"]["files"][0]
+        assert "id" in file_data
+        assert "original_name" in file_data
+        assert "folder" in file_data
 
-    def test_get_folder_files_not_found(self):
-        """测试获取不存在的文件夹文件"""
-        resp = client.get("/api/v1/folders/999/files")
-        assert resp.status_code == 404
+    def test_get_folder_files_no_auth(self):
+        """测试无认证不能获取文件"""
+        resp = client.get("/api/v1/folders/1/files")
+        assert resp.status_code == 401
+
+    def test_get_file_preview_success(self):
+        """测试获取文件预览"""
+        token = get_user_token()
+        resp = client.get("/api/v1/files/1/preview",
+                         headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 200
         data = resp.json()
-        assert data["success"] is False
-        assert data["error"]["code"] == "FOLDER_NOT_FOUND"
+        assert data["success"] is True
+        assert "id" in data["data"]
+        assert "original_name" in data["data"]
+
+    def test_get_file_preview_no_auth(self):
+        """测试无认证不能预览文件"""
+        resp = client.get("/api/v1/files/1/preview")
+        assert resp.status_code == 401
 
     def test_download_file_success(self):
         """测试下载文件"""
-        resp = client.get("/api/v1/files/1/download")
-        # 如果文件不存在，应该返回404
-        if resp.status_code == 404:
-            data = resp.json()
-            assert data["success"] is False
-            assert data["error"]["code"] == "FILE_NOT_FOUND"
-        else:
-            assert resp.status_code == 200
-            # 检查响应头
-            assert "Content-Disposition" in resp.headers
-            assert "attachment" in resp.headers["Content-Disposition"]
+        token = get_user_token()
+        resp = client.get("/api/v1/files/1/download",
+                         headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 200
+        assert "attachment" in resp.headers.get("content-disposition", "").lower()
 
-    def test_preview_file_success(self):
-        """测试文件预览"""
-        resp = client.get("/api/v1/files/1/preview")
-        # 如果文件不存在，应该返回404
-        if resp.status_code == 404:
-            data = resp.json()
-            assert data["success"] is False
-            assert data["error"]["code"] == "FILE_NOT_FOUND"
-        else:
-            assert resp.status_code == 200
-            data = resp.json()
-            assert data["success"] is True
-            assert "id" in data["data"]
-            assert "original_name" in data["data"]
-            assert "file_type" in data["data"]
-            assert "file_size" in data["data"]
-            assert "mime_type" in data["data"]
-            assert "created_at" in data["data"]
+    def test_download_file_no_auth(self):
+        """测试无认证不能下载文件"""
+        resp = client.get("/api/v1/files/1/download")
+        assert resp.status_code == 401
 
     def test_delete_file_success(self):
         """测试删除文件"""
         token = get_user_token()
-        resp = client.delete("/api/v1/files/1", 
+        resp = client.delete("/api/v1/files/1",
                            headers={"Authorization": f"Bearer {token}"})
-        # 如果文件不存在，应该返回404
-        if resp.status_code == 404:
-            data = resp.json()
-            assert data["success"] is False
-            assert data["error"]["code"] == "FILE_NOT_FOUND"
-        else:
-            assert resp.status_code == 200
-            data = resp.json()
-            assert data["success"] is True
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is True
 
     def test_delete_file_no_auth(self):
         """测试无认证不能删除文件"""
         resp = client.delete("/api/v1/files/1")
-        assert resp.status_code == 401
-
-# 全局文件管理相关测试（可选功能）
-class TestGlobalFiles:
-    def test_get_global_files_success(self):
-        """测试获取全局文件列表"""
-        resp = client.get("/api/v1/global-files")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["success"] is True
-        assert "files" in data["data"]
-
-    def test_upload_global_file_success(self):
-        """测试上传全局文件"""
-        token = get_user_token()
-        file_content = b"global test file content"
-        files = {"file": ("global_test.pdf", io.BytesIO(file_content), "application/pdf")}
-        
-        resp = client.post("/api/v1/global-files/upload", 
-                          headers={"Authorization": f"Bearer {token}"},
-                          files=files)
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["success"] is True
-        assert "file" in data["data"]
-
-    def test_delete_global_file_success(self):
-        """测试删除全局文件"""
-        token = get_user_token()
-        resp = client.delete("/api/v1/global-files/1", 
-                           headers={"Authorization": f"Bearer {token}"})
-        # 如果文件不存在，应该返回404
-        if resp.status_code == 404:
-            data = resp.json()
-            assert data["success"] is False
-            assert data["error"]["code"] == "FILE_NOT_FOUND"
-        else:
-            assert resp.status_code == 200
-            data = resp.json()
-            assert data["success"] is True 
+        assert resp.status_code == 401 

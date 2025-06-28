@@ -1,12 +1,18 @@
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
+from app.schemas.common import SuccessResponse
 
 class FileAttachment(BaseModel):
     id: int
     filename: str
     original_name: str
     file_size: int
+
+class FolderInfo(BaseModel):
+    id: int
+    name: str
+    folder_type: str
 
 class FileResponse(BaseModel):
     id: int
@@ -20,22 +26,17 @@ class FileResponse(BaseModel):
     is_processed: bool
     processing_status: str
     created_at: datetime
-    folder: Optional[dict] = None
+    folder: Optional[FolderInfo] = None
 
-class FileListResponse(BaseModel):
-    files: List[FileResponse]
+class FileListResponse(SuccessResponse):
+    data: dict  # {"files": List[FileResponse]}
 
-class FilePreviewResponse(BaseModel):
-    id: int
-    original_name: str
-    file_type: str
-    file_size: int
-    mime_type: str
-    created_at: datetime
+class FilePreviewResponse(SuccessResponse):
+    data: dict  # FileResponse fields
 
 class UploadFileRequest(BaseModel):
     course_id: int
     folder_id: int
 
-class UploadFileResponse(BaseModel):
-    file: FileResponse 
+class UploadFileResponse(SuccessResponse):
+    data: dict  # {"file": FileResponse} 
