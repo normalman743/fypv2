@@ -11,6 +11,8 @@ from main import app
 from app.db.base import Base
 from app.db.session import get_db
 from app.core.config import settings
+from app.crud.semester import semester as crud_semester
+from app.schemas.semester import SemesterCreate
 
 # Setup a test database
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
@@ -73,7 +75,7 @@ def test_create_semester_success(client: TestClient, test_user: dict):
         json=semester_data,
         headers=headers
     )
-    assert response.status_code == 201 # Changed to 201 as per API design
+    assert response.status_code == 201
     data = response.json()
     assert data["success"] is True
     assert data["data"]["semester"]["name"] == "2025 Fall"
@@ -129,3 +131,94 @@ def test_create_semester_invalid_data(client: TestClient, test_user: dict):
         headers=headers
     )
     assert response.status_code == 422 # Unprocessable Entity
+
+def test_get_semesters_success(client: TestClient, test_user: dict, db_session: Session):
+    headers = {"Authorization": f"Bearer {test_user['token']}"}
+    # Create a few semesters
+    semester_data_1 = SemesterCreate(name="2025 Fall", code="2025FA", start_date=datetime(2025, 9, 1), end_date=datetime(2025, 12, 31, 23, 59, 59))
+    semester_data_2 = SemesterCreate(name="2026 Spring", code="2026SP", start_date=datetime(2026, 1, 1), end_date=datetime(2026, 5, 31, 23, 59, 59))
+    crud_semester.create(db_session, obj_in=semester_data_1)
+    crud_semester.create(db_session, obj_in=semester_data_2)
+
+    response = client.get(
+        "/api/v1/semesters",
+        headers=headers
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert len(data["data"]["semesters"]) == 2
+    assert data["data"]["semesters"][0]["name"] == "2025 Fall"
+    assert data["data"]["semesters"][1]["name"] == "2026 Spring"
+
+def test_get_semesters_pagination(client: TestClient, test_user: dict, db_session: Session):
+    headers = {"Authorization": f"Bearer {test_user['token']}"}
+    # Create more semesters for pagination test
+    for i in range(5):
+        crud_semester.create(db_session, obj_in=SemesterCreate(
+            name=f"Semester {i}",
+            code=f"S{i}",
+            start_date=datetime(2025, 1, 1),
+            end_date=datetime(2025, 12, 31)
+        ))
+    
+    response = client.get(
+        "/api/v1/semesters?skip=1&limit=2",
+        headers=headers
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert len(data["data"]["semesters"]) == 2
+    assert data["data"]["semesters"][0]["name"] == "Semester 1"
+    assert data["data"]["semesters"][1]["name"] == "Semester 2"
+
+def test_get_semesters_empty_list(client: TestClient, test_user: dict):
+    headers = {"Authorization": f"Bearer {test_user['token']}"}
+    response = client.get(
+        "/api/v1/semesters",
+        headers=headers
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert len(data["data"]["semesters"]) == 0
+
+def test_get_semesters_unauthenticated(client: TestClient):
+    response = client.get(
+        "/api/v1/semesters"
+    )
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Not authenticated"}
+
+def test_get_semester_by_id_success(client: TestClient, test_user: dict, db_session: Session):
+    headers = {"Authorization": f"Bearer {test_user['token']}"}
+    semester_data = SemesterCreate(name="Unique Semester", code="UNIQUE", start_date=datetime(2025, 1, 1), end_date=datetime(2025, 12, 31))
+    created_semester = crud_semester.create(db_session, obj_in=semester_data)
+
+    response = client.get(
+        f"/api/v1/semesters/{created_semester.id}",
+        headers=headers
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert data["data"]["semester"]["name"] == "Unique Semester"
+    assert data["data"]["semester"]["code"] == "UNIQUE"
+    assert data["data"]["semester"]["id"] == created_semester.id
+
+def test_get_semester_by_id_not_found(client: TestClient, test_user: dict):
+    headers = {"Authorization": f"Bearer {test_user['token']}"}
+    response = client.get(
+        "/api/v1/semesters/999", # Non-existent ID
+        headers=headers
+    )
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Semester not found"}
+
+def test_get_semester_by_id_unauthenticated(client: TestClient):
+    response = client.get(
+        "/api/v1/semesters/1"
+    )
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Not authenticated"}
