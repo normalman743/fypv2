@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 from app.core.config import settings
 from app.models.database import engine, Base
 from app.schemas.common import ErrorResponse
+import os
 
 # 创建数据库表
 Base.metadata.create_all(bind=engine)
@@ -16,9 +17,10 @@ app = FastAPI(
 )
 
 # 添加CORS中间件
+cors_origins = os.getenv("CORS_ORIGINS", "*").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 生产环境中应该指定具体域名
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

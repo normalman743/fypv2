@@ -141,6 +141,54 @@ async def get_file_status(
     }
 
 
+@router.get("/tasks/{task_id}/progress")
+async def get_task_progress(
+    task_id: str = Path(..., description="Celery Task ID"),
+    current_user: User = Depends(get_current_user)
+):
+    """Get async task progress (Celery task status)"""
+    try:
+        from app.tasks.file_processing import get_task_status
+        from celery.result import AsyncResult
+        from app.celery_app import celery_app
+        
+        # 获取任务状态
+        result = AsyncResult(task_id, app=celery_app)
+        
+        return {
+            "success": True,
+            "data": {
+                "task_id": task_id,
+                "state": result.state,
+                "progress": {
+                    "current": result.info.get("current", 0) if result.info else 0,
+                    "total": result.info.get("total", 100) if result.info else 100,
+                    "status": result.info.get("status", "") if result.info else ""
+                },
+                "result": result.result if result.ready() else None,
+                "failed": result.failed(),
+                "successful": result.successful()
+            }
+        }
+        
+    except ImportError:
+        return {
+            "success": False,
+            "error": {
+                "code": "CELERY_NOT_AVAILABLE",
+                "message": "Async task system not available"
+            }
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": {
+                "code": "TASK_STATUS_ERROR",
+                "message": str(e)
+            }
+        }
+
+
 @router.get("/files/{file_id}/download")
 async def download_file(
     file_id: int = Path(..., description="File ID"),

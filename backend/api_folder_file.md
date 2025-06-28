@@ -149,20 +149,93 @@ folder_id: 2
   - `"failed"` - RAG处理失败
 - `rag_ready`: 布尔值，`true`表示文件可用于RAG检索
 
-**前端轮询建议：**
+### GET /api/v1/tasks/{task_id}/progress
+- 获取异步任务处理进度（Celery任务状态）
+
+**响应：**
+```json
+{
+  "success": true,
+  "data": {
+    "task_id": "abc123-def456",
+    "state": "PROGRESS",
+    "progress": {
+      "current": 50,
+      "total": 100,
+      "status": "正在分析文件内容..."
+    },
+    "result": null,
+    "failed": false,
+    "successful": false
+  }
+}
+```
+
+**状态说明：**
+- `state`: 任务状态
+  - `"PENDING"` - 等待执行
+  - `"PROGRESS"` - 执行中
+  - `"SUCCESS"` - 执行成功
+  - `"FAILURE"` - 执行失败
+- `progress`: 进度信息
+  - `current`: 当前进度值
+  - `total`: 总进度值
+  - `status`: 当前状态描述
+
+**前端集成指南：**
 ```javascript
-// 文件上传后轮询状态，直到rag_ready=true
-const pollStatus = async (fileId) => {
-  const interval = setInterval(async () => {
-    const response = await fetch(`/api/v1/files/${fileId}/status`);
-    const data = await response.json();
-    
-    if (data.data.rag_ready) {
-      console.log('文件可用于RAG对话！');
-      clearInterval(interval);
-    }
-  }, 2000); // 每2秒检查一次
+// 异步文件上传 + 实时进度监控
+const uploadFileWithProgress = async (file, courseId, folderId) => {
+  // 1. 上传文件（立即返回）
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('course_id', courseId);
+  formData.append('folder_id', folderId);
+  
+  const uploadResponse = await fetch('/api/v1/files/upload', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}` },
+    body: formData
+  });
+  
+  const fileData = await uploadResponse.json();
+  console.log('文件上传成功，开始后台处理'); // 立即响应
+  
+  // 2. 轮询文件状态直到完成
+  return new Promise((resolve, reject) => {
+    const interval = setInterval(async () => {
+      try {
+        const statusResponse = await fetch(`/api/v1/files/${fileData.data.file.id}/status`);
+        const statusData = await statusResponse.json();
+        
+        // 更新UI状态
+        updateFileStatus(statusData.data);
+        
+        if (statusData.data.rag_ready) {
+          clearInterval(interval);
+          resolve(fileData.data.file);
+        } else if (statusData.data.processing_status === 'failed') {
+          clearInterval(interval);
+          reject(new Error('文件处理失败'));
+        }
+      } catch (error) {
+        clearInterval(interval);
+        reject(error);
+      }
+    }, 2000);
+  });
 };
+
+// 使用示例
+uploadFileWithProgress(file, 1, 1)
+  .then(fileInfo => {
+    console.log('文件可用于RAG对话！', fileInfo);
+    enableChatWithFile(fileInfo.id);
+  })
+  .catch(error => {
+    console.error('文件上传/处理失败:', error);
+    showErrorMessage('文件处理失败，请重试');
+  });
 ```
 
 ### GET /api/v1/files/{id}/preview

@@ -15,6 +15,7 @@ class File(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     is_processed = Column(Boolean, default=False)
     processing_status = Column(String(32), default="pending")
+    cloud_url = Column(String(512), nullable=True)  # 云存储URL
     created_at = Column(DateTime, server_default=func.now())
 
     folder = relationship("Folder", back_populates="files")

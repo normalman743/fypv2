@@ -11,6 +11,7 @@ from app.models.file import File
 from app.models.folder import Folder
 from app.models.course import Course
 from app.core.exceptions import NotFoundError, ForbiddenError, BadRequestError
+from app.services.cloud_storage_service import mock_cloud_storage
 
 # Import RAG service
 try:
@@ -56,7 +57,14 @@ class FileService:
         if not folder:
             raise NotFoundError("Folder not found or does not belong to course", "FOLDER_NOT_FOUND")
 
-        # Read file content for processing
+        # 上传到云存储
+        try:
+            cloud_url, local_path = mock_cloud_storage.upload_file(file, course_id, folder_id)
+        except Exception as e:
+            raise BadRequestError(f"Failed to upload file to cloud storage: {e}", "CLOUD_UPLOAD_FAILED")
+
+        # Read file content for processing (reset file pointer)
+        file.file.seek(0)
         file_content = file.file.read()
         file_size = len(file_content)
         
@@ -67,7 +75,7 @@ class FileService:
         file_type = self._determine_file_type(file.filename, file.content_type)
 
         try:
-            # Create file record
+            # Create file record with cloud URL
             file_record = File(
                 original_name=file.filename,
                 file_type=file_type,
@@ -77,23 +85,49 @@ class FileService:
                 folder_id=folder_id,
                 user_id=user_id,
                 is_processed=False,
-                processing_status="pending"
+                processing_status="pending",
+                cloud_url=cloud_url
             )
             
             self.db.add(file_record)
             self.db.commit()
             self.db.refresh(file_record)
             
-            # Process file with RAG service
-            self._process_file_with_rag(file_record, file_content)
+            # 启动异步RAG处理任务
+            task_id = self._start_async_rag_processing(file_record, file_content)
             
             return file_record
         except IntegrityError:
             self.db.rollback()
+            # 如果数据库操作失败，删除已上传的云文件
+            mock_cloud_storage.delete_file(cloud_url)
             raise BadRequestError("Failed to upload file", "FILE_UPLOAD_FAILED")
 
-    def _process_file_with_rag(self, file_record: File, file_content: bytes):
-        """Process file with RAG service and update status"""
+    def _start_async_rag_processing(self, file_record: File, file_content: bytes) -> str:
+        """启动异步RAG处理任务"""
+        try:
+            # 尝试导入Celery任务
+            from app.tasks.file_processing import process_file_rag_task
+            
+            # 启动异步任务
+            task = process_file_rag_task.delay(file_record.id, file_content)
+            
+            print(f"🚀 Started async RAG processing for file {file_record.id}, task ID: {task.id}")
+            return str(task.id)
+            
+        except ImportError:
+            print("⚠️ Celery not available, falling back to synchronous processing")
+            # 降级到同步处理
+            self._process_file_with_rag_sync(file_record, file_content)
+            return "sync_processing"
+        except Exception as e:
+            print(f"❌ Failed to start async task: {e}")
+            # 降级到同步处理
+            self._process_file_with_rag_sync(file_record, file_content)
+            return "sync_fallback"
+    
+    def _process_file_with_rag_sync(self, file_record: File, file_content: bytes):
+        """同步RAG处理（备用方案）"""
         try:
             # Update status to processing
             file_record.processing_status = "processing"
