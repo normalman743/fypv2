@@ -17,8 +17,8 @@ class User(Base):
     total_spent = Column(Float, default=0.00)
     
     # 用户偏好设置
-    preferred_language = Column(String(10), default="zh_CN")
-    preferred_theme = Column(String(10), default="light")
+    preferred_language = Column(String(20), default="zh_CN")
+    preferred_theme = Column(String(20), default="light")
     last_opened_semester_id = Column(Integer, nullable=True)
     
     # 时间戳
@@ -27,7 +27,6 @@ class User(Base):
     
     # 软删除
     is_active = Column(Boolean, default=True)
-    is_deleted = Column(Boolean, default=False)
     
     # 关系
     courses = relationship("Course", back_populates="user")
