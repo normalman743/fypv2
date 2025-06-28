@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, func
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean, Text, func
 from sqlalchemy.orm import relationship
 from app.models.database import Base
 
@@ -6,11 +6,16 @@ class Chat(Base):
     __tablename__ = "chats"
 
     id = Column(Integer, primary_key=True, index=True)
-    title = Column(String(256), nullable=False)
-    chat_type = Column(String(32), nullable=False)  # general或course
+    title = Column(String(200), nullable=False)
+    chat_type = Column(String(20), nullable=False)  # general或course
     course_id = Column(Integer, ForeignKey("courses.id"), nullable=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    custom_prompt = Column(String(512), nullable=True)
+    custom_prompt = Column(Text, nullable=True)
+    
+    # RAG配置
+    rag_enabled = Column(Boolean, default=True)
+    max_context_length = Column(Integer, default=4000)
+    
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 

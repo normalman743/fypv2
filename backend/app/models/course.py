@@ -7,8 +7,8 @@ class Course(Base):
     __tablename__ = "courses"
     
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(200), nullable=False)
-    code = Column(String(50), nullable=False)
+    name = Column(String(100), nullable=False)
+    code = Column(String(20), nullable=False)
     description = Column(Text, nullable=True)
     
     # 外键关系
@@ -16,8 +16,7 @@ class Course(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     
     # 时间戳
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    created_at = Column(DateTime, server_default=func.now())
     
     # 关系
     semester = relationship("Semester", back_populates="courses")

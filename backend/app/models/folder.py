@@ -6,8 +6,8 @@ class Folder(Base):
     __tablename__ = "folders"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(128), nullable=False)
-    folder_type = Column(String(32), nullable=False)  # 如outline/lecture等
+    name = Column(String(100), nullable=False)
+    folder_type = Column(String(20), nullable=False)  # outline, tutorial, lecture, exam, assignment, others
     course_id = Column(Integer, ForeignKey("courses.id"), nullable=False, index=True)
     is_default = Column(Boolean, default=False)
     created_at = Column(DateTime, server_default=func.now())
