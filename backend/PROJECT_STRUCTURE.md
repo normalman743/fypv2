@@ -23,8 +23,9 @@
 │   ├── crud/ # 数据库操作层 (Create, Read, Update, Delete)
 │   │   ├── __init__.py # Python包初始化文件
 │   │   ├── base.py # CRUD基类 (通用CRUD方法) (已完成)
-│   │   └── user.py # 用户CRUD操作 (已完成)
-│   │   └── ... (course.py, semester.py etc.) # 各模型对应的CRUD操作
+│   │   ├── user.py # 用户CRUD操作 (已完成)
+│   │   └── semester.py # 学期CRUD操作 (已完成)
+│   │   └── ... (course.py, etc.) # 各模型对应的CRUD操作
 │   ├── db/ # 数据库相关配置
 │   │   ├── __init__.py # Python包初始化文件
 │   │   ├── base.py # SQLAlchemy声明性基类 (所有模型继承) (已完成)
@@ -41,14 +42,17 @@
 │   │   └── message.py # 消息、消息文件关联模型 (已完成)
 │   ├── schemas/ # Pydantic数据模型 (请求/响应数据验证与序列化)
 │   │   ├── __init__.py # Python包初始化文件 (已完成)
-│   │   └── user.py # 用户相关的Pydantic模型 (已完成)
-│   │   └── ... (semester.py, course.py etc.) # 各模块对应的Pydantic模型
+│   │   ├── user.py # 用户相关的Pydantic模型 (已完成)
+│   │   ├── semester.py # 学期相关的Pydantic模型 (已完成)
+│   │   ├── course.py # 课程相关的Pydantic模型 (已完成)
+│   │   └── ... # 各模块对应的Pydantic模型
 │   └── services/ # 业务逻辑服务层
 │       ├── __init__.py # Python包初始化文件
 │       └── ... (rag_service.py, file_service.py etc.) # 复杂业务逻辑处理
 ├── tests/ # 单元测试和集成测试
 │   ├── __init__.py # Python包初始化文件 (已完成)
-│   └── test_auth.py # 认证模块的单元测试 (已完成)
+│   ├── test_auth.py # 认证模块的单元测试 (已完成)
+│   ├── test_semester_course.py # 学期和课程模块的单元测试 (已完成，将补充)
 │   └── ... # 各模块对应的测试文件
 ├── main.py # FastAPI应用入口文件 (已完成)
 ├── requirements.txt # Python项目依赖列表 (已完成)
@@ -85,10 +89,67 @@
 在完成用户认证模块后，建议按照以下顺序逐步实现其他功能：
 
 1.  **学期与课程管理 (Semester & Course Management)**:
-    *   定义Pydantic Schemas (`app/schemas/semester.py`, `app/schemas/course.py`)
+    *   定义Pydantic Schemas (`app/schemas/semester.py`, `app/schemas/course.py`) (已完成)
     *   实现CRUD操作 (`app/crud/semester.py`, `app/crud/course.py`)
     *   创建API路由 (`app/api/v1/semester.py`, `app/api/v1/course.py`)
-    *   编写单元测试 (`tests/test_semester.py`, `tests/test_course.py`)
+    *   编写单元测试 (`tests/test_semester_course.py`)
+        *   **学期管理测试单元**:
+            *   **POST /api/v1/semesters - 创建学期**
+                *   `test_create_semester_success`: 成功创建学期 (状态码 201, 返回正确数据, 数据库中存在)
+                *   `test_create_semester_duplicate_code`: 尝试创建重复 `code` 的学期 (状态码 400, 返回错误信息)
+                *   `test_create_semester_unauthenticated`: 未认证用户尝试创建学期 (状态码 401)
+                *   `test_create_semester_invalid_data`: 提供无效数据 (例如缺少必填字段, 状态码 422)
+                *   `test_create_semester_admin_only` (如果实现管理员权限): 非管理员用户尝试创建学期 (状态码 403)
+            *   **GET /api/v1/semesters - 获取学期列表**
+                *   `test_get_semesters_success`: 成功获取学期列表 (状态码 200, 返回列表, 包含已创建学期)
+                *   `test_get_semesters_pagination`: 测试分页参数 `skip` 和 `limit` (状态码 200, 返回正确数量和范围的数据)
+                *   `test_get_semesters_empty_list`: 没有学期时返回空列表 (状态码 200)
+                *   `test_get_semesters_unauthenticated`: 未认证用户尝试获取列表 (状态码 401)
+            *   **GET /api/v1/semesters/{id} - 获取单个学期**
+                *   `test_get_semester_by_id_success`: 成功获取指定ID的学期 (状态码 200, 返回正确学期数据)
+                *   `test_get_semester_by_id_not_found`: 获取不存在的学期 (状态码 404)
+                *   `test_get_semester_by_id_unauthenticated`: 未认证用户尝试获取 (状态码 401)
+            *   **PUT /api/v1/semesters/{id} - 更新学期**
+                *   `test_update_semester_success`: 成功更新学期 (状态码 200, 返回更新后的数据, 数据库中数据已更新)
+                *   `test_update_semester_not_found`: 更新不存在的学期 (状态码 404)
+                *   `test_update_semester_unauthenticated`: 未认证用户尝试更新 (状态码 401)
+                *   `test_update_semester_invalid_data`: 提供无效更新数据 (状态码 422)
+                *   `test_update_semester_admin_only` (如果实现管理员权限): 非管理员用户尝试更新 (状态码 403)
+            *   **DELETE /api/v1/semesters/{id} - 删除学期**
+                *   `test_delete_semester_success`: 成功删除学期 (状态码 200, 再次获取返回404)
+                *   `test_delete_semester_not_found`: 删除不存在的学期 (状态码 404)
+                *   `test_delete_semester_unauthenticated`: 未认证用户尝试删除 (状态码 401)
+                *   `test_delete_semester_admin_only` (如果实现管理员权限): 非管理员用户尝试删除 (状态码 403)
+        *   **课程管理测试单元**:
+            *   **POST /api/v1/courses - 创建课程**
+                *   `test_create_course_success`: 成功创建课程 (状态码 201, 返回正确数据, 数据库中存在)
+                *   `test_create_course_duplicate_code_in_semester`: 同一学期内创建重复 `code` 的课程 (状态码 400)
+                *   `test_create_course_duplicate_code_across_semesters`: 不同学期内创建重复 `code` 的课程 (状态码 201)
+                *   `test_create_course_semester_not_found`: 关联的学期不存在 (状态码 404)
+                *   `test_create_course_unauthenticated`: 未认证用户尝试创建 (状态码 401)
+                *   `test_create_course_invalid_data`: 提供无效数据 (状态码 422)
+            *   **GET /api/v1/courses - 获取课程列表**
+                *   `test_get_courses_success`: 成功获取课程列表 (状态码 200, 返回列表, 包含已创建课程)
+                *   `test_get_courses_by_semester_id`: 按 `semester_id` 过滤课程 (状态码 200, 返回正确过滤结果)
+                *   `test_get_courses_pagination`: 测试分页参数 `skip` 和 `limit` (状态码 200)
+                *   `test_get_courses_empty_list`: 没有课程时返回空列表 (状态码 200)
+                *   `test_get_courses_unauthenticated`: 未认证用户尝试获取列表 (状态码 401)
+            *   **GET /api/v1/courses/{id} - 获取单个课程**
+                *   `test_get_course_by_id_success`: 成功获取指定ID的课程 (状态码 200, 返回正确课程数据)
+                *   `test_get_course_by_id_not_found`: 获取不存在的课程 (状态码 404)
+                *   `test_get_course_by_id_unauthenticated`: 未认证用户尝试获取 (状态码 401)
+                *   `test_get_course_by_id_not_owned` (如果实现课程所有权): 获取不属于自己的课程 (状态码 403)
+            *   **PUT /api/v1/courses/{id} - 更新课程**
+                *   `test_update_course_success`: 成功更新课程 (状态码 200, 返回更新后的数据, 数据库中数据已更新)
+                *   `test_update_course_not_found`: 更新不存在的课程 (状态码 404)
+                *   `test_update_course_unauthenticated`: 未认证用户尝试更新 (状态码 401)
+                *   `test_update_course_invalid_data`: 提供无效更新数据 (状态码 422)
+                *   `test_update_course_not_owned` (如果实现课程所有权): 更新不属于自己的课程 (状态码 403)
+            *   **DELETE /api/v1/courses/{id} - 删除课程**
+                *   `test_delete_course_success`: 成功删除课程 (状态码 200, 再次获取返回404)
+                *   `test_delete_course_not_found`: 删除不存在的课程 (状态码 404)
+                *   `test_delete_course_unauthenticated`: 未认证用户尝试删除 (状态码 401)
+                *   `test_delete_course_not_owned` (如果实现课程所有权): 删除不属于自己的课程 (状态码 403)
     *   **理由**: 学期和课程是组织文件和聊天的基础结构，先完成它们可以为后续的文件和聊天功能提供上下文。
 
 2.  **文件夹与文件管理 (Folder & File Management)**:
