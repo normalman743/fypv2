@@ -1,30 +1,45 @@
-from typing import Optional
-from datetime import datetime
 from pydantic import BaseModel
+from typing import Optional, List
+from datetime import datetime
+
+from app.schemas.common import BaseResponse
+
 
 class SemesterBase(BaseModel):
     name: str
     code: str
-    start_date: datetime
-    end_date: datetime
-    is_active: Optional[bool] = True
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+
 
 class SemesterCreate(SemesterBase):
     pass
 
-class SemesterUpdate(SemesterBase):
+
+class SemesterUpdate(BaseModel):
     name: Optional[str] = None
     code: Optional[str] = None
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
     is_active: Optional[bool] = None
 
-class SemesterInDBBase(SemesterBase):
+
+class SemesterResponse(SemesterBase):
     id: int
+    is_active: bool
     created_at: datetime
 
     class Config:
         from_attributes = True
 
-class Semester(SemesterInDBBase):
-    pass
+
+class SemesterListResponse(BaseResponse):
+    data: dict  # {"semesters": List[SemesterResponse]}
+
+
+class SemesterCreateResponse(BaseResponse):
+    data: dict  # {"semester": {"id": int, "created_at": datetime}}
+
+
+class SemesterUpdateResponse(BaseResponse):
+    data: dict  # {"semester": {"id": int, "updated_at": datetime}}

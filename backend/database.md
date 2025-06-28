@@ -1,5 +1,5 @@
 # 🗄️ 校园LLM系统数据库设计
-http://39.108.113.103:3306/
+39.108.113.103:3306
 user: campus_user
 password: CampusLLM123!
 ## 📋 架构概览

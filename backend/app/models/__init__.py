@@ -1,8 +1,15 @@
-from app.db.base import Base  # noqa
-from app.models.user import User  # noqa
-from app.models.semester import Semester  # noqa
-from app.models.course import Course  # noqa
-from app.models.chat import Chat  # noqa
-from app.models.file import PhysicalFile, Folder, File, GlobalFile, DocumentChunk  # noqa
-from app.models.invite_code import InviteCode  # noqa
-from app.models.message import Message, MessageFile  # noqa
+from .database import Base, engine, SessionLocal
+from .user import User
+from .semester import Semester
+from .course import Course
+from .folder import Folder
+from .file import File
+from .chat import Chat
+from .message import Message
+from .invite_code import InviteCode
+
+__all__ = [
+    "Base", "engine", "SessionLocal",
+    "User", "Semester", "Course", 
+    "Folder", "File", "Chat", "Message", "InviteCode"
+]
