@@ -93,8 +93,8 @@ class FileService:
             self.db.commit()
             self.db.refresh(file_record)
             
-            # 启动异步RAG处理任务
-            task_id = self._start_async_rag_processing(file_record, file_content)
+            # 内测阶段直接同步处理RAG（10人左右，无需异步）
+            self._process_file_with_rag_sync(file_record, file_content)
             
             return file_record
         except IntegrityError:
