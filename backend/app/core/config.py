@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings
-from typing import Optional
+from typing import Optional, List
 import os
 from dotenv import load_dotenv
 
@@ -24,9 +24,9 @@ class Settings(BaseSettings):
     default_invite_code: str = "INVITE2025"
     
     # 文件上传配置
-    upload_dir: str = "./storage/uploads"
+    upload_dir: str = os.getenv("UPLOAD_DIR", "./storage/uploads")
     max_file_size: int = 50 * 1024 * 1024  # 50MB
-    allowed_extensions: list = ["pdf", "doc", "docx", "txt", "md"]
+    allowed_extensions_str: str = os.getenv("ALLOWED_EXTENSIONS", "pdf,doc,docx,txt,md")
     
     # AI 和 RAG 配置
     openai_api_key: Optional[str] = os.getenv("OPENAI_API_KEY")
@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     # 日志配置
     log_level: str = "INFO"
     log_file: str = "./logs/app.log"
+    
+    @property
+    def allowed_extensions(self) -> List[str]:
+        """将逗号分隔的字符串转换为列表"""
+        return [ext.strip() for ext in self.allowed_extensions_str.split(",")]
     
     class Config:
         env_file = ".env"
