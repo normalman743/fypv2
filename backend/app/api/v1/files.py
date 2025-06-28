@@ -118,6 +118,29 @@ async def get_file_preview(
     )
 
 
+@router.get("/files/{file_id}/status")
+async def get_file_status(
+    file_id: int = Path(..., description="File ID"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get file processing status"""
+    service = FileService(db)
+    file_record = service.get_file_preview(file_id, current_user.id)
+    
+    return {
+        "success": True,
+        "data": {
+            "id": file_record.id,
+            "original_name": file_record.original_name,
+            "is_processed": file_record.is_processed,
+            "processing_status": file_record.processing_status,
+            "created_at": file_record.created_at,
+            "rag_ready": file_record.is_processed and file_record.processing_status == "completed"
+        }
+    }
+
+
 @router.get("/files/{file_id}/download")
 async def download_file(
     file_id: int = Path(..., description="File ID"),

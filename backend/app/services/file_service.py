@@ -4,11 +4,20 @@ from sqlalchemy.exc import IntegrityError
 import hashlib
 import os
 from fastapi import UploadFile
+from pathlib import Path
+import tempfile
 
 from app.models.file import File
 from app.models.folder import Folder
 from app.models.course import Course
 from app.core.exceptions import NotFoundError, ForbiddenError, BadRequestError
+
+# Import RAG service
+try:
+    from app.services.rag_service import get_rag_service
+    RAG_AVAILABLE = True
+except ImportError:
+    RAG_AVAILABLE = False
 
 
 class FileService:
@@ -75,16 +84,62 @@ class FileService:
             self.db.commit()
             self.db.refresh(file_record)
             
-            # TODO: Implement actual file storage logic here
-            # For now, just mark as completed
-            file_record.is_processed = True
-            file_record.processing_status = "completed"
-            self.db.commit()
+            # Process file with RAG service
+            self._process_file_with_rag(file_record, file_content)
             
             return file_record
         except IntegrityError:
             self.db.rollback()
             raise BadRequestError("Failed to upload file", "FILE_UPLOAD_FAILED")
+
+    def _process_file_with_rag(self, file_record: File, file_content: bytes):
+        """Process file with RAG service and update status"""
+        try:
+            # Update status to processing
+            file_record.processing_status = "processing"
+            self.db.commit()
+            
+            if not RAG_AVAILABLE:
+                print("⚠️ RAG service not available, marking as completed without processing")
+                file_record.is_processed = True
+                file_record.processing_status = "completed"
+                self.db.commit()
+                return
+            
+            # Create temporary file for RAG processing
+            with tempfile.NamedTemporaryFile(
+                suffix=f"_{file_record.original_name}", 
+                delete=False
+            ) as temp_file:
+                temp_file.write(file_content)
+                temp_file_path = temp_file.name
+            
+            try:
+                # Process with RAG service
+                rag_service = get_rag_service()
+                result = rag_service.process_file(file_record, temp_file_path)
+                
+                print(f"✅ RAG processing completed: {result}")
+                
+                # Update status to completed
+                file_record.is_processed = True
+                file_record.processing_status = "completed"
+                self.db.commit()
+                
+            except Exception as e:
+                print(f"❌ RAG processing failed: {e}")
+                file_record.processing_status = "failed"
+                self.db.commit()
+                
+            finally:
+                # Clean up temporary file
+                if os.path.exists(temp_file_path):
+                    os.unlink(temp_file_path)
+                    
+        except Exception as e:
+            print(f"❌ File processing error: {e}")
+            file_record.processing_status = "failed"
+            self.db.commit()
 
     def get_file_preview(self, file_id: int, user_id: int) -> File:
         """Get file preview info (check access via course ownership)"""
