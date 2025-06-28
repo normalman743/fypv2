@@ -7,6 +7,8 @@ from app.models.semester import Semester
 from app.models.course import Course
 from app.models.chat import Chat
 from app.models.message import Message
+from app.models.file import File
+from app.models.folder import Folder
 from app.core.security import get_password_hash, create_access_token
 from sqlalchemy.orm import Session
 from datetime import datetime
@@ -48,6 +50,48 @@ def setup_module(module):
         user_id=1
     )
     db.add(course)
+    
+    # 创建文件夹
+    folder = Folder(
+        name="课程资料",
+        folder_type="lecture",
+        course_id=1
+    )
+    db.add(folder)
+    
+    # 创建测试文件
+    file1 = File(
+        original_name="lecture1.pdf",
+        file_type="course_material",
+        file_size=1024000,
+        mime_type="application/pdf",
+        folder_id=1,
+        course_id=1,
+        user_id=1
+    )
+    db.add(file1)
+    
+    file2 = File(
+        original_name="notes.txt",
+        file_type="course_material",
+        file_size=51200,
+        mime_type="text/plain",
+        folder_id=1,
+        course_id=1,
+        user_id=1
+    )
+    db.add(file2)
+    
+    file3 = File(
+        original_name="assignment.pdf",
+        file_type="course_material",
+        file_size=2048000,
+        mime_type="application/pdf",
+        folder_id=1,
+        course_id=1,
+        user_id=1
+    )
+    db.add(file3)
     
     # 创建测试聊天
     chat1 = Chat(

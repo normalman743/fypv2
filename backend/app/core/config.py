@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     max_file_size: int = 50 * 1024 * 1024  # 50MB
     allowed_extensions: list = ["pdf", "doc", "docx", "txt", "md"]
     
+    # AI 和 RAG 配置
+    openai_api_key: Optional[str] = os.getenv("OPENAI_API_KEY")
+    
     # 日志配置
     log_level: str = "INFO"
     log_file: str = "./logs/app.log"

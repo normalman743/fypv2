@@ -5,7 +5,7 @@ from app.models.database import get_db
 from app.models.user import User
 from app.core.security import verify_token
 from app.core.config import settings
-from app.core.exceptions import ForbiddenError, UnauthorizedError
+from app.core.exceptions import ForbiddenError, UnauthorizedError, InsufficientPermissionsError
 
 # HTTP Bearer authentication
 security = HTTPBearer(auto_error=False)
@@ -37,7 +37,7 @@ def get_current_user(
 def get_current_admin_user(current_user: User = Depends(get_current_user)) -> User:
     """Get current admin user"""
     if current_user.role != "admin":
-        raise ForbiddenError("Insufficient permissions")
+        raise InsufficientPermissionsError("Insufficient permissions")
     return current_user
 
 # Alias for require_admin

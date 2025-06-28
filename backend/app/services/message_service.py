@@ -8,14 +8,14 @@ from app.models.file import File
 from app.models.course import Course
 from app.models.message_attachment import MessageFileAttachment, MessageRAGSource
 from app.schemas.message import SendMessageRequest, EditMessageRequest
-from app.services.ai_service import MockAIService
+from app.services.enhanced_ai_service import create_ai_service
 from app.core.exceptions import NotFoundError, ForbiddenError, BadRequestError
 
 
 class MessageService:
     def __init__(self, db: Session):
         self.db = db
-        self.ai_service = MockAIService()
+        self.ai_service = create_ai_service()
 
     def get_chat_messages(self, chat_id: int, user_id: int) -> List[Message]:
         """Get all messages in a chat (check chat ownership)"""

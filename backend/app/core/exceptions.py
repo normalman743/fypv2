@@ -74,3 +74,18 @@ class UnauthorizedError(HTTPException):
                 }
             }
         )
+
+
+class InsufficientPermissionsError(HTTPException):
+    """Insufficient permissions error (403)"""
+    def __init__(self, detail: str):
+        super().__init__(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "success": False,
+                "error": {
+                    "code": "INSUFFICIENT_PERMISSIONS",
+                    "message": detail
+                }
+            }
+        )
