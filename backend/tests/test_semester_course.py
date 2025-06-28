@@ -60,7 +60,7 @@ def create_test_user(client: TestClient):
     token = response.json()["access_token"]
     return {"username": "testuser_semester", "token": token}
 
-def test_create_semester(client: TestClient, test_user: dict):
+def test_create_semester_success(client: TestClient, test_user: dict):
     headers = {"Authorization": f"Bearer {test_user['token']}"}
     semester_data = {
         "name": "2025 Fall",
@@ -79,3 +79,53 @@ def test_create_semester(client: TestClient, test_user: dict):
     assert data["data"]["semester"]["name"] == "2025 Fall"
     assert data["data"]["semester"]["code"] == "2025FA"
     assert "id" in data["data"]["semester"]
+
+def test_create_semester_duplicate_code(client: TestClient, test_user: dict):
+    headers = {"Authorization": f"Bearer {test_user['token']}"}
+    semester_data = {
+        "name": "2025 Fall",
+        "code": "2025FA",
+        "start_date": datetime(2025, 9, 1, 0, 0, 0).isoformat(),
+        "end_date": datetime(2025, 12, 31, 23, 59, 59).isoformat()
+    }
+    client.post(
+        "/api/v1/semesters",
+        json=semester_data,
+        headers=headers
+    )
+    response = client.post(
+        "/api/v1/semesters",
+        json=semester_data,
+        headers=headers
+    )
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Semester with this code already exists"}
+
+def test_create_semester_unauthenticated(client: TestClient):
+    semester_data = {
+        "name": "2026 Spring",
+        "code": "2026SP",
+        "start_date": datetime(2026, 1, 1, 0, 0, 0).isoformat(),
+        "end_date": datetime(2026, 5, 31, 23, 59, 59).isoformat()
+    }
+    response = client.post(
+        "/api/v1/semesters",
+        json=semester_data
+    )
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Not authenticated"}
+
+def test_create_semester_invalid_data(client: TestClient, test_user: dict):
+    headers = {"Authorization": f"Bearer {test_user['token']}"}
+    semester_data = {
+        "name": "Invalid Semester",
+        "code": "INV",
+        "start_date": "invalid-date", # Invalid date format
+        "end_date": datetime(2026, 5, 31, 23, 59, 59).isoformat()
+    }
+    response = client.post(
+        "/api/v1/semesters",
+        json=semester_data,
+        headers=headers
+    )
+    assert response.status_code == 422 # Unprocessable Entity

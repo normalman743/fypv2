@@ -23,3 +23,4 @@ from app.schemas.course import (
     CourseInDBBase,
     Course
 )
+from app.schemas.common import SuccessResponse, ErrorResponse
