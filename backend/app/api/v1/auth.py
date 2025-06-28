@@ -51,7 +51,7 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
     user = User(
         username=user_data.username,
         email=user_data.email,
-        hashed_password=hashed_password,
+        password_hash=hashed_password,
         role="user"
     )
     db.add(user)
@@ -69,7 +69,7 @@ async def login(user_data: UserLogin, db: Session = Depends(get_db)):
     """用户登录"""
     user = db.query(User).filter(User.username == user_data.username).first()
     
-    if not user or not verify_password(user_data.password, user.hashed_password):
+    if not user or not verify_password(user_data.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=ErrorResponse(

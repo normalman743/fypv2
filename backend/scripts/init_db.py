@@ -27,7 +27,7 @@ def init_data():
     user = User(
         username="testuser",
         email="test@example.com",
-        hashed_password=get_password_hash("testpass123"),
+        password_hash=get_password_hash("testpass123"),
         role="user",
         balance=10.0,
         total_spent=0.0,
