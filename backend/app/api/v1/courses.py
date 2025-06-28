@@ -20,18 +20,17 @@ router = APIRouter(prefix="/courses", tags=["courses"])
 @router.get("", response_model=CourseListResponse)
 async def get_courses(
     semester_id: Optional[int] = Query(None, description="Semester ID filter"),
-    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get course list"""
     service = CourseService(db)
-    courses = service.get_courses(current_user.id, semester_id)
+    courses = service.get_courses(semester_id=semester_id)
     
     # Convert to response format with semester info and stats
     course_list = []
     for course in courses:
         # Get course statistics
-        stats = service.get_course_stats(course.id, current_user.id)
+        stats = service.get_course_stats(course.id, course.user_id)
         
         course_data = {
             "id": course.id,
