@@ -12,7 +12,7 @@ from app.db.base import Base
 from app.db.session import get_db
 from app.core.config import settings
 from app.crud.semester import semester as crud_semester
-from app.schemas.semester import SemesterCreate
+from app.schemas.semester import SemesterCreate, SemesterUpdate
 
 # Setup a test database
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
@@ -218,6 +218,93 @@ def test_get_semester_by_id_not_found(client: TestClient, test_user: dict):
 
 def test_get_semester_by_id_unauthenticated(client: TestClient):
     response = client.get(
+        "/api/v1/semesters/1"
+    )
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Not authenticated"}
+
+def test_update_semester_success(client: TestClient, test_user: dict, db_session: Session):
+    headers = {"Authorization": f"Bearer {test_user['token']}"}
+    semester_data = SemesterCreate(name="Semester to Update", code="UPDATE", start_date=datetime(2025, 1, 1), end_date=datetime(2025, 12, 31))
+    created_semester = crud_semester.create(db_session, obj_in=semester_data)
+
+    update_data = {"name": "Updated Semester Name", "is_active": False}
+    response = client.put(
+        f"/api/v1/semesters/{created_semester.id}",
+        json=update_data,
+        headers=headers
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert data["data"]["semester"]["name"] == "Updated Semester Name"
+    assert data["data"]["semester"]["is_active"] is False
+
+def test_update_semester_not_found(client: TestClient, test_user: dict):
+    headers = {"Authorization": f"Bearer {test_user['token']}"}
+    update_data = {"name": "Non Existent"}
+    response = client.put(
+        "/api/v1/semesters/999",
+        json=update_data,
+        headers=headers
+    )
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Semester not found"}
+
+def test_update_semester_unauthenticated(client: TestClient):
+    update_data = {"name": "Unauthorized Update"}
+    response = client.put(
+        "/api/v1/semesters/1",
+        json=update_data
+    )
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Not authenticated"}
+
+def test_update_semester_invalid_data(client: TestClient, test_user: dict, db_session: Session):
+    headers = {"Authorization": f"Bearer {test_user['token']}"}
+    semester_data = SemesterCreate(name="Semester for Invalid Update", code="INVUPD", start_date=datetime(2025, 1, 1), end_date=datetime(2025, 12, 31))
+    created_semester = crud_semester.create(db_session, obj_in=semester_data)
+
+    update_data = {"start_date": "invalid-date-format"}
+    response = client.put(
+        f"/api/v1/semesters/{created_semester.id}",
+        json=update_data,
+        headers=headers
+    )
+    assert response.status_code == 422
+
+def test_delete_semester_success(client: TestClient, test_user: dict, db_session: Session):
+    headers = {"Authorization": f"Bearer {test_user['token']}"}
+    semester_data = SemesterCreate(name="Semester to Delete", code="DELETE", start_date=datetime(2025, 1, 1), end_date=datetime(2025, 12, 31))
+    created_semester = crud_semester.create(db_session, obj_in=semester_data)
+
+    response = client.delete(
+        f"/api/v1/semesters/{created_semester.id}",
+        headers=headers
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert data["data"]["semester"]["id"] == created_semester.id
+
+    # Verify it's deleted
+    response = client.get(
+        f"/api/v1/semesters/{created_semester.id}",
+        headers=headers
+    )
+    assert response.status_code == 404
+
+def test_delete_semester_not_found(client: TestClient, test_user: dict):
+    headers = {"Authorization": f"Bearer {test_user['token']}"}
+    response = client.delete(
+        "/api/v1/semesters/999",
+        headers=headers
+    )
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Semester not found"}
+
+def test_delete_semester_unauthenticated(client: TestClient):
+    response = client.delete(
         "/api/v1/semesters/1"
     )
     assert response.status_code == 401
