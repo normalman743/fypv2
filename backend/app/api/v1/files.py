@@ -36,8 +36,8 @@ async def upload_file(
         id=file_record.id,
         original_name=file_record.original_name,
         file_type=file_record.file_type,
-        file_size=file_record.file_size,
-        mime_type=file_record.mime_type,
+        file_size=file_record.physical_file.file_size if file_record.physical_file else 0,
+        mime_type=file_record.physical_file.mime_type if file_record.physical_file else "application/octet-stream",
         course_id=file_record.course_id,
         folder_id=file_record.folder_id,
         user_id=file_record.user_id,
@@ -77,8 +77,8 @@ async def get_folder_files(
             id=file_record.id,
             original_name=file_record.original_name,
             file_type=file_record.file_type,
-            file_size=file_record.file_size,
-            mime_type=file_record.mime_type,
+            file_size=file_record.physical_file.file_size if file_record.physical_file else 0,
+            mime_type=file_record.physical_file.mime_type if file_record.physical_file else "unknown",
             course_id=file_record.course_id,
             folder_id=file_record.folder_id,
             user_id=file_record.user_id,
@@ -111,8 +111,8 @@ async def get_file_preview(
             "id": file_record.id,
             "original_name": file_record.original_name,
             "file_type": file_record.file_type,
-            "file_size": file_record.file_size,
-            "mime_type": file_record.mime_type,
+            "file_size": file_record.physical_file.file_size if file_record.physical_file else 0,
+            "mime_type": file_record.physical_file.mime_type if file_record.physical_file else "unknown",
             "created_at": file_record.created_at
         }
     )
@@ -143,50 +143,26 @@ async def get_file_status(
 
 @router.get("/tasks/{task_id}/progress")
 async def get_task_progress(
-    task_id: str = Path(..., description="Celery Task ID"),
+    task_id: str = Path(..., description="Task ID"),
     current_user: User = Depends(get_current_user)
 ):
-    """Get async task progress (Celery task status)"""
-    try:
-        from app.tasks.file_processing import get_task_status
-        from celery.result import AsyncResult
-        from app.celery_app import celery_app
-        
-        # 获取任务状态
-        result = AsyncResult(task_id, app=celery_app)
-        
-        return {
-            "success": True,
-            "data": {
-                "task_id": task_id,
-                "state": result.state,
-                "progress": {
-                    "current": result.info.get("current", 0) if result.info else 0,
-                    "total": result.info.get("total", 100) if result.info else 100,
-                    "status": result.info.get("status", "") if result.info else ""
-                },
-                "result": result.result if result.ready() else None,
-                "failed": result.failed(),
-                "successful": result.successful()
-            }
+    """Get task progress (Beta版本: 文件同步处理)"""
+    # Beta版本中文件直接同步处理，总是返回已完成状态
+    return {
+        "success": True,
+        "data": {
+            "task_id": task_id,
+            "state": "SUCCESS",
+            "progress": {
+                "current": 100,
+                "total": 100,
+                "status": "文件处理已完成"
+            },
+            "result": {"status": "completed", "message": "Beta版本中文件同步处理完成"},
+            "failed": False,
+            "successful": True
         }
-        
-    except ImportError:
-        return {
-            "success": False,
-            "error": {
-                "code": "CELERY_NOT_AVAILABLE",
-                "message": "Async task system not available"
-            }
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "error": {
-                "code": "TASK_STATUS_ERROR",
-                "message": str(e)
-            }
-        }
+    }
 
 
 @router.get("/files/{file_id}/download")
@@ -205,7 +181,7 @@ async def download_file(
     
     return StreamingResponse(
         io.BytesIO(file_content),
-        media_type=file_record.mime_type,
+        media_type=file_record.physical_file.mime_type if file_record.physical_file else "application/octet-stream",
         headers={
             "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
         }

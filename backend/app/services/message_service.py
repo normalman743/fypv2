@@ -29,7 +29,7 @@ class MessageService:
 
         return self.db.query(Message).options(
             joinedload(Message.file_attachments),
-            joinedload(Message.rag_sources)
+            joinedload(Message.rag_sources_rel)
         ).filter(Message.chat_id == chat_id).order_by(Message.created_at.asc()).all()
 
     def send_message(self, chat_id: int, message_data: SendMessageRequest, user_id: int) -> dict:
@@ -226,8 +226,8 @@ class MessageService:
                 })
 
         rag_sources = []
-        if hasattr(message, 'rag_sources') and message.rag_sources:
-            for source in message.rag_sources:
+        if hasattr(message, 'rag_sources_rel') and message.rag_sources_rel:
+            for source in message.rag_sources_rel:
                 rag_sources.append({
                     "source_file": source.source_file,
                     "chunk_id": source.chunk_id

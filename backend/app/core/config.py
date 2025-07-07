@@ -13,8 +13,8 @@ class Settings(BaseSettings):
     environment: str = "development"
     
     # 数据库配置
-    database_url: str = os.getenv("DATABASE_URL", "sqlite:///./test.db")
-    test_database_url: str = os.getenv("TEST_DATABASE_URL", "sqlite:///./test.db")
+    database_url: str = os.getenv("DATABASE_URL", "sqlite:///./local_campus_llm.db")
+    test_database_url: Optional[str] = os.getenv("TEST_DATABASE_URL")
     
     # JWT配置
     secret_key: str = os.getenv("SECRET_KEY", "your-secret-key-here-change-in-production")

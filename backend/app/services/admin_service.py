@@ -24,7 +24,7 @@ class AdminService:
             if not self.db.query(InviteCode).filter(InviteCode.code == code).first():
                 return code
 
-    def create_invite_code(self, request: CreateInviteCodeRequest) -> InviteCode:
+    def create_invite_code(self, request: CreateInviteCodeRequest, created_by: int) -> InviteCode:
         """创建邀请码"""
         code = self.generate_invite_code()
         
@@ -32,7 +32,8 @@ class AdminService:
             code=code,
             description=request.description,
             expires_at=request.expires_at,
-            is_used=False
+            is_used=False,
+            created_by=created_by
         )
         
         self.db.add(invite_code)

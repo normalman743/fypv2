@@ -28,7 +28,7 @@ def get_current_user(
     if user_id is None:
         raise UnauthorizedError("Invalid authentication credentials")
     
-    user = db.query(User).filter(User.id == user_id, User.is_active == True, User.is_deleted == False).first()
+    user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
     if user is None:
         raise UnauthorizedError("User not found or deactivated")
     

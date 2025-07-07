@@ -72,7 +72,7 @@ async def edit_message(
             "message": {
                 "id": message.id,
                 "content": message.content,
-                "updated_at": message.updated_at
+                "created_at": message.created_at
             }
         }
     )

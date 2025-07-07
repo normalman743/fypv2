@@ -8,6 +8,7 @@ from pathlib import Path
 import tempfile
 
 from app.models.file import File
+from app.models.physical_file import PhysicalFile
 from app.models.folder import Folder
 from app.models.course import Course
 from app.core.exceptions import NotFoundError, ForbiddenError, BadRequestError
@@ -36,7 +37,8 @@ class FileService:
             raise ForbiddenError("You don't have permission to access this folder")
 
         return self.db.query(File).options(
-            joinedload(File.folder)
+            joinedload(File.folder),
+            joinedload(File.physical_file)
         ).filter(File.folder_id == folder_id).all()
 
     def upload_file(self, file: UploadFile, course_id: int, folder_id: int, user_id: int) -> File:
@@ -73,25 +75,50 @@ class FileService:
 
         # Determine file type based on content and extension
         file_type = self._determine_file_type(file.filename, file.content_type)
+        
+        # Calculate file hash for deduplication
+        file_hash = hashlib.sha256(file_content).hexdigest()
 
         try:
-            # Create file record with local file path
+            # Check if physical file already exists
+            physical_file = self.db.query(PhysicalFile).filter(
+                PhysicalFile.file_hash == file_hash
+            ).first()
+            
+            if not physical_file:
+                # Create new physical file record
+                physical_file = PhysicalFile(
+                    file_hash=file_hash,
+                    file_size=file_size,
+                    mime_type=file.content_type or "application/octet-stream",
+                    storage_path=file_path,
+                    reference_count=1
+                )
+                self.db.add(physical_file)
+                self.db.flush()  # Get ID without committing
+            else:
+                # Increment reference count for existing file
+                physical_file.reference_count += 1
+            
+            # Create file record
             file_record = File(
+                physical_file_id=physical_file.id,
                 original_name=file.filename,
                 file_type=file_type,
-                file_size=file_size,
-                mime_type=file.content_type or "application/octet-stream",
                 course_id=course_id,
                 folder_id=folder_id,
                 user_id=user_id,
                 is_processed=False,
-                processing_status="pending",
-                file_path=file_path  # 文件本地存储路径
+                processing_status="pending"
             )
             
             self.db.add(file_record)
             self.db.commit()
             self.db.refresh(file_record)
+            
+            # Load physical file relationship
+            self.db.refresh(physical_file)
+            file_record.physical_file = physical_file
             
             # 内测阶段直接同步处理RAG（10人左右，无需异步）
             self._process_file_with_rag_sync(file_record, file_content)
@@ -179,7 +206,8 @@ class FileService:
         """Get file preview info (check access via course ownership)"""
         # Get file with course info
         file_record = self.db.query(File).options(
-            joinedload(File.course)
+            joinedload(File.course),
+            joinedload(File.physical_file)
         ).filter(File.id == file_id).first()
         
         if not file_record:
@@ -196,10 +224,10 @@ class FileService:
         file_record = self.get_file_preview(file_id, user_id)  # Same access logic
         
         # 从本地存储读取文件内容
-        if not file_record.file_path:
+        if not file_record.physical_file or not file_record.physical_file.storage_path:
             raise BadRequestError("File path not found", "FILE_PATH_NOT_FOUND")
         
-        file_content = local_file_storage.download_file(file_record.file_path)
+        file_content = local_file_storage.download_file(file_record.physical_file.storage_path)
         if file_content is None:
             raise BadRequestError("Failed to read file from local storage", "LOCAL_READ_FAILED")
         
@@ -209,7 +237,8 @@ class FileService:
         """Delete file (check access via course ownership)"""
         # Get file with course info
         file_record = self.db.query(File).options(
-            joinedload(File.course)
+            joinedload(File.course),
+            joinedload(File.physical_file)
         ).filter(File.id == file_id).first()
         
         if not file_record:
@@ -219,15 +248,25 @@ class FileService:
         if file_record.course.user_id != user_id:
             raise ForbiddenError("You don't have permission to delete this file")
 
-        # 删除本地存储中的文件
-        if file_record.file_path:
-            try:
-                local_file_storage.delete_file(file_record.file_path)
-            except Exception as e:
-                print(f"⚠️ Failed to delete file from local storage: {e}")
-                # 继续删除数据库记录，即使本地文件删除失败
+        physical_file = file_record.physical_file
         
+        # Delete the file record first
         self.db.delete(file_record)
+        
+        # Decrease reference count for physical file
+        if physical_file:
+            physical_file.reference_count -= 1
+            
+            # If no more references, delete the physical file and record
+            if physical_file.reference_count <= 0:
+                try:
+                    local_file_storage.delete_file(physical_file.storage_path)
+                except Exception as e:
+                    print(f"⚠️ Failed to delete file from local storage: {e}")
+                    # Continue to delete database record even if local file deletion fails
+                
+                self.db.delete(physical_file)
+        
         self.db.commit()
         return True
 

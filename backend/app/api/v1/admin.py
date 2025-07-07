@@ -28,7 +28,7 @@ async def create_invite_code(
     """创建邀请码 (管理员专用)"""
     try:
         admin_service = AdminService(db)
-        invite_code = admin_service.create_invite_code(request)
+        invite_code = admin_service.create_invite_code(request, created_by=current_user.id)
         
         return ResponseModel(
             success=True,
@@ -90,7 +90,7 @@ async def update_invite_code(
             data=UpdateInviteCodeResponse(
                 invite_code={
                     "id": invite_code.id,
-                    "updated_at": invite_code.updated_at
+                    "updated_at": invite_code.created_at  # 使用created_at代替不存在的updated_at
                 }
             )
         )

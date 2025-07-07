@@ -2,6 +2,7 @@
 39.108.113.103:3306
 user: campus_user
 password: CampusLLM123!
+database：
 ## 📋 架构概览
 
 ### 存储策略

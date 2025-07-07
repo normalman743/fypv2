@@ -24,3 +24,4 @@ class Course(Base):
     folders = relationship("Folder", back_populates="course")
     files = relationship("File", back_populates="course")
     chats = relationship("Chat", back_populates="course")
+    chats = relationship("Chat", back_populates="course")

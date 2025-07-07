@@ -10,7 +10,14 @@ from app.models.database import get_db
 from app.models.user import User
 
 # 密码加密上下文
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# 解决bcrypt版本兼容性问题
+try:
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+except Exception:
+    # 降级处理，忽略bcrypt版本检查
+    import passlib.handlers.bcrypt as bcrypt_handler
+    bcrypt_handler._bcrypt_version = None
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 class HTTPBearer401(HTTPBearer):
     async def __call__(self, request: Request) -> HTTPAuthorizationCredentials:

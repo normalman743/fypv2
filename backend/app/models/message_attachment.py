@@ -24,4 +24,4 @@ class MessageRAGSource(Base):
     relevance_score = Column(String(32), nullable=True)  # For future use
     created_at = Column(DateTime, server_default=func.now())
 
-    message = relationship("Message", back_populates="rag_sources")
+    message = relationship("Message", back_populates="rag_sources_rel")
