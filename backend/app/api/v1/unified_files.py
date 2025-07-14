@@ -76,6 +76,7 @@ async def upload_file(
                     "processing_status": file_record.processing_status,
                     "created_at": file_record.created_at,
                     "file_size": file_record.file_size,
+                    "file_hash": file_record.file_hash,  # 添加hash字段
                     "description": file_record.description,
                     "tags": file_record.tags
                 }

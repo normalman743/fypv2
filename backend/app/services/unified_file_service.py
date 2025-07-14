@@ -53,6 +53,9 @@ class UnifiedFileService:
         file_hash = hashlib.sha256(file_content).hexdigest()
         file.file.seek(0)
         
+        # 调试信息
+        print(f"File upload: {file.filename}, size: {len(file_content)}, hash: {file_hash}")
+        
         file_info = {
             'original_name': file.filename,
             'mime_type': file.content_type or "application/octet-stream",
@@ -109,6 +112,10 @@ class UnifiedFileService:
         course_id: Optional[int]
     ) -> Optional[File]:
         """检查是否已存在相同文件"""
+        # 确保hash不为空
+        if not file_hash:
+            return None
+            
         query = self.db.query(File).filter(
             File.file_hash == file_hash,
             File.user_id == user_id,
@@ -118,7 +125,11 @@ class UnifiedFileService:
         if scope == 'course' and course_id:
             query = query.filter(File.course_id == course_id)
         
-        return query.first()
+        existing_file = query.first()
+        if existing_file:
+            print(f"Found existing file with hash {file_hash}: {existing_file.id}")
+        
+        return existing_file
 
     def _get_or_create_physical_file(
         self, 
