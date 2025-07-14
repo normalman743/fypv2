@@ -6,16 +6,21 @@
 
 ```
 api_test/
-├── config.py              # 测试配置文件
-├── utils.py               # 工具函数和API客户端
-├── test_basic.py          # 基础API测试
-├── test_auth.py           # 认证API测试
-├── test_courses.py        # 课程管理API测试
-├── test_files.py          # 文件管理API测试
-├── test_chats.py          # 聊天API测试
-├── test_admin.py          # 管理员API测试
-├── run_all_tests.py       # 运行所有测试
-└── README.md              # 说明文档
+├── config.py                  # 测试配置文件
+├── utils.py                   # 工具函数和API客户端
+├── test_basic.py              # 基础API测试
+├── test_auth.py               # 认证API测试
+├── test_courses.py            # 课程管理API测试
+├── test_files.py              # 文件管理API测试
+├── test_chats.py              # 聊天API测试
+├── test_rag.py                # RAG功能测试
+├── test_rag_complete.py       # RAG完整测试套件
+├── test_rag_direct.py         # RAG直接处理测试
+├── test_rag_database_sync.py  # RAG数据库同步测试
+├── rag_status_check.py        # RAG状态快速检查
+├── test_admin.py              # 管理员API测试
+├── run_all_tests.py           # 运行所有测试
+└── README.md                  # 说明文档
 ```
 
 ## 🚀 快速开始
@@ -58,6 +63,21 @@ python test_files.py
 
 # 聊天API测试
 python test_chats.py
+
+# RAG功能测试
+python test_rag.py
+
+# RAG完整测试套件
+python test_rag_complete.py
+
+# RAG状态快速检查
+python rag_status_check.py
+
+# RAG直接处理测试
+python test_rag_direct.py
+
+# RAG数据库同步检查
+python test_rag_database_sync.py
 
 # 管理员API测试
 python test_admin.py
@@ -219,3 +239,34 @@ ADMIN_USER = {
 4. 网络连接是否正常
 
 测试愉快！🎉
+
+## 🤖 RAG系统专项测试
+
+### 快速状态检查
+```bash
+python rag_status_check.py
+```
+- 检查文件处理统计
+- 验证数据一致性
+- 评估系统健康度
+
+### 完整功能测试
+```bash
+python test_rag_complete.py
+```
+- 数据库一致性测试
+- 直接处理功能测试
+- API集成测试
+- 文件上传RAG处理测试
+
+### 单项测试
+```bash
+# 基础RAG功能
+python test_rag.py
+
+# 直接RAG处理
+python test_rag_direct.py
+
+# 数据库同步验证
+python test_rag_database_sync.py
+```

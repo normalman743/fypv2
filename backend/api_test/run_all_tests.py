@@ -8,11 +8,14 @@ from datetime import datetime
 
 # 测试模块列表
 TEST_MODULES = [
+    ("V2.1快速验证", "quick_test"),
     ("基础API测试", "test_basic"),
     ("认证API测试", "test_auth"),
     ("课程管理API测试", "test_courses"),
-    ("文件管理API测试", "test_files"),
+    ("V2.1统一文件系统测试", "test_unified_files_v2"),
+    ("传统文件管理API测试", "test_files"),
     ("聊天API测试", "test_chats"),
+    ("RAG功能测试", "test_rag"),
     ("管理员API测试", "test_admin")
 ]
 

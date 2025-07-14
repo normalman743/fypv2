@@ -15,12 +15,10 @@ from .course import Course
 from .folder import Folder
 from .file import File
 from .physical_file import PhysicalFile
-from .global_file import GlobalFile
 from .document_chunk import DocumentChunk
+from .file_share import FileShare, FileAccessLog, FileGroup, FileGroupMember  # 新增文件共享模型
 from .chat import Chat
 from .message import Message
-from .message_file import MessageFile
-from .message_attachment import MessageFileAttachment, MessageRAGSource
 
 # Export all models
 __all__ = [
@@ -39,13 +37,13 @@ __all__ = [
     'Folder',
     'File',
     'PhysicalFile',
-    'GlobalFile',
     'DocumentChunk',
+    'FileShare',
+    'FileAccessLog', 
+    'FileGroup',
+    'FileGroupMember',
     
     # Chat system
     'Chat',
     'Message',
-    'MessageFile',
-    'MessageFileAttachment',
-    'MessageRAGSource',
 ]

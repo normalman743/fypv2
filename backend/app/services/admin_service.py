@@ -78,7 +78,7 @@ class AdminService:
         return {
             "max_file_size": 10485760,  # 10MB
             "allowed_file_types": ["pdf", "docx", "txt", "jpg", "png"],
-            "ai_model": "gpt-4",
+            "ai_model": "gpt-40-mini",
             "rag_enabled": True,
             "max_chat_history": 1000,
             "max_files_per_chat": 10

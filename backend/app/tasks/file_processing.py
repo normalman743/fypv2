@@ -53,8 +53,11 @@ def process_file_rag_task(self, file_id: int, file_content: bytes) -> Dict[str, 
         
         if not RAG_AVAILABLE:
             print("⚠️ RAG service not available")
+            from datetime import datetime
             file_record.processing_status = "completed"
             file_record.is_processed = True
+            file_record.processed_at = datetime.now()
+            file_record.chunk_count = 0
             db.commit()
             return {
                 "status": "completed", 
@@ -96,8 +99,11 @@ def process_file_rag_task(self, file_id: int, file_content: bytes) -> Dict[str, 
             )
             
             # 更新文件状态为完成
+            from datetime import datetime
             file_record.is_processed = True
             file_record.processing_status = "completed"
+            file_record.processed_at = datetime.now()
+            file_record.chunk_count = result.get('chunks_created', 0)
             db.commit()
             
             # 最终状态
@@ -113,7 +119,10 @@ def process_file_rag_task(self, file_id: int, file_content: bytes) -> Dict[str, 
             
         except Exception as e:
             print(f"❌ RAG processing failed for file {file_id}: {e}")
+            from datetime import datetime
             file_record.processing_status = "failed"
+            file_record.processed_at = datetime.now()
+            file_record.processing_error = str(e)
             db.commit()
             
             return {

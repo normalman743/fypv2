@@ -6,7 +6,7 @@ from app.models.chat import Chat
 from app.models.course import Course
 from app.models.message import Message
 from app.models.file import File
-from app.models.message_attachment import MessageFileAttachment, MessageRAGSource
+# from app.models.message_attachment import MessageFileAttachment, MessageRAGSource  # V2.1: 已移除
 from app.schemas.chat import CreateChatRequest, UpdateChatRequest
 from app.schemas.message import SendMessageRequest
 from app.services.enhanced_ai_service import create_ai_service

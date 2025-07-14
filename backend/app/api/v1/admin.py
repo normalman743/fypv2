@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
+import json
 
 from app.dependencies import get_db, get_current_user, require_admin
 from app.models.user import User
@@ -15,6 +16,7 @@ from app.schemas.invite_code import (
 )
 from app.schemas.common import ResponseModel, ErrorResponse
 from app.core.exceptions import NotFoundError, BadRequestError
+from app.services.unified_file_service import UnifiedFileService
 
 router = APIRouter(tags=["管理员"])
 
@@ -172,4 +174,51 @@ async def get_audit_logs(
         
         return ResponseModel(success=True, data={"logs": logs})
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) 
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.post("/global-files/upload", response_model=ResponseModel)
+async def upload_global_file(
+    file: UploadFile = File(...),
+    description: str = Form(None),
+    tags: str = Form(None),  # 建议前端传json字符串
+    visibility: str = Form('public'),  # 新增可见性控制
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
+    """
+    上传全局文件（管理员专用）
+    使用统一文件服务代替原有的 GlobalFileService
+    """
+    try:
+        # 解析tags
+        tags_list = json.loads(tags) if tags else []
+
+        service = UnifiedFileService(db)
+        file_record = service.upload_file(
+            file=file,
+            user_id=current_user.id,
+            scope='global',
+            description=description,
+            tags=tags_list,
+            visibility=visibility
+        )
+        return ResponseModel(
+            success=True,
+            data={
+                "file": {
+                    "id": file_record.id,
+                    "original_name": file_record.original_name,
+                    "file_type": file_record.file_type,
+                    "scope": file_record.scope,
+                    "visibility": file_record.visibility,
+                    "is_processed": file_record.is_processed,
+                    "processing_status": file_record.processing_status,
+                    "created_at": file_record.created_at,
+                    "file_size": file_record.file_size,
+                    "description": file_record.description,
+                    "tags": file_record.tags
+                }
+            }
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))

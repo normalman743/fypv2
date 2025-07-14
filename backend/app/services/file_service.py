@@ -16,7 +16,7 @@ from app.services.local_file_storage import local_file_storage
 
 # Import RAG service
 try:
-    from app.services.rag_service import get_rag_service
+    from app.services.rag_service import get_rag_service, ProductionRAGService
     RAG_AVAILABLE = True
 except ImportError:
     RAG_AVAILABLE = False
@@ -176,8 +176,10 @@ class FileService:
                 temp_file_path = temp_file.name
             
             try:
-                # Process with RAG service
-                rag_service = get_rag_service()
+                # Process with RAG service (传递数据库会话)
+                print(f"🔧 正在创建RAG服务，数据库会话: {self.db}")
+                rag_service = ProductionRAGService(db_session=self.db)
+                print(f"🔧 RAG服务创建成功，开始处理文件...")
                 result = rag_service.process_file(file_record, temp_file_path)
                 
                 print(f"✅ RAG processing completed: {result}")
