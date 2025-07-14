@@ -108,14 +108,9 @@ class MessageService:
             self.db.add(ai_message)
             self.db.flush()
 
-            # Add RAG sources
-            for source in ai_response.rag_sources:
-                rag_source = MessageRAGSource(
-                    message_id=ai_message.id,
-                    source_file=source["source_file"],
-                    chunk_id=source["chunk_id"]
-                )
-                self.db.add(rag_source)
+            # Add RAG sources (V2.1: 存储在message的rag_sources JSON字段中)
+            if hasattr(ai_response, 'rag_sources') and ai_response.rag_sources:
+                ai_message.rag_sources = ai_response.rag_sources
 
             # Check if this is the first user message (excluding system messages)
             message_count = self.db.query(Message).filter(
