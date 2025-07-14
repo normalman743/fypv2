@@ -1,0 +1,407 @@
+import hashlib
+import os
+import tempfile
+from typing import List, Optional, Dict, Any
+from sqlalchemy.orm import Session
+from fastapi import UploadFile, HTTPException
+
+from app.models.file import File
+from app.models.physical_file import PhysicalFile
+from app.models.file_share import FileShare, FileAccessLog
+from app.models.user import User
+from app.models.course import Course
+from app.services.local_file_storage import local_file_storage
+from app.services.rag_service import ProductionRAGService
+
+
+class UnifiedFileService:
+    """统一文件服务 - 替代原来的 file_service 和 global_file_service"""
+    
+    def __init__(self, db: Session):
+        self.db = db
+
+    def upload_file(
+        self,
+        file: UploadFile,
+        user_id: int,
+        scope: str = 'course',
+        course_id: Optional[int] = None,
+        folder_id: Optional[int] = None,
+        description: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        visibility: str = 'private'
+    ) -> File:
+        """
+        统一文件上传接口
+        
+        Args:
+            file: 上传的文件
+            user_id: 上传用户ID
+            scope: 文件作用域 ('course', 'global', 'personal')
+            course_id: 课程ID (scope='course'时必需)
+            folder_id: 文件夹ID (可选)
+            description: 文件描述
+            tags: 标签列表
+            visibility: 可见性 ('private', 'course', 'public', 'shared')
+        """
+        
+        # 1. 验证参数
+        self._validate_upload_params(scope, course_id, user_id)
+        
+        # 2. 读取和处理文件内容
+        file_content = file.file.read()
+        file_hash = hashlib.sha256(file_content).hexdigest()
+        file.file.seek(0)
+        
+        file_info = {
+            'original_name': file.filename,
+            'mime_type': file.content_type or "application/octet-stream",
+            'file_size': len(file_content),
+            'file_hash': file_hash
+        }
+        
+        # 3. 检查是否已存在相同文件
+        existing_file = self._check_existing_file(file_hash, user_id, scope, course_id)
+        if existing_file:
+            return existing_file
+        
+        # 4. 获取或创建 PhysicalFile
+        physical_file = self._get_or_create_physical_file(file_info, file_content, scope)
+        
+        # 5. 创建 File 记录
+        file_record = self._create_file_record(
+            physical_file=physical_file,
+            file_info=file_info,
+            user_id=user_id,
+            scope=scope,
+            course_id=course_id,
+            folder_id=folder_id,
+            description=description,
+            tags=tags,
+            visibility=visibility
+        )
+        
+        # 6. 触发 RAG 处理
+        self._trigger_rag_processing(file_record, physical_file)
+        
+        return file_record
+
+    def _validate_upload_params(self, scope: str, course_id: Optional[int], user_id: int):
+        """验证上传参数"""
+        if scope not in ['course', 'global', 'personal']:
+            raise HTTPException(status_code=400, detail="Invalid scope")
+        
+        if scope == 'course' and not course_id:
+            raise HTTPException(status_code=400, detail="course_id is required for course scope")
+        
+        if scope == 'course' and course_id:
+            # 验证用户是否有权限上传到该课程
+            course = self.db.query(Course).filter(Course.id == course_id).first()
+            if not course:
+                raise HTTPException(status_code=404, detail="Course not found")
+            # TODO: 添加课程权限检查
+
+    def _check_existing_file(
+        self, 
+        file_hash: str, 
+        user_id: int, 
+        scope: str, 
+        course_id: Optional[int]
+    ) -> Optional[File]:
+        """检查是否已存在相同文件"""
+        query = self.db.query(File).filter(
+            File.file_hash == file_hash,
+            File.user_id == user_id,
+            File.scope == scope
+        )
+        
+        if scope == 'course' and course_id:
+            query = query.filter(File.course_id == course_id)
+        
+        return query.first()
+
+    def _get_or_create_physical_file(
+        self, 
+        file_info: dict, 
+        file_content: bytes, 
+        scope: str
+    ) -> PhysicalFile:
+        """获取或创建 PhysicalFile 记录"""
+        
+        # 检查是否已存在相同 hash 的物理文件
+        physical_file = self.db.query(PhysicalFile).filter(
+            PhysicalFile.file_hash == file_info['file_hash']
+        ).first()
+        
+        if physical_file:
+            # 更新引用计数
+            physical_file.reference_count += 1
+            self.db.commit()
+            return physical_file
+        
+        # 创建新的物理文件
+        storage_path = self._generate_storage_path(file_info, scope)
+        full_path = local_file_storage.base_dir / storage_path
+        
+        # 确保目录存在
+        os.makedirs(full_path.parent, exist_ok=True)
+        
+        # 保存文件
+        with open(full_path, "wb") as f:
+            f.write(file_content)
+        
+        # 创建数据库记录
+        physical_file = PhysicalFile(
+            file_hash=file_info['file_hash'],
+            file_size=file_info['file_size'],
+            mime_type=file_info['mime_type'],
+            storage_path=str(storage_path),
+            reference_count=1
+        )
+        
+        self.db.add(physical_file)
+        self.db.commit()
+        self.db.refresh(physical_file)
+        
+        return physical_file
+
+    def _generate_storage_path(self, file_info: dict, scope: str) -> str:
+        """生成存储路径"""
+        file_hash = file_info['file_hash']
+        original_name = file_info['original_name']
+        
+        if scope == 'global':
+            return f"global/{file_hash}_{original_name}"
+        elif scope == 'course':
+            return f"course/{file_hash}_{original_name}"
+        else:  # personal
+            return f"personal/{file_hash}_{original_name}"
+
+    def _create_file_record(
+        self,
+        physical_file: PhysicalFile,
+        file_info: dict,
+        user_id: int,
+        scope: str,
+        course_id: Optional[int],
+        folder_id: Optional[int],
+        description: Optional[str],
+        tags: Optional[List[str]],
+        visibility: str
+    ) -> File:
+        """创建 File 记录"""
+        
+        # 推断文件类型
+        file_type = self._infer_file_type(file_info['mime_type'], file_info['original_name'])
+        
+        file_record = File(
+            physical_file_id=physical_file.id,
+            original_name=file_info['original_name'],
+            file_type=file_type,
+            scope=scope,
+            visibility=visibility,
+            course_id=course_id,
+            folder_id=folder_id,
+            user_id=user_id,
+            file_size=file_info['file_size'],
+            mime_type=file_info['mime_type'],
+            file_hash=file_info['file_hash'],
+            description=description,
+            tags=tags,
+            is_processed=False,
+            processing_status="pending"
+        )
+        
+        self.db.add(file_record)
+        self.db.commit()
+        self.db.refresh(file_record)
+        
+        return file_record
+
+    def _infer_file_type(self, mime_type: str, filename: str) -> str:
+        """推断文件类型"""
+        if 'pdf' in mime_type.lower():
+            return 'pdf'
+        elif 'document' in mime_type.lower() or filename.endswith(('.doc', '.docx')):
+            return 'doc'
+        elif 'text' in mime_type.lower() or filename.endswith(('.txt', '.md')):
+            return 'txt'
+        else:
+            return 'unknown'
+
+    def _trigger_rag_processing(self, file_record: File, physical_file: PhysicalFile):
+        """触发 RAG 处理"""
+        try:
+            full_path = local_file_storage.base_dir / physical_file.storage_path
+            rag_service = ProductionRAGService(db_session=self.db)
+            rag_service.process_file(file_record, str(full_path))
+            
+            file_record.is_processed = True
+            file_record.processing_status = "completed"
+        except Exception as e:
+            file_record.processing_status = "failed"
+            file_record.processing_error = str(e)
+        
+        self.db.commit()
+
+    # 共享相关方法
+    def share_file(
+        self,
+        file_id: int,
+        shared_with_type: str,
+        shared_with_id: Optional[int],
+        permission_level: str,
+        shared_by: int,
+        can_reshare: bool = False,
+        expires_at: Optional[str] = None
+    ) -> FileShare:
+        """共享文件"""
+        
+        # 验证文件存在且有权限
+        file_record = self.db.query(File).filter(File.id == file_id).first()
+        if not file_record:
+            raise HTTPException(status_code=404, detail="File not found")
+        
+        if file_record.user_id != shared_by:
+            raise HTTPException(status_code=403, detail="No permission to share this file")
+        
+        # 创建共享记录
+        share = FileShare(
+            file_id=file_id,
+            shared_with_type=shared_with_type,
+            shared_with_id=shared_with_id,
+            permission_level=permission_level,
+            shared_by=shared_by,
+            can_reshare=can_reshare,
+            expires_at=expires_at
+        )
+        
+        self.db.add(share)
+        self.db.commit()
+        self.db.refresh(share)
+        
+        return share
+
+    def get_accessible_files(
+        self,
+        user_id: int,
+        scope: Optional[str] = None,
+        course_id: Optional[int] = None,
+        include_shared: bool = True
+    ) -> List[File]:
+        """获取用户可访问的文件列表"""
+        
+        query = self.db.query(File)
+        
+        # 基础过滤
+        if scope:
+            query = query.filter(File.scope == scope)
+        if course_id:
+            query = query.filter(File.course_id == course_id)
+        
+        # 权限过滤
+        conditions = []
+        
+        # 1. 用户拥有的文件
+        conditions.append(File.user_id == user_id)
+        
+        # 2. 公开文件
+        if scope == 'global' or not scope:
+            conditions.append(File.visibility == 'public')
+        
+        # 3. 课程文件 (如果用户是课程成员)
+        if course_id:
+            conditions.append(
+                (File.scope == 'course') & 
+                (File.course_id == course_id) & 
+                (File.visibility.in_(['course', 'public']))
+            )
+        
+        # 4. 共享给用户的文件
+        if include_shared:
+            shared_file_ids = self.db.query(FileShare.file_id).filter(
+                FileShare.shared_with_type == 'user',
+                FileShare.shared_with_id == user_id
+            ).subquery()
+            
+            conditions.append(File.id.in_(shared_file_ids))
+        
+        # 应用条件
+        if conditions:
+            from sqlalchemy import or_
+            query = query.filter(or_(*conditions))
+        
+        return query.all()
+
+    def log_file_access(
+        self,
+        file_id: int,
+        user_id: int,
+        action: str,
+        access_via: str = 'direct',
+        ip_address: Optional[str] = None,
+        user_agent: Optional[str] = None
+    ):
+        """记录文件访问日志"""
+        
+        log = FileAccessLog(
+            file_id=file_id,
+            user_id=user_id,
+            action=action,
+            access_via=access_via,
+            ip_address=ip_address,
+            user_agent=user_agent
+        )
+        
+        self.db.add(log)
+        self.db.commit()
+
+    def delete_file(self, file_id: int, user_id: int) -> bool:
+        """删除文件"""
+        
+        file_record = self.db.query(File).filter(
+            File.id == file_id,
+            File.user_id == user_id
+        ).first()
+        
+        if not file_record:
+            raise HTTPException(status_code=404, detail="File not found or no permission")
+        
+        # 删除文件记录
+        self.db.delete(file_record)
+        
+        # 更新 PhysicalFile 引用计数
+        physical_file = file_record.physical_file
+        physical_file.reference_count -= 1
+        
+        # 如果没有其他引用，删除物理文件
+        if physical_file.reference_count <= 0:
+            try:
+                full_path = local_file_storage.base_dir / physical_file.storage_path
+                if os.path.exists(full_path):
+                    os.remove(full_path)
+                self.db.delete(physical_file)
+            except Exception as e:
+                # 记录日志但不阻断删除
+                print(f"Failed to delete physical file: {e}")
+        
+        self.db.commit()
+        return True
+
+    # 迁移兼容方法
+    def upload_global_file(
+        self,
+        file: UploadFile,
+        description: str,
+        tags: list,
+        user_id: int
+    ) -> File:
+        """兼容原 global_file_service.upload_global_file 方法"""
+        return self.upload_file(
+            file=file,
+            user_id=user_id,
+            scope='global',
+            description=description,
+            tags=tags,
+            visibility='public'
+        )

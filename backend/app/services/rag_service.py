@@ -7,6 +7,7 @@ Integrates LangChain RAG functionality into the existing chat/message system
 import os
 import time
 import json
+import uuid
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 from datetime import datetime
@@ -28,12 +29,12 @@ from langchain.schema import Document
 from langchain.embeddings.base import Embeddings
 
 # OpenAI imports
-import openai
 from openai import OpenAI
 
 # Database models
 from sqlalchemy.orm import Session
 from app.models.file import File
+from app.models.document_chunk import DocumentChunk
 from app.models.course import Course
 
 
@@ -111,15 +112,17 @@ class OpenAIEmbeddingsWrapper(Embeddings):
 class ProductionRAGService:
     """生产级RAG服务 - 可插拔替换MockAIService"""
     
-    def __init__(self, data_dir: str = "./data/chroma", use_openai: bool = True):
+    def __init__(self, data_dir: str = "./data/chroma", use_openai: bool = True, db_session: Session = None):
         """
         初始化RAG服务
         
         Args:
             data_dir: ChromaDB数据存储目录
             use_openai: 是否尝试使用OpenAI API
+            db_session: 数据库会话（用于同步保存文档切片）
         """
         self.data_dir = data_dir
+        self.db_session = db_session
         os.makedirs(data_dir, exist_ok=True)
         
         # 文本分割器
@@ -151,7 +154,7 @@ class ProductionRAGService:
         
         print(f"📁 RAG Service initialized with data directory: {data_dir}")
     
-    def process_file(self, file: File, file_path: str) -> Dict[str, Any]:
+    def process_file(self, file, file_path: str) -> Dict[str, Any]:
         """
         处理文件并添加到向量数据库
         
@@ -182,19 +185,35 @@ class ProductionRAGService:
         for i, chunk in enumerate(chunks):
             chunk.metadata.update({
                 "file_id": str(file.id),
-                "course_id": str(file.course_id) if file.course_id else "global",
+                "course_id": str(file.course_id) if hasattr(file, "course_id") and getattr(file, "course_id", None) else "global",
                 "filename": file.original_name,
-                "file_type": file.file_type,
+                "file_type": getattr(file, "file_type", "global"),
                 "chunk_id": i,
                 "processed_at": datetime.now().isoformat()
             })
         
-        # 5. 确定集合名称
-        collection_name = f"course_{file.course_id}" if file.course_id else "global"
+        # 5. 根据文件作用域确定集合名称
+        file_scope = getattr(file, "scope", "course")
+        if file_scope == "global":
+            collection_name = "global"
+        elif hasattr(file, "course_id") and getattr(file, "course_id", None):
+            collection_name = f"course_{file.course_id}"
+        else:
+            collection_name = "personal"
         
         # 6. 存储到向量数据库
         vectorstore = self._get_or_create_vectorstore(collection_name)
         vectorstore.add_documents(chunks)
+        
+        # 7. 同步保存文档切片到数据库
+        if self.db_session:
+            print(f"🔧 数据库会话可用，开始保存切片到数据库...")
+            # 获取文件信息
+            course_id = getattr(file, "course_id", None) if hasattr(file, "course_id") else None
+            file_scope = getattr(file, "scope", "course")
+            self._save_chunks_to_db(chunks, file, course_id, file_scope)
+        else:
+            print(f"⚠️ 数据库会话不可用，跳过数据库同步")
         
         processing_time = time.time() - start_time
         print(f"✅ File processed: {len(chunks)} chunks, {processing_time:.2f}s")
@@ -207,7 +226,48 @@ class ProductionRAGService:
             "collection": collection_name
         }
     
-    def retrieve_context(self, query: str, chat_type: str = "general", 
+    def _save_chunks_to_db(self, chunks: List[Document], file_obj, course_id: Optional[int], file_scope: str = "course"):
+        """将文档切片同步保存到数据库"""
+        try:
+            # 获取正确的 ID
+            file_id = file_obj.id
+            physical_file_id = getattr(file_obj, 'physical_file_id', None)
+            
+            # 检查文件是否已经处理过 (使用统一的 file_id)
+            existing_chunks = self.db_session.query(DocumentChunk).filter(
+                DocumentChunk.file_id == file_id
+            ).count()
+
+            if existing_chunks > 0:
+                print(f"⚠️ 文件 {file_id} 已有 {existing_chunks} 个切片，跳过重复处理")
+                return
+
+            print(f"💾 Saving {len(chunks)} chunks to database for file {file_id}")
+
+            for i, chunk in enumerate(chunks):
+                chroma_id = str(uuid.uuid4())
+                token_count = len(chunk.page_content.split())
+                
+                # 使用统一的文件模型
+                chunk_record = DocumentChunk(
+                    physical_file_id=physical_file_id,
+                    file_id=file_id,  # 新的统一字段
+                    chunk_text=chunk.page_content,
+                    chunk_index=i,
+                    token_count=token_count,
+                    chroma_id=chroma_id,
+                    chunk_metadata=chunk.metadata
+                )
+                self.db_session.add(chunk_record)
+
+            self.db_session.commit()
+            print(f"✅ Successfully saved {len(chunks)} chunks to database")
+
+        except Exception as e:
+            print(f"❌ Failed to save chunks to database: {e}")
+            self.db_session.rollback()
+            
+    def retrieve_context(self, query: str, chat_type: str = "general",
                         course_id: Optional[int] = None, limit: int = 5) -> List[RAGSource]:
         """
         检索相关上下文
