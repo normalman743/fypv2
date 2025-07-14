@@ -22,7 +22,4 @@ class Message(Base):
     created_at = Column(DateTime, server_default=func.now(), index=True)
 
     # 关系
-    chat = relationship("Chat", back_populates="messages")
-    message_files = relationship("MessageFile", back_populates="message", cascade="all, delete-orphan")
-    file_attachments = relationship("MessageFileAttachment", back_populates="message", cascade="all, delete-orphan") 
-    rag_sources_rel = relationship("MessageRAGSource", back_populates="message", cascade="all, delete-orphan") 
+    chat = relationship("Chat", back_populates="messages") 
