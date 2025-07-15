@@ -63,6 +63,7 @@ class File(Base):
     # 新增关系
     shares = relationship("FileShare", back_populates="file", cascade="all, delete-orphan")
     access_logs = relationship("FileAccessLog", back_populates="file", cascade="all, delete-orphan")
+    document_chunks = relationship("DocumentChunk", back_populates="file", cascade="all, delete-orphan")
     
     @property
     def owner_id(self):

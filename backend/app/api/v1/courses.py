@@ -1,5 +1,5 @@
 from typing import Optional
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_db, get_current_user
@@ -95,6 +95,44 @@ async def update_course(
                 "updated_at": course.created_at  # Use created_at as updated_at placeholder
             }
         }
+    )
+
+
+@router.get("/{course_id}", response_model=CourseListResponse)
+async def get_course(
+    course_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get course details"""
+    service = CourseService(db)
+    course = service.get_course(course_id, current_user.id)
+    
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+    
+    # Get course statistics
+    stats = service.get_course_stats(course.id, course.user_id)
+    
+    course_data = {
+        "id": course.id,
+        "name": course.name,
+        "code": course.code,
+        "description": course.description,
+        "semester_id": course.semester_id,
+        "user_id": course.user_id,
+        "created_at": course.created_at,
+        "semester": {
+            "id": course.semester.id,
+            "name": course.semester.name,
+            "code": course.semester.code
+        },
+        "stats": stats
+    }
+    
+    return CourseListResponse(
+        success=True,
+        data={"course": course_data}
     )
 
 

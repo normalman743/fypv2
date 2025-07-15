@@ -19,6 +19,10 @@ from .document_chunk import DocumentChunk
 from .file_share import FileShare, FileAccessLog, FileGroup, FileGroupMember  # 新增文件共享模型
 from .chat import Chat
 from .message import Message
+from .permission import Permission, Role, SubjectRole  # 权限系统模型
+from .message_reference import MessageFileReference, MessageRAGSource  # 消息关联模型
+from .audit_log import AuditLog  # 审计日志模型
+from .system_config import SystemConfig  # 系统配置模型
 
 # Export all models
 __all__ = [
@@ -46,4 +50,15 @@ __all__ = [
     # Chat system
     'Chat',
     'Message',
+    'MessageFileReference',
+    'MessageRAGSource',
+    
+    # Permission system
+    'Permission',
+    'Role', 
+    'SubjectRole',
+    
+    # System management
+    'AuditLog',
+    'SystemConfig',
 ]

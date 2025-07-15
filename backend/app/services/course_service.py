@@ -34,6 +34,10 @@ class CourseService:
             Course.id == course_id,
             Course.user_id == user_id
         ).first()
+    
+    def get_course(self, course_id: int, user_id: int) -> Optional[Course]:
+        """Get course by ID (alias for get_course_by_id)"""
+        return self.get_course_by_id(course_id, user_id)
 
     def create_course(self, course_data: CourseCreate, user_id: int) -> Course:
         """Create new course"""

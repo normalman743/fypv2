@@ -6,7 +6,7 @@ from app.models.chat import Chat
 from app.models.course import Course
 from app.models.message import Message
 from app.models.file import File
-# from app.models.message_attachment import MessageFileAttachment, MessageRAGSource  # V2.1: 已移除
+from app.models.message_reference import MessageFileReference, MessageRAGSource
 from app.schemas.chat import CreateChatRequest, UpdateChatRequest
 from app.schemas.message import SendMessageRequest
 from app.services.enhanced_ai_service import create_ai_service
@@ -84,15 +84,15 @@ class ChatService:
             if chat_data.file_ids:
                 for file_id in chat_data.file_ids:
                     file = next(f for f in files if f.id == file_id)
-                    attachment = MessageFileAttachment(
+                    attachment = MessageFileReference(
                         message_id=user_message.id,
                         file_id=file_id,
-                        filename=f"attachment_{file_id}_{file.original_name}"
+                        reference_type='file'
                     )
                     self.db.add(attachment)
                     file_attachments.append({
                         "id": file_id,
-                        "filename": attachment.filename,
+                        "filename": file.original_name,
                         "original_name": file.original_name,
                         "file_size": file.file_size
                     })

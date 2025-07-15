@@ -231,7 +231,6 @@ class ProductionRAGService:
         try:
             # 获取正确的 ID
             file_id = file_obj.id
-            physical_file_id = getattr(file_obj, 'physical_file_id', None)
             
             # 检查文件是否已经处理过 (使用统一的 file_id)
             existing_chunks = self.db_session.query(DocumentChunk).filter(
@@ -250,8 +249,7 @@ class ProductionRAGService:
                 
                 # 使用统一的文件模型
                 chunk_record = DocumentChunk(
-                    physical_file_id=physical_file_id,
-                    file_id=file_id,  # 新的统一字段
+                    file_id=file_id,
                     chunk_text=chunk.page_content,
                     chunk_index=i,
                     token_count=token_count,

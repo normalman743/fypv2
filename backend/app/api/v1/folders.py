@@ -69,6 +69,33 @@ async def create_folder(
     )
 
 
+@router.post("/folders", response_model=CreateFolderResponse)
+async def create_general_folder(
+    folder_data: CreateFolderRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a general folder (personal or course)"""
+    service = FolderService(db)
+    
+    # If it's a course folder, use the course-specific method
+    if hasattr(folder_data, 'course_id') and folder_data.course_id:
+        folder = service.create_folder(folder_data.course_id, folder_data, current_user.id)
+    else:
+        # Create personal folder - need to implement this method
+        folder = service.create_personal_folder(folder_data, current_user.id)
+    
+    return CreateFolderResponse(
+        success=True,
+        data={
+            "folder": {
+                "id": folder.id,
+                "created_at": folder.created_at
+            }
+        }
+    )
+
+
 @router.delete("/folders/{folder_id}", response_model=SuccessResponse)
 async def delete_folder(
     folder_id: int = Path(..., description="Folder ID"),

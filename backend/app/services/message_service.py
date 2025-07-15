@@ -6,7 +6,7 @@ from app.models.chat import Chat
 from app.models.message import Message
 from app.models.file import File
 from app.models.course import Course
-# from app.models.message_attachment import MessageFileAttachment, MessageRAGSource  # V2.1: 已移除
+from app.models.message_reference import MessageFileReference, MessageRAGSource
 from app.schemas.message import SendMessageRequest, EditMessageRequest
 from app.services.enhanced_ai_service import create_ai_service
 from app.core.exceptions import NotFoundError, ForbiddenError, BadRequestError
@@ -28,8 +28,8 @@ class MessageService:
             raise NotFoundError("Chat not found", "CHAT_NOT_FOUND")
 
         return self.db.query(Message).options(
-            joinedload(Message.file_attachments),
-            joinedload(Message.rag_sources_rel)
+            joinedload(Message.file_references),
+            joinedload(Message.rag_sources_tracked)
         ).filter(Message.chat_id == chat_id).order_by(Message.created_at.asc()).all()
 
     def send_message(self, chat_id: int, message_data: SendMessageRequest, user_id: int) -> dict:
@@ -77,15 +77,15 @@ class MessageService:
             if message_data.file_ids:
                 for file_id in message_data.file_ids:
                     file = next(f for f in files if f.id == file_id)
-                    attachment = MessageFileAttachment(
+                    attachment = MessageFileReference(
                         message_id=user_message.id,
                         file_id=file_id,
-                        filename=f"attachment_{file_id}_{file.original_name}"
+                        reference_type='file'
                     )
                     self.db.add(attachment)
                     file_attachments.append({
                         "id": file_id,
-                        "filename": attachment.filename,
+                        "filename": file.original_name,
                         "original_name": file.original_name,
                         "file_size": file.file_size
                     })
@@ -211,18 +211,18 @@ class MessageService:
     def format_message_response(self, message: Message) -> dict:
         """Format message for API response"""
         file_attachments = []
-        if hasattr(message, 'file_attachments') and message.file_attachments:
-            for attachment in message.file_attachments:
+        if hasattr(message, 'file_references') and message.file_references:
+            for attachment in message.file_references:
                 file_attachments.append({
                     "id": attachment.file_id,
-                    "filename": attachment.filename,
-                    "original_name": attachment.file.original_name if attachment.file else attachment.filename,
+                    "filename": attachment.file.original_name if attachment.file else f"file_{attachment.file_id}",
+                    "original_name": attachment.file.original_name if attachment.file else f"file_{attachment.file_id}",
                     "file_size": attachment.file.file_size if attachment.file else 0
                 })
 
         rag_sources = []
-        if hasattr(message, 'rag_sources_rel') and message.rag_sources_rel:
-            for source in message.rag_sources_rel:
+        if hasattr(message, 'rag_sources_tracked') and message.rag_sources_tracked:
+            for source in message.rag_sources_tracked:
                 rag_sources.append({
                     "source_file": source.source_file,
                     "chunk_id": source.chunk_id

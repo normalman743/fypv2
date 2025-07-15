@@ -19,7 +19,14 @@ class Message(Base):
     # RAG相关
     rag_sources = Column(JSON, nullable=True)
     
+    # 上下文统计字段
+    context_size = Column(Integer, nullable=True)
+    direct_file_count = Column(Integer, default=0)
+    rag_source_count = Column(Integer, default=0)
+    
     created_at = Column(DateTime, server_default=func.now(), index=True)
 
     # 关系
-    chat = relationship("Chat", back_populates="messages") 
+    chat = relationship("Chat", back_populates="messages")
+    file_references = relationship("MessageFileReference", back_populates="message", cascade="all, delete-orphan")
+    rag_sources_tracked = relationship("MessageRAGSource", back_populates="message", cascade="all, delete-orphan") 

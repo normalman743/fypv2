@@ -21,6 +21,10 @@ class SemesterService:
             Semester.id == semester_id,
             Semester.is_active == True
         ).first()
+    
+    def get_semester(self, semester_id: int) -> Optional[Semester]:
+        """Get semester by ID (alias for get_semester_by_id)"""
+        return self.get_semester_by_id(semester_id)
 
     def create_semester(self, semester_data: SemesterCreate) -> Semester:
         """Create new semester"""
