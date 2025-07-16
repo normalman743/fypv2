@@ -28,26 +28,17 @@
 ```
 
 ### POST /api/v1/folders
-- 新建文件夹（可用于课程或个人）
+- 新建文件夹（注意：实际API不支持此接口，请使用 POST /api/v1/courses/{id}/folders）
 
 **请求体：**
 ```json
 {
-  "name": "个人笔记",
-  "description": "个人学习笔记",
-  "scope": "personal"
+  "name": "文件夹名称",
+  "folder_type": "general"
 }
 ```
 
-**或者：**
-```json
-{
-  "name": "课程资料",
-  "description": "课程相关资料",
-  "scope": "course",
-  "course_id": 1
-}
-```
+**注意：** 此接口在实际实现中不可用，所有文件夹都必须关联到课程。
 
 **响应：**
 ```json
@@ -95,8 +86,8 @@
 **请求体（multipart/form-data）：**
 ```
 file: <文件>
-course_id: 1
-folder_id: 2
+course_id: <课程ID>
+folder_id: <文件夹ID>
 ```
 **响应：**
 ```json
@@ -188,13 +179,15 @@ folder_id: 2
 
 ---
 
-## 全局文件管理（可选）
+## 全局文件管理（暂未实现）
+
+**注意：** 以下全局文件API在当前版本中暂未实现，调用将返回404错误。
 
 ### GET /api/v1/global-files
-- 获取全局文件列表
+- 获取全局文件列表（暂未实现）
 
 ### POST /api/v1/global-files/upload
-- 上传全局文件
+- 上传全局文件（暂未实现）
 
 ### DELETE /api/v1/global-files/{id}
-- 删除全局文件
+- 删除全局文件（暂未实现）

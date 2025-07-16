@@ -116,6 +116,18 @@ async def update_me(
                     error={"code": "USERNAME_EXISTS", "message": "用户名已存在"}
                 ).model_dump()
             )
+    
+    # 检查邮箱是否已被其他用户使用
+    if user_data.email and user_data.email != current_user.email:
+        existing_user = db.query(User).filter(User.email == user_data.email, User.id != current_user.id).first()
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=ErrorResponse(
+                    success=False,
+                    error={"code": "EMAIL_EXISTS", "message": "邮箱已存在"}
+                ).model_dump()
+            )
     # 更新用户信息
     if user_data.username:
         current_user.username = user_data.username

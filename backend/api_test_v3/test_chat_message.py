@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-聊天和消息功能测试
+聊天和消息功能测试 - 基于api_chat_message_rag.md文档
 使用前请先: source venv/bin/activate
 运行: python api_test_v3/test_chat_message.py
 """
@@ -36,7 +36,7 @@ def get_user_token(user_type="user"):
     return None
 
 def test_chat_management():
-    """测试聊天管理"""
+    """测试聊天管理 - 基于api_chat_message_rag.md"""
     print("💬 聊天管理测试")
     print("=" * 50)
     
@@ -50,50 +50,65 @@ def test_chat_management():
     
     client.set_auth_token(user_token)
     
-    # 1. 获取所有聊天会话
-    print("\n1️⃣ 获取所有聊天会话")
+    # 1. 获取聊天列表 - GET /api/v1/chats
+    print("\n1️⃣ 获取聊天列表")
     chats_response = client.get("/api/v1/chats")
     print_response(chats_response, "获取聊天列表")
     
-    # 2. 创建新聊天会话
-    print("\n2️⃣ 创建新聊天会话")
-    chat_data = {
-        "title": "测试聊天会话",
-        "description": "用于测试的聊天会话",
-        "scope": "personal"
+    # 2. 创建通用聊天 - POST /api/v1/chats
+    print("\n2️⃣ 创建通用聊天")
+    create_general_data = {
+        "chat_type": "general",
+        "first_message": "崇基学院体育馆的开放时间是什么时候",
+        "course_id": None,
+        "custom_prompt": None,
+        "file_ids": []
     }
     
-    create_chat_response = client.post("/api/v1/chats", json=chat_data)
-    print_response(create_chat_response, "创建聊天")
+    create_chat_response = client.post("/api/v1/chats", json=create_general_data)
+    print_response(create_chat_response, "创建通用聊天")
     
     chat_id = None
     if create_chat_response.status_code == 200:
         result = create_chat_response.json()
         if result.get("success"):
-            chat_id = result["data"]["id"]
-            print(f"✅ 创建聊天会话成功，ID: {chat_id}")
+            chat_id = result["data"]["chat"]["id"]
+            print(f"✅ 创建聊天成功，ID: {chat_id}")
     
-    # 3. 获取特定聊天会话信息
-    if chat_id:
-        print(f"\n3️⃣ 获取聊天会话信息 (ID: {chat_id})")
-        chat_detail_response = client.get(f"/api/v1/chats/{chat_id}")
-        print_response(chat_detail_response, "聊天详情")
+    # 3. 创建课程聊天 - POST /api/v1/chats (需要课程ID)
+    print("\n3️⃣ 创建课程聊天")
+    create_course_data = {
+        "chat_type": "course",
+        "first_message": "这节课讲了什么",
+        "course_id": 1,  # 假设存在课程ID为1
+        "custom_prompt": None,
+        "file_ids": []
+    }
     
-    # 4. 更新聊天会话信息
+    create_course_chat_response = client.post("/api/v1/chats", json=create_course_data)
+    print_response(create_course_chat_response, "创建课程聊天")
+    
+    course_chat_id = None
+    if create_course_chat_response.status_code == 200:
+        result = create_course_chat_response.json()
+        if result.get("success"):
+            course_chat_id = result["data"]["chat"]["id"]
+            print(f"✅ 创建课程聊天成功，ID: {course_chat_id}")
+    
+    # 4. 更新聊天标题 - PUT /api/v1/chats/{id}
     if chat_id:
-        print(f"\n4️⃣ 更新聊天会话信息")
+        print(f"\n4️⃣ 更新聊天标题 (ID: {chat_id})")
         update_data = {
-            "title": "更新后的聊天标题",
-            "description": "更新后的聊天描述"
+            "title": "体育馆开放时间咨询"
         }
         update_response = client.put(f"/api/v1/chats/{chat_id}", json=update_data)
-        print_response(update_response, "更新聊天")
+        print_response(update_response, "更新聊天标题")
     
-    return chat_id
+    return chat_id, course_chat_id
 
-def test_message_management():
-    """测试消息管理"""
-    print("\n📨 消息管理测试")
+def test_message_management(chat_id=None):
+    """测试消息管理 - 基于api_chat_message_rag.md"""
+    print("\n📝 消息管理测试")
     print("=" * 50)
     
     client = APIClient()
@@ -102,77 +117,69 @@ def test_message_management():
     user_token = get_user_token("user")
     if not user_token:
         print("❌ 无法获取用户token，跳过测试")
-        return None
+        return
     
     client.set_auth_token(user_token)
     
-    # 创建聊天会话
-    chat_id = test_chat_management()
     if not chat_id:
-        print("❌ 无法创建聊天会话，跳过消息测试")
+        print("❌ 没有可用的聊天ID，跳过消息测试")
         return
     
-    # 1. 获取聊天会话的消息
-    print(f"\n1️⃣ 获取聊天会话消息 (Chat ID: {chat_id})")
+    # 1. 获取消息列表 - GET /api/v1/chats/{id}/messages
+    print(f"\n1️⃣ 获取消息列表 (Chat ID: {chat_id})")
     messages_response = client.get(f"/api/v1/chats/{chat_id}/messages")
     print_response(messages_response, "获取消息列表")
     
-    # 2. 发送用户消息
-    print(f"\n2️⃣ 发送用户消息")
-    message_data = {
-        "content": "你好，这是一条测试消息",
-        "message_type": "user"
+    # 2. 发送消息 - POST /api/v1/chats/{id}/messages
+    print(f"\n2️⃣ 发送消息 (Chat ID: {chat_id})")
+    send_message_data = {
+        "content": "请提供更详细的体育馆设施信息",
+        "file_ids": []
     }
     
-    send_message_response = client.post(f"/api/v1/chats/{chat_id}/messages", json=message_data)
-    print_response(send_message_response, "发送消息")
+    send_response = client.post(f"/api/v1/chats/{chat_id}/messages", json=send_message_data)
+    print_response(send_response, "发送消息")
     
     message_id = None
-    if send_message_response.status_code == 200:
-        result = send_message_response.json()
+    if send_response.status_code == 200:
+        result = send_response.json()
         if result.get("success"):
-            message_id = result["data"]["id"]
+            message_id = result["data"]["user_message"]["id"]
             print(f"✅ 发送消息成功，ID: {message_id}")
     
-    # 3. 获取特定消息信息
+    # 3. 编辑消息 - PUT /api/v1/messages/{id}
     if message_id:
-        print(f"\n3️⃣ 获取消息信息 (ID: {message_id})")
-        message_detail_response = client.get(f"/api/v1/messages/{message_id}")
-        print_response(message_detail_response, "消息详情")
-    
-    # 4. 发送AI回复消息
-    print(f"\n4️⃣ 发送AI回复消息")
-    ai_message_data = {
-        "content": "这是一条AI回复消息，回复用户的问题",
-        "message_type": "assistant"
-    }
-    
-    ai_message_response = client.post(f"/api/v1/chats/{chat_id}/messages", json=ai_message_data)
-    print_response(ai_message_response, "AI回复消息")
-    
-    # 5. 分页获取消息
-    print(f"\n5️⃣ 分页获取消息")
-    paginated_messages_response = client.get(f"/api/v1/chats/{chat_id}/messages", params={
-        "page": 1,
-        "size": 10
-    })
-    print_response(paginated_messages_response, "分页获取消息")
-    
-    # 6. 编辑消息
-    if message_id:
-        print(f"\n6️⃣ 编辑消息")
+        print(f"\n3️⃣ 编辑消息 (Message ID: {message_id})")
         edit_data = {
-            "content": "这是编辑后的消息内容"
+            "content": "请提供体育馆的详细开放时间和设施信息"
         }
         edit_response = client.put(f"/api/v1/messages/{message_id}", json=edit_data)
         print_response(edit_response, "编辑消息")
     
-    return message_id
+    # 获取最新消息ID用于删除测试
+    messages_response = client.get(f"/api/v1/chats/{chat_id}/messages")
+    if messages_response.status_code == 200:
+        result = messages_response.json()
+        if result.get("success") and result["data"]["messages"]:
+            # 找到最后一条用户消息
+            for msg in reversed(result["data"]["messages"]):
+                if msg["role"] == "user":
+                    message_id = msg["id"]
+                    break
+    
+    # 4. 删除消息 - DELETE /api/v1/messages/{id}
+    if message_id:
+        print(f"\n4️⃣ 删除消息 (Message ID: {message_id})")
+        delete_response = client.delete(f"/api/v1/messages/{message_id}")
+        print_response(delete_response, "删除消息")
 
 def test_rag_functionality():
-    """测试RAG功能"""
-    print("\n🔍 RAG功能测试")
+    """测试RAG功能和聊天类型"""
+    print("\n🧠 RAG功能测试")
     print("=" * 50)
+    print("📝 注意: 如果没有配置OpenAI API密钥，系统将使用Mock模式")
+    print("   Mock模式下的RAG结果是预设的模拟数据")
+    print("   要测试真实RAG功能，需要配置有效的OpenAI API密钥")
     
     client = APIClient()
     
@@ -184,42 +191,48 @@ def test_rag_functionality():
     
     client.set_auth_token(user_token)
     
-    # 获取消息ID
-    message_id = test_message_management()
-    if not message_id:
-        print("❌ 无法获取消息ID，跳过RAG测试")
-        return
+    # 动态获取课程ID用于课程聊天测试
+    courses_response = client.get("/api/v1/courses")
+    course_id = None
+    if courses_response.status_code == 200:
+        result = courses_response.json()
+        if result.get("success") and result["data"]["courses"]:
+            course_id = result["data"]["courses"][0]["id"]
+            print(f"✅ 使用课程ID: {course_id} 用于课程聊天测试")
+        else:
+            print("⚠️ 没有可用课程，将仅测试通用聊天")
     
-    # 1. 执行RAG搜索
-    print(f"\n1️⃣ 执行RAG搜索")
-    rag_data = {
-        "query": "软件工程",
-        "scope": "personal",
-        "limit": 5
+    # 测试通用聊天的全局检索
+    print("\n1️⃣ 测试通用聊天 - 全局知识库检索")
+    general_chat_data = {
+        "chat_type": "general",
+        "first_message": "学校的图书馆开放时间是什么",
+        "course_id": None,
+        "custom_prompt": None,
+        "file_ids": []
     }
     
-    rag_response = client.post(f"/api/v1/messages/{message_id}/rag", json=rag_data)
-    print_response(rag_response, "RAG搜索")
+    general_response = client.post("/api/v1/chats", json=general_chat_data)
+    print_response(general_response, "通用聊天RAG测试")
     
-    # 2. 获取消息的RAG源
-    print(f"\n2️⃣ 获取消息的RAG源")
-    rag_sources_response = client.get(f"/api/v1/messages/{message_id}/rag-sources")
-    print_response(rag_sources_response, "RAG源列表")
-    
-    # 3. 测试不同范围的RAG搜索
-    print(f"\n3️⃣ 测试全局范围RAG搜索")
-    global_rag_data = {
-        "query": "测试文档",
-        "scope": "global",
-        "limit": 3
+    # 测试课程聊天的课程特定检索
+    print("\n2️⃣ 测试课程聊天 - 课程+全局知识库检索")
+    course_chat_data = {
+        "chat_type": "course" if course_id else "general",
+        "first_message": "这门课程的主要学习目标是什么" if course_id else "RAG功能测试",
+        "course_id": course_id,
+        "custom_prompt": None,
+        "file_ids": []
     }
     
-    global_rag_response = client.post(f"/api/v1/messages/{message_id}/rag", json=global_rag_data)
-    print_response(global_rag_response, "全局RAG搜索")
+    # RAG处理可能需要更长时间，增加超时
+    print("⏳ 创建课程聊天（RAG处理可能需要较长时间）...")
+    course_response = client.post("/api/v1/chats", json=course_chat_data, timeout=120)  # 2分钟超时
+    print_response(course_response, "课程聊天RAG测试")
 
-def test_chat_ai_integration():
-    """测试聊天AI集成"""
-    print("\n🤖 聊天AI集成测试")
+def test_chat_deletion():
+    """测试聊天删除功能"""
+    print("\n🗑️ 聊天删除测试")
     print("=" * 50)
     
     client = APIClient()
@@ -232,89 +245,61 @@ def test_chat_ai_integration():
     
     client.set_auth_token(user_token)
     
-    # 1. 创建聊天会话
-    chat_data = {
-        "title": "AI对话测试",
-        "description": "测试AI对话功能",
-        "scope": "personal"
+    # 创建一个测试聊天用于删除
+    print("\n1️⃣ 创建测试聊天")
+    create_data = {
+        "chat_type": "general",
+        "first_message": "这是一个测试聊天",
+        "course_id": None,
+        "custom_prompt": None,
+        "file_ids": []
     }
     
-    create_chat_response = client.post("/api/v1/chats", json=chat_data)
-    if create_chat_response.status_code != 200:
-        print("❌ 创建聊天会话失败")
-        return
+    create_response = client.post("/api/v1/chats", json=create_data)
+    print_response(create_response, "创建测试聊天")
     
-    chat_id = create_chat_response.json()["data"]["id"]
+    chat_id = None
+    if create_response.status_code == 200:
+        result = create_response.json()
+        if result.get("success"):
+            chat_id = result["data"]["chat"]["id"]
+            print(f"✅ 创建测试聊天成功，ID: {chat_id}")
     
-    # 2. 发送问题并获取AI回复
-    print(f"\n1️⃣ 发送问题并获取AI回复")
-    user_question = {
-        "content": "请介绍一下软件工程的基本概念",
-        "message_type": "user"
-    }
-    
-    question_response = client.post(f"/api/v1/chats/{chat_id}/messages", json=user_question)
-    print_response(question_response, "发送问题")
-    
-    if question_response.status_code == 200:
-        # 等待AI处理
-        print("⏳ 等待AI处理...")
-        time.sleep(2)
-        
-        # 获取AI回复
-        messages_response = client.get(f"/api/v1/chats/{chat_id}/messages")
-        if messages_response.status_code == 200:
-            messages = messages_response.json()["data"]
-            ai_messages = [msg for msg in messages if msg.get("message_type") == "assistant"]
-            if ai_messages:
-                print(f"✅ 获取到AI回复: {len(ai_messages)} 条")
-                print(f"回复内容预览: {ai_messages[0]['content'][:100]}...")
-            else:
-                print("⚠️ 暂未获取到AI回复")
-
-def test_message_search():
-    """测试消息搜索"""
-    print("\n🔎 消息搜索测试")
-    print("=" * 50)
-    
-    client = APIClient()
-    
-    # 获取用户权限
-    user_token = get_user_token("user")
-    if not user_token:
-        print("❌ 无法获取用户token，跳过测试")
-        return
-    
-    client.set_auth_token(user_token)
-    
-    # 1. 搜索消息
-    print(f"\n1️⃣ 搜索消息")
-    search_response = client.get("/api/v1/messages/search", params={
-        "query": "测试",
-        "limit": 10
-    })
-    print_response(search_response, "搜索消息")
-    
-    # 2. 按消息类型搜索
-    print(f"\n2️⃣ 按消息类型搜索")
-    type_search_response = client.get("/api/v1/messages/search", params={
-        "query": "测试",
-        "message_type": "user",
-        "limit": 5
-    })
-    print_response(type_search_response, "按类型搜索")
+    # 删除聊天 - DELETE /api/v1/chats/{id}
+    if chat_id:
+        print(f"\n2️⃣ 删除聊天 (ID: {chat_id})")
+        delete_response = client.delete(f"/api/v1/chats/{chat_id}")
+        print_response(delete_response, "删除聊天")
 
 if __name__ == "__main__":
     print("⚠️  请确保已执行: source venv/bin/activate")
     print("⚠️  请确保服务正在运行: uvicorn app.main:app --reload --host 0.0.0.0 --port 8000")
+    print("⚠️  建议先运行: python prepare_test_documents.py 上传测试文档")
+    print("📋 基于 api_chat_message_rag.md 文档的测试")
+    
+    # 询问是否需要准备测试文档
+    prepare_docs = input("是否需要先上传测试文档用于RAG测试？(y/N): ")
+    if prepare_docs.lower() == 'y':
+        print("请先运行: python prepare_test_documents.py")
+        print("然后重新运行此测试")
+        sys.exit(0)
+    
     input("按回车键继续...")
     
     try:
-        test_chat_management()
-        test_message_management()
+        # 测试聊天管理
+        chat_id, course_chat_id = test_chat_management()
+        
+        # 测试消息管理
+        if chat_id:
+            test_message_management(chat_id)
+        
+        # 测试RAG功能
         test_rag_functionality()
-        test_chat_ai_integration()
-        test_message_search()
+        
+        # 测试聊天删除
+        test_chat_deletion()
+        
         print(f"\n🎉 聊天和消息功能测试完成！")
     except Exception as e:
         print(f"\n❌ 测试过程中发生错误: {e}")

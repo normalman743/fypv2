@@ -222,7 +222,27 @@ class DatabaseManager:
                 logger.error(f"❌ 创建邀请码 {invite_code['code']} 失败")
                 return False
         
-        logger.info("✅ 默认数据创建完成")
+        # 创建默认课程
+        course_query = """
+        INSERT INTO courses (name, code, description, semester_id, user_id, created_at) 
+        VALUES ('数据结构与算法', 'CS101', '计算机科学基础课程', 1, 2, NOW())
+        """
+        
+        if not self.execute_query(course_query):
+            logger.error("❌ 创建默认课程失败")
+            return False
+        
+        # 创建默认文件夹
+        folder_query = """
+        INSERT INTO folders (name, folder_type, course_id, is_default, created_at) 
+        VALUES ('课程资料', 'general', 1, 1, NOW())
+        """
+        
+        if not self.execute_query(folder_query):
+            logger.error("❌ 创建默认文件夹失败")
+            return False
+        
+        logger.info("✅ 默认数据创建完成（包括学期、用户、邀请码、课程、文件夹）")
         return True
 
 def clear_storage_directory():

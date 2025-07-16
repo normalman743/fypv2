@@ -49,11 +49,14 @@ class APIClient:
         if 'proxies' not in kwargs:
             kwargs['proxies'] = {'http': '', 'https': ''}
         
+        # 支持自定义超时时间
+        timeout = kwargs.pop('timeout', self.timeout)
+        
         try:
             response = self.session.request(
                 method=method,
                 url=url,
-                timeout=self.timeout,
+                timeout=timeout,
                 **kwargs
             )
             
