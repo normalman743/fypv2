@@ -8,7 +8,7 @@ from app.models.file import File
 from app.models.course import Course
 from app.models.message_reference import MessageFileReference, MessageRAGSource
 from app.schemas.message import SendMessageRequest, EditMessageRequest
-from app.services.enhanced_ai_service import create_ai_service
+from app.services.production_ai_service import create_ai_service
 from app.core.exceptions import NotFoundError, ForbiddenError, BadRequestError
 
 

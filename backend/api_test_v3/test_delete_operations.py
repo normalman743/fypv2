@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-删除操作测试脚本
+跨模块删除操作测试 - 整合所有API文档中的删除功能
 使用前请先: source venv/bin/activate
 运行: python api_test_v3/test_delete_operations.py
 """
@@ -14,6 +14,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from utils import APIClient, print_response, extract_token_from_response
 from config import test_config
 import logging
+from datetime import datetime, timedelta
 
 # 设置日志
 logging.basicConfig(level=logging.INFO)
@@ -46,102 +47,9 @@ def create_test_file(content="测试文件内容", filename="test.txt"):
     temp_file.close()
     return temp_file.name
 
-def test_file_deletion():
-    """测试文件删除功能"""
-    print("🗑️ 文件删除测试")
-    print("=" * 50)
-    
-    client = APIClient()
-    
-    # 获取用户权限
-    user_token = get_user_token("user")
-    if not user_token:
-        print("❌ 无法获取用户token，跳过测试")
-        return
-    
-    client.set_auth_token(user_token)
-    
-    # 1. 先创建一个文件夹
-    print("\n1️⃣ 创建测试文件夹")
-    folder_data = {
-        "name": "待删除测试文件夹",
-        "description": "用于测试删除功能",
-        "scope": "personal"
-    }
-    
-    folder_response = client.post("/api/v1/folders", json=folder_data)
-    print_response(folder_response, "创建文件夹")
-    
-    folder_id = None
-    if folder_response.status_code == 200:
-        result = folder_response.json()
-        if result.get("success"):
-            folder_id = result["data"]["folder"]["id"]
-            print(f"✅ 创建文件夹成功，ID: {folder_id}")
-    
-    # 2. 上传测试文件
-    print("\n2️⃣ 上传测试文件")
-    test_file_path = create_test_file("这是待删除的测试文件", "delete_test.txt")
-    
-    file_id = None
-    try:
-        upload_data = {
-            "scope": "personal",
-            "folder_id": folder_id
-        }
-        
-        with open(test_file_path, 'rb') as f:
-            files = {'file': ('delete_test.txt', f, 'text/plain')}
-            upload_response = client.post("/api/v1/files/upload", data=upload_data, files=files)
-        
-        print_response(upload_response, "文件上传")
-        
-        if upload_response.status_code == 200:
-            result = upload_response.json()
-            if result.get("success"):
-                file_id = result["data"]["file"]["id"]
-                print(f"✅ 文件上传成功，ID: {file_id}")
-        
-        # 3. 删除文件
-        if file_id:
-            print(f"\n3️⃣ 删除文件 (ID: {file_id})")
-            delete_file_response = client.delete(f"/api/v1/files/{file_id}")
-            print_response(delete_file_response, "删除文件")
-            
-            if delete_file_response.status_code == 200:
-                print("✅ 文件删除成功")
-                
-                # 4. 验证文件已被删除
-                print(f"\n4️⃣ 验证文件已被删除")
-                get_file_response = client.get(f"/api/v1/files/{file_id}")
-                print_response(get_file_response, "获取已删除文件")
-                
-                if get_file_response.status_code == 404:
-                    print("✅ 文件确实已被删除")
-                else:
-                    print("⚠️ 文件可能未被正确删除")
-            else:
-                print("❌ 文件删除失败")
-        
-    finally:
-        # 清理临时文件
-        if os.path.exists(test_file_path):
-            os.unlink(test_file_path)
-    
-    # 5. 删除文件夹
-    if folder_id:
-        print(f"\n5️⃣ 删除文件夹 (ID: {folder_id})")
-        delete_folder_response = client.delete(f"/api/v1/folders/{folder_id}")
-        print_response(delete_folder_response, "删除文件夹")
-        
-        if delete_folder_response.status_code == 200:
-            print("✅ 文件夹删除成功")
-        else:
-            print("❌ 文件夹删除失败")
-
 def test_message_deletion():
-    """测试消息删除功能"""
-    print("\n💬 消息删除测试")
+    """测试消息删除 - 基于api_chat_message_rag.md"""
+    print("💬 消息删除测试")
     print("=" * 50)
     
     client = APIClient()
@@ -154,151 +62,148 @@ def test_message_deletion():
     
     client.set_auth_token(user_token)
     
-    # 1. 创建测试聊天会话
-    print("\n1️⃣ 创建测试聊天会话")
+    # 1. 创建测试聊天
+    print("\n1️⃣ 创建测试聊天")
     chat_data = {
-        "title": "待删除测试聊天",
-        "description": "用于测试删除功能",
-        "scope": "personal"
+        "chat_type": "general",
+        "first_message": "这是一个用于删除测试的消息",
+        "course_id": None,
+        "custom_prompt": None,
+        "file_ids": []
     }
     
     chat_response = client.post("/api/v1/chats", json=chat_data)
-    print_response(chat_response, "创建聊天")
+    print_response(chat_response, "创建测试聊天")
     
     chat_id = None
     if chat_response.status_code == 200:
         result = chat_response.json()
         if result.get("success"):
-            chat_id = result["data"]["id"]
-            print(f"✅ 创建聊天成功，ID: {chat_id}")
+            chat_id = result["data"]["chat"]["id"]
+            print(f"✅ 创建测试聊天成功，ID: {chat_id}")
     
-    # 2. 发送测试消息
-    message_id = None
+    # 2. 发送额外消息用于删除
     if chat_id:
-        print(f"\n2️⃣ 发送测试消息")
+        print(f"\n2️⃣ 发送额外消息 (Chat ID: {chat_id})")
         message_data = {
-            "content": "这是一条待删除的测试消息",
-            "message_type": "user"
+            "content": "这条消息将被删除",
+            "file_ids": []
         }
         
         message_response = client.post(f"/api/v1/chats/{chat_id}/messages", json=message_data)
         print_response(message_response, "发送消息")
         
+        message_id = None
         if message_response.status_code == 200:
             result = message_response.json()
             if result.get("success"):
-                message_id = result["data"]["id"]
-                print(f"✅ 消息发送成功，ID: {message_id}")
+                message_id = result["data"]["user_message"]["id"]
+                print(f"✅ 发送消息成功，ID: {message_id}")
+                
+                # 3. 删除消息 - DELETE /api/v1/messages/{id}
+                print(f"\n3️⃣ 删除消息 (Message ID: {message_id})")
+                delete_response = client.delete(f"/api/v1/messages/{message_id}")
+                print_response(delete_response, "删除消息")
     
-    # 3. 删除消息
-    if message_id:
-        print(f"\n3️⃣ 删除消息 (ID: {message_id})")
-        delete_message_response = client.delete(f"/api/v1/messages/{message_id}")
-        print_response(delete_message_response, "删除消息")
-        
-        if delete_message_response.status_code == 200:
-            print("✅ 消息删除成功")
-        else:
-            print("❌ 消息删除失败")
-    
-    # 4. 删除聊天会话
-    if chat_id:
-        print(f"\n4️⃣ 删除聊天会话 (ID: {chat_id})")
-        delete_chat_response = client.delete(f"/api/v1/chats/{chat_id}")
-        print_response(delete_chat_response, "删除聊天")
-        
-        if delete_chat_response.status_code == 200:
-            print("✅ 聊天删除成功")
-            
-            # 5. 验证聊天已被删除
-            print(f"\n5️⃣ 验证聊天已被删除")
-            get_chat_response = client.get(f"/api/v1/chats/{chat_id}")
-            print_response(get_chat_response, "获取已删除聊天")
-            
-            if get_chat_response.status_code == 404:
-                print("✅ 聊天确实已被删除")
-            else:
-                print("⚠️ 聊天可能未被正确删除")
-        else:
-            print("❌ 聊天删除失败")
+    return chat_id
 
-def test_course_semester_deletion():
-    """测试课程和学期删除功能"""
-    print("\n🎓 课程和学期删除测试")
+def test_chat_deletion(chat_id=None):
+    """测试聊天删除 - 基于api_chat_message_rag.md"""
+    print("\n💬 聊天删除测试")
     print("=" * 50)
     
     client = APIClient()
     
-    # 获取管理员权限
-    admin_token = get_admin_token()
-    if not admin_token:
-        print("❌ 无法获取管理员token，跳过测试")
+    # 获取用户权限
+    user_token = get_user_token("user")
+    if not user_token:
+        print("❌ 无法获取用户token，跳过测试")
         return
     
-    client.set_auth_token(admin_token)
+    client.set_auth_token(user_token)
     
-    # 1. 创建测试学期
-    print("\n1️⃣ 创建测试学期")
-    semester_data = {
-        "name": "待删除测试学期",
-        "code": "DELETE-TEST",
-        "is_active": True
-    }
-    
-    semester_response = client.post("/api/v1/semesters", json=semester_data)
-    print_response(semester_response, "创建学期")
-    
-    semester_id = None
-    if semester_response.status_code == 200:
-        result = semester_response.json()
-        if result.get("success"):
-            semester_id = result["data"]["semester"]["id"]
-            print(f"✅ 创建学期成功，ID: {semester_id}")
-    
-    # 2. 创建测试课程
-    course_id = None
-    if semester_id:
-        print(f"\n2️⃣ 创建测试课程")
-        course_data = {
-            "name": "待删除测试课程",
-            "code": "DELETE-COURSE",
-            "description": "用于测试删除功能的课程",
-            "semester_id": semester_id
+    # 如果没有提供chat_id，创建一个新的
+    if not chat_id:
+        print("\n1️⃣ 创建临时聊天用于删除")
+        chat_data = {
+            "chat_type": "general",
+            "first_message": "临时聊天，即将删除",
+            "course_id": None,
+            "custom_prompt": None,
+            "file_ids": []
         }
         
-        course_response = client.post("/api/v1/courses", json=course_data)
-        print_response(course_response, "创建课程")
-        
-        if course_response.status_code == 200:
-            result = course_response.json()
+        chat_response = client.post("/api/v1/chats", json=chat_data)
+        if chat_response.status_code == 200:
+            result = chat_response.json()
             if result.get("success"):
-                course_id = result["data"]["course"]["id"]
-                print(f"✅ 创建课程成功，ID: {course_id}")
+                chat_id = result["data"]["chat"]["id"]
+                print(f"✅ 创建临时聊天成功，ID: {chat_id}")
     
-    # 3. 删除课程
-    if course_id:
-        print(f"\n3️⃣ 删除课程 (ID: {course_id})")
-        delete_course_response = client.delete(f"/api/v1/courses/{course_id}")
-        print_response(delete_course_response, "删除课程")
-        
-        if delete_course_response.status_code == 200:
-            print("✅ 课程删除成功")
-        else:
-            print("❌ 课程删除失败")
+    # 删除聊天 - DELETE /api/v1/chats/{id}
+    if chat_id:
+        print(f"\n2️⃣ 删除聊天 (Chat ID: {chat_id})")
+        delete_response = client.delete(f"/api/v1/chats/{chat_id}")
+        print_response(delete_response, "删除聊天")
+
+def test_file_deletion():
+    """测试文件删除 - 基于api_folder_file.md"""
+    print("\n📄 文件删除测试")
+    print("=" * 50)
     
-    # 4. 删除学期
-    if semester_id:
-        print(f"\n4️⃣ 删除学期 (ID: {semester_id})")
-        delete_semester_response = client.delete(f"/api/v1/semesters/{semester_id}")
-        print_response(delete_semester_response, "删除学期")
-        
-        if delete_semester_response.status_code == 200:
-            print("✅ 学期删除成功")
-        else:
-            print("❌ 学期删除失败")
+    client = APIClient()
+    
+    # 获取用户权限
+    user_token = get_user_token("user")
+    if not user_token:
+        print("❌ 无法获取用户token，跳过测试")
+        return
+    
+    client.set_auth_token(user_token)
+    
+    # 1. 上传测试文件
+    print("\n1️⃣ 上传测试文件")
+    test_file_path = create_test_file("测试文件内容 - 用于删除", "delete_test.txt")
+    
+    try:
+        with open(test_file_path, 'rb') as f:
+            files = {'file': (os.path.basename(test_file_path), f, 'text/plain')}
+            # 动态获取课程ID
+            courses_response = client.get("/api/v1/courses")
+            course_id = 1  # 默认值
+            if courses_response.status_code == 200:
+                result = courses_response.json()
+                if result.get("success") and result["data"]["courses"]:
+                    course_id = result["data"]["courses"][0]["id"]
+            
+            data = {
+                'course_id': course_id,
+                'folder_id': 1
+            }
+            
+            upload_response = client.post("/api/v1/files/upload", files=files, data=data)
+            print_response(upload_response, "上传测试文件")
+            
+            if upload_response.status_code == 200:
+                result = upload_response.json()
+                if result.get("success"):
+                    file_id = result["data"]["file"]["id"]
+                    print(f"✅ 上传文件成功，ID: {file_id}")
+                    
+                    # 2. 删除文件 - DELETE /api/v1/files/{id}
+                    print(f"\n2️⃣ 删除文件 (File ID: {file_id})")
+                    delete_response = client.delete(f"/api/v1/files/{file_id}")
+                    print_response(delete_response, "删除文件")
+    
+    finally:
+        # 清理本地测试文件
+        try:
+            os.unlink(test_file_path)
+        except:
+            pass
 
 def test_invite_code_deletion():
-    """测试邀请码删除功能"""
+    """测试邀请码删除 - 基于api_admin.md"""
     print("\n🎫 邀请码删除测试")
     print("=" * 50)
     
@@ -314,49 +219,173 @@ def test_invite_code_deletion():
     
     # 1. 创建测试邀请码
     print("\n1️⃣ 创建测试邀请码")
-    from datetime import datetime, timedelta
     future_date = datetime.now() + timedelta(days=7)
-    
-    invite_data = {
-        "code": "DELETE-TEST-2024",
-        "description": "待删除测试邀请码",
-        "expires_at": future_date.isoformat(),
-        "is_active": True
+    create_data = {
+        "description": "用于删除测试的邀请码",
+        "expires_at": future_date.isoformat() + "Z"
     }
     
-    invite_response = client.post("/api/v1/admin/invite-codes", json=invite_data)
-    print_response(invite_response, "创建邀请码")
+    create_response = client.post("/api/v1/invite-codes", json=create_data)
+    print_response(create_response, "创建测试邀请码")
     
-    invite_id = None
-    if invite_response.status_code == 200:
-        result = invite_response.json()
+    if create_response.status_code == 200:
+        result = create_response.json()
         if result.get("success"):
-            invite_id = result["data"]["id"]
-            print(f"✅ 创建邀请码成功，ID: {invite_id}")
+            invite_code_id = result["data"]["invite_code"]["id"]
+            print(f"✅ 创建邀请码成功，ID: {invite_code_id}")
+            
+            # 2. 删除邀请码 - DELETE /api/v1/invite-codes/{id}
+            print(f"\n2️⃣ 删除邀请码 (ID: {invite_code_id})")
+            delete_response = client.delete(f"/api/v1/invite-codes/{invite_code_id}")
+            print_response(delete_response, "删除邀请码")
+
+def test_course_deletion():
+    """测试课程删除 - 基于api_semester_course.md"""
+    print("\n📚 课程删除测试")
+    print("=" * 50)
     
-    # 2. 删除邀请码
-    if invite_id:
-        print(f"\n2️⃣ 删除邀请码 (ID: {invite_id})")
-        delete_invite_response = client.delete(f"/api/v1/admin/invite-codes/{invite_id}")
-        print_response(delete_invite_response, "删除邀请码")
-        
-        if delete_invite_response.status_code == 200:
-            print("✅ 邀请码删除成功")
-        else:
-            print("❌ 邀请码删除失败")
+    client = APIClient()
+    
+    # 获取管理员权限
+    admin_token = get_admin_token()
+    if not admin_token:
+        print("❌ 无法获取管理员token，跳过测试")
+        return
+    
+    client.set_auth_token(admin_token)
+    
+    # 1. 创建测试课程
+    print("\n1️⃣ 创建测试课程")
+    create_data = {
+        "name": "待删除测试课程",
+        "code": "DEL101",
+        "description": "这个课程将被删除",
+        "semester_id": 1  # 默认使用第一个学期
+    }
+    
+    create_response = client.post("/api/v1/courses", json=create_data)
+    print_response(create_response, "创建测试课程")
+    
+    if create_response.status_code == 200:
+        result = create_response.json()
+        if result.get("success"):
+            course_id = result["data"]["course"]["id"]
+            print(f"✅ 创建课程成功，ID: {course_id}")
+            
+            # 2. 删除课程 - DELETE /api/v1/courses/{id}
+            print(f"\n2️⃣ 删除课程 (ID: {course_id})")
+            delete_response = client.delete(f"/api/v1/courses/{course_id}")
+            print_response(delete_response, "删除课程")
+
+def test_semester_deletion():
+    """测试学期删除 - 基于api_semester_course.md"""
+    print("\n📅 学期删除测试")
+    print("=" * 50)
+    
+    client = APIClient()
+    
+    # 获取管理员权限
+    admin_token = get_admin_token()
+    if not admin_token:
+        print("❌ 无法获取管理员token，跳过测试")
+        return
+    
+    client.set_auth_token(admin_token)
+    
+    # 1. 创建测试学期
+    print("\n1️⃣ 创建测试学期")
+    future_start = datetime.now() + timedelta(days=365)
+    future_end = future_start + timedelta(days=120)
+    
+    create_data = {
+        "name": "待删除测试学期",
+        "code": "DEL2026",
+        "start_date": future_start.isoformat() + "Z",
+        "end_date": future_end.isoformat() + "Z"
+    }
+    
+    create_response = client.post("/api/v1/semesters", json=create_data)
+    print_response(create_response, "创建测试学期")
+    
+    if create_response.status_code == 200:
+        result = create_response.json()
+        if result.get("success"):
+            semester_id = result["data"]["semester"]["id"]
+            print(f"✅ 创建学期成功，ID: {semester_id}")
+            
+            # 2. 删除学期 - DELETE /api/v1/semesters/{id}
+            print(f"\n2️⃣ 删除学期 (ID: {semester_id})")
+            delete_response = client.delete(f"/api/v1/semesters/{semester_id}")
+            print_response(delete_response, "删除学期")
+
+def test_folder_deletion():
+    """测试文件夹删除 - 基于api_folder_file.md"""
+    print("\n📁 文件夹删除测试")
+    print("=" * 50)
+    
+    client = APIClient()
+    
+    # 获取用户权限
+    user_token = get_user_token("user")
+    if not user_token:
+        print("❌ 无法获取用户token，跳过测试")
+        return
+    
+    client.set_auth_token(user_token)
+    
+    # 1. 创建测试文件夹
+    print("\n1️⃣ 创建测试文件夹")
+    create_data = {
+        "name": "待删除测试文件夹",
+        "description": "这个文件夹将被删除",
+        "scope": "personal"
+    }
+    
+    create_response = client.post("/api/v1/folders", json=create_data)
+    print_response(create_response, "创建测试文件夹")
+    
+    if create_response.status_code == 200:
+        result = create_response.json()
+        if result.get("success"):
+            folder_id = result["data"]["folder"]["id"]
+            print(f"✅ 创建文件夹成功，ID: {folder_id}")
+            
+            # 2. 删除文件夹 - DELETE /api/v1/folders/{id}
+            print(f"\n2️⃣ 删除文件夹 (ID: {folder_id})")
+            delete_response = client.delete(f"/api/v1/folders/{folder_id}")
+            print_response(delete_response, "删除文件夹")
 
 if __name__ == "__main__":
     print("⚠️  请确保已执行: source venv/bin/activate")
     print("⚠️  请确保服务正在运行: uvicorn app.main:app --reload --host 0.0.0.0 --port 8000")
-    print("⚠️  此测试会创建和删除测试数据")
+    print("🗑️ 跨模块删除操作综合测试")
+    print("📋 测试所有API文档中的删除功能")
     input("按回车键继续...")
     
     try:
+        # 测试消息删除（包含聊天删除）
+        chat_id = test_message_deletion()
+        test_chat_deletion(chat_id)
+        
+        # 测试文件和文件夹删除
         test_file_deletion()
-        test_message_deletion()
-        test_course_semester_deletion()
+        test_folder_deletion()
+        
+        # 测试管理员删除功能
         test_invite_code_deletion()
-        print(f"\n🎉 删除操作测试完成！")
+        test_course_deletion()
+        test_semester_deletion()
+        
+        print(f"\n🎉 跨模块删除操作测试完成！")
+        print("✅ 测试了以下删除功能：")
+        print("   - 消息删除 (api_chat_message_rag.md)")
+        print("   - 聊天删除 (api_chat_message_rag.md)")
+        print("   - 文件删除 (api_folder_file.md)")
+        print("   - 文件夹删除 (api_folder_file.md)")
+        print("   - 邀请码删除 (api_admin.md)")
+        print("   - 课程删除 (api_semester_course.md)")
+        print("   - 学期删除 (api_semester_course.md)")
+        
     except Exception as e:
         print(f"\n❌ 测试过程中发生错误: {e}")
         import traceback

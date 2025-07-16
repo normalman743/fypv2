@@ -9,7 +9,7 @@ from app.models.file import File
 from app.models.message_reference import MessageFileReference, MessageRAGSource
 from app.schemas.chat import CreateChatRequest, UpdateChatRequest
 from app.schemas.message import SendMessageRequest
-from app.services.enhanced_ai_service import create_ai_service
+from app.services.production_ai_service import create_ai_service
 from app.core.exceptions import NotFoundError, ForbiddenError, BadRequestError
 
 

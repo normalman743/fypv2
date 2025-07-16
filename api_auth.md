@@ -9,7 +9,7 @@
   "email": "user@example.com",
   "username": "user01",
   "password": "yourpassword",
-  "invite_code": "INVITE2025"
+  "invite_code": "USER2024"
 }
 ```
 **响应：**

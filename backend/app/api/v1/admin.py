@@ -12,16 +12,20 @@ from app.schemas.invite_code import (
     InviteCodeResponse,
     InviteCodeListResponse,
     CreateInviteCodeResponse,
-    UpdateInviteCodeResponse
+    UpdateInviteCodeResponse,
+    CreateInviteCodeData,
+    UpdateInviteCodeData,
+    InviteCodeListData
 )
-from app.schemas.common import ResponseModel, ErrorResponse
+from app.schemas.system import SystemConfigResponse, AuditLogsResponse
+from app.schemas.common import SuccessResponse
 from app.core.exceptions import NotFoundError, BadRequestError
 from app.services.unified_file_service import UnifiedFileService
 
 router = APIRouter(tags=["管理员"])
 
 # 邀请码管理
-@router.post("/invite-codes", response_model=ResponseModel[CreateInviteCodeResponse])
+@router.post("/invite-codes", response_model=CreateInviteCodeResponse)
 async def create_invite_code(
     request: CreateInviteCodeRequest,
     db: Session = Depends(get_db),
@@ -32,9 +36,8 @@ async def create_invite_code(
         admin_service = AdminService(db)
         invite_code = admin_service.create_invite_code(request, created_by=current_user.id)
         
-        return ResponseModel(
-            success=True,
-            data=CreateInviteCodeResponse(
+        return CreateInviteCodeResponse(
+            data=CreateInviteCodeData(
                 invite_code={
                     "id": invite_code.id,
                     "code": invite_code.code,
@@ -45,7 +48,7 @@ async def create_invite_code(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.get("/invite-codes", response_model=ResponseModel[InviteCodeListResponse])
+@router.get("/invite-codes", response_model=InviteCodeListResponse)
 async def get_invite_codes(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
@@ -68,14 +71,13 @@ async def get_invite_codes(
             ) for ic in invite_codes
         ]
         
-        return ResponseModel(
-            success=True,
-            data=InviteCodeListResponse(invite_codes=invite_code_responses)
+        return InviteCodeListResponse(
+            data=InviteCodeListData(invite_codes=invite_code_responses)
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.put("/invite-codes/{invite_code_id}", response_model=ResponseModel[UpdateInviteCodeResponse])
+@router.put("/invite-codes/{invite_code_id}", response_model=UpdateInviteCodeResponse)
 async def update_invite_code(
     invite_code_id: int,
     request: UpdateInviteCodeRequest,
@@ -87,9 +89,8 @@ async def update_invite_code(
         admin_service = AdminService(db)
         invite_code = admin_service.update_invite_code(invite_code_id, request)
         
-        return ResponseModel(
-            success=True,
-            data=UpdateInviteCodeResponse(
+        return UpdateInviteCodeResponse(
+            data=UpdateInviteCodeData(
                 invite_code={
                     "id": invite_code.id,
                     "updated_at": invite_code.created_at  # 使用created_at代替不存在的updated_at
@@ -101,7 +102,7 @@ async def update_invite_code(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.delete("/invite-codes/{invite_code_id}", response_model=ResponseModel)
+@router.delete("/invite-codes/{invite_code_id}", response_model=SuccessResponse)
 async def delete_invite_code(
     invite_code_id: int,
     db: Session = Depends(get_db),
@@ -112,14 +113,14 @@ async def delete_invite_code(
         admin_service = AdminService(db)
         admin_service.delete_invite_code(invite_code_id)
         
-        return ResponseModel(success=True)
+        return SuccessResponse()
     except NotFoundError as e:
         raise e
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 # 系统配置
-@router.get("/system/config", response_model=ResponseModel[Dict[str, Any]])
+@router.get("/system/config", response_model=SystemConfigResponse)
 async def get_system_config(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
@@ -129,11 +130,13 @@ async def get_system_config(
         admin_service = AdminService(db)
         config = admin_service.get_system_config()
         
-        return ResponseModel(success=True, data={"config": config})
+        return SystemConfigResponse(
+            data={"config": config}
+        )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.put("/system/config", response_model=ResponseModel[Dict[str, Any]])
+@router.put("/system/config", response_model=SystemConfigResponse)
 async def update_system_config(
     config: Dict[str, Any],
     db: Session = Depends(get_db),
@@ -144,12 +147,14 @@ async def update_system_config(
         admin_service = AdminService(db)
         updated_config = admin_service.update_system_config(config)
         
-        return ResponseModel(success=True, data={"config": updated_config})
+        return SystemConfigResponse(
+            data={"config": updated_config}
+        )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 # 审计日志
-@router.get("/audit-logs", response_model=ResponseModel[Dict[str, Any]])
+@router.get("/audit-logs", response_model=AuditLogsResponse)
 async def get_audit_logs(
     user_id: Optional[int] = Query(None),
     action: Optional[str] = Query(None),
@@ -172,11 +177,13 @@ async def get_audit_logs(
             limit=limit
         )
         
-        return ResponseModel(success=True, data={"logs": logs})
+        return AuditLogsResponse(
+            data={"logs": logs}
+        )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.post("/global-files/upload", response_model=ResponseModel)
+@router.post("/global-files/upload", response_model=SuccessResponse, operation_id="upload_global_file")
 async def upload_global_file(
     file: UploadFile = File(...),
     description: str = Form(None),
@@ -202,8 +209,7 @@ async def upload_global_file(
             tags=tags_list,
             visibility=visibility
         )
-        return ResponseModel(
-            success=True,
+        return SuccessResponse(
             data={
                 "file": {
                     "id": file_record.id,
@@ -220,5 +226,88 @@ async def upload_global_file(
                 }
             }
         )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.get("/global-files", response_model=SuccessResponse)
+async def get_global_files(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    visibility: Optional[str] = Query(None),  # 可根据可见性过滤
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
+    """获取全局文件列表（管理员专用）"""
+    try:
+        service = UnifiedFileService(db)
+        files = service.get_accessible_files(
+            user_id=current_user.id,
+            scope='global',
+            include_shared=True
+        )
+        
+        # 按可见性过滤
+        if visibility:
+            files = [f for f in files if f.visibility == visibility]
+        
+        # 分页
+        total = len(files)
+        files_page = files[skip:skip + limit]
+        
+        files_data = [
+            {
+                "id": file.id,
+                "original_name": file.original_name,
+                "file_type": file.file_type,
+                "visibility": file.visibility,
+                "owner_id": file.user_id,
+                "is_processed": file.is_processed,
+                "processing_status": file.processing_status,
+                "created_at": file.created_at,
+                "file_size": file.file_size,
+                "description": file.description,
+                "tags": file.tags
+            }
+            for file in files_page
+        ]
+        
+        return SuccessResponse(
+            data={
+                "files": files_data,
+                "pagination": {
+                    "total": total,
+                    "skip": skip,
+                    "limit": limit,
+                    "has_more": skip + limit < total
+                }
+            }
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.delete("/global-files/{file_id}", response_model=SuccessResponse)
+async def delete_global_file(
+    file_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
+    """删除全局文件（管理员专用）"""
+    try:
+        # 验证文件确实是全局文件
+        from app.models.file import File
+        file_record = db.query(File).filter(File.id == file_id).first()
+        if not file_record:
+            raise HTTPException(status_code=404, detail="File not found")
+        
+        if file_record.scope != 'global':
+            raise HTTPException(status_code=400, detail="This is not a global file")
+        
+        service = UnifiedFileService(db)
+        success = service.delete_file(file_id, current_user.id)
+        
+        if success:
+            return SuccessResponse(data={"message": "Global file deleted successfully"})
+        else:
+            raise HTTPException(status_code=500, detail="Failed to delete global file")
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
