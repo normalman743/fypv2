@@ -32,6 +32,7 @@ class CreateChatRequest(BaseModel):
     course_id: Optional[int] = None
     custom_prompt: Optional[str] = None
     file_ids: Optional[List[int]] = []
+    folder_ids: Optional[List[int]] = []
 
 class UpdateChatRequest(BaseModel):
     title: str
