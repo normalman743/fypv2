@@ -19,7 +19,7 @@ from app.models.user import User
 router = APIRouter(tags=["files"])
 
 
-@router.post("/files/upload", response_model=UploadFileResponse)
+@router.post("/files/upload", response_model=UploadFileResponse, operation_id="upload_course_file")
 async def upload_file(
     file: UploadFile = File(...),
     course_id: int = Form(...),
@@ -188,7 +188,7 @@ async def download_file(
     )
 
 
-@router.delete("/files/{file_id}", response_model=SuccessResponse)
+@router.delete("/files/{file_id}", response_model=SuccessResponse, operation_id="delete_course_file")
 async def delete_file(
     file_id: int = Path(..., description="File ID"),
     current_user: User = Depends(get_current_user),

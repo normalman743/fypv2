@@ -7,13 +7,18 @@ from app.dependencies import get_db, get_current_user
 from app.models.user import User
 from app.services.unified_file_service import UnifiedFileService
 from app.services.file_permission_service import FilePermissionService
-from app.schemas.common import ResponseModel, ErrorResponse
+from app.schemas.common import ErrorResponse, SuccessResponse
+from app.schemas.unified_file import (
+    FileUploadResponse, FileListResponse, FileDetailResponse,
+    FileAccessLogResponse, FileShareResponse, FileDeleteResponse,
+    FileUploadData, FileListData, FileAccessLogData, FileShareData
+)
 from app.core.exceptions import NotFoundError, BadRequestError
 
 router = APIRouter(tags=["统一文件管理"])
 
 
-@router.post("/files/upload", response_model=ResponseModel)
+@router.post("/files/upload", response_model=FileUploadResponse, operation_id="unified_upload_file")
 async def upload_file(
     file: UploadFile = File(...),
     scope: str = Form('course'),  # 'course', 'global', 'personal'
@@ -61,10 +66,9 @@ async def upload_file(
             access_via='api'
         )
         
-        return ResponseModel(
-            success=True,
-            data={
-                "file": {
+        return FileUploadResponse(
+            data=FileUploadData(
+                file={
                     "id": file_record.id,
                     "original_name": file_record.original_name,
                     "file_type": file_record.file_type,
@@ -80,13 +84,13 @@ async def upload_file(
                     "description": file_record.description,
                     "tags": file_record.tags
                 }
-            }
+            )
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/files", response_model=ResponseModel)
+@router.get("/files", response_model=FileListResponse)
 async def get_files(
     scope: Optional[str] = Query(None),
     course_id: Optional[int] = Query(None),
@@ -134,23 +138,22 @@ async def get_files(
             for file in files_page
         ]
         
-        return ResponseModel(
-            success=True,
-            data={
-                "files": files_data,
-                "pagination": {
+        return FileListResponse(
+            data=FileListData(
+                files=files_data,
+                pagination={
                     "total": total,
                     "skip": skip,
                     "limit": limit,
                     "has_more": skip + limit < total
                 }
-            }
+            )
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/files/{file_id}", response_model=ResponseModel)
+@router.get("/files/{file_id}", response_model=FileDetailResponse)
 async def get_file_detail(
     file_id: int,
     db: Session = Depends(get_db),
@@ -179,8 +182,7 @@ async def get_file_detail(
             access_via='api'
         )
         
-        return ResponseModel(
-            success=True,
+        return FileDetailResponse(
             data={
                 "file": {
                     "id": file_record.id,
@@ -212,7 +214,7 @@ async def get_file_detail(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/files/{file_id}/share", response_model=ResponseModel)
+@router.post("/files/{file_id}/share", response_model=FileShareResponse, operation_id="share_file")
 async def share_file(
     file_id: int,
     shared_with_type: str = Form(...),  # 'user', 'course', 'group', 'public'
@@ -236,10 +238,9 @@ async def share_file(
             expires_at=expires_at
         )
         
-        return ResponseModel(
-            success=True,
-            data={
-                "share": {
+        return FileShareResponse(
+            data=FileShareData(
+                share={
                     "id": share.id,
                     "file_id": share.file_id,
                     "shared_with_type": share.shared_with_type,
@@ -249,13 +250,13 @@ async def share_file(
                     "expires_at": share.expires_at,
                     "created_at": share.created_at
                 }
-            }
+            )
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.delete("/files/{file_id}", response_model=ResponseModel)
+@router.delete("/files/{file_id}", response_model=FileDeleteResponse, operation_id="unified_delete_file")
 async def delete_file(
     file_id: int,
     db: Session = Depends(get_db),
@@ -267,14 +268,14 @@ async def delete_file(
         success = service.delete_file(file_id, current_user.id)
         
         if success:
-            return ResponseModel(success=True, data={"message": "File deleted successfully"})
+            return FileDeleteResponse(data={"message": "File deleted successfully"})
         else:
             raise HTTPException(status_code=500, detail="Failed to delete file")
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/files/{file_id}/access-logs", response_model=ResponseModel)
+@router.get("/files/{file_id}/access-logs", response_model=FileAccessLogResponse)
 async def get_file_access_logs(
     file_id: int,
     skip: int = Query(0, ge=0),
@@ -316,17 +317,16 @@ async def get_file_access_logs(
             for log in logs
         ]
         
-        return ResponseModel(
-            success=True,
-            data={
-                "logs": logs_data,
-                "pagination": {
+        return FileAccessLogResponse(
+            data=FileAccessLogData(
+                logs=logs_data,
+                pagination={
                     "total": total,
                     "skip": skip,
                     "limit": limit,
                     "has_more": skip + limit < total
                 }
-            }
+            )
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
