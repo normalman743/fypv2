@@ -81,8 +81,6 @@ python -m pytest test_specific_module.py -v
 - 测试前确保数据库已启动并连接正常
 - 使用reset_system.py重置测试环境
 - 测试时注意--noproxy参数用于本地连接
-- **RAG功能测试**: 运行`python prepare_test_documents.py`上传测试文档
-- **Mock vs Production模式**: 没有OpenAI API密钥时系统使用Mock模式，RAG结果为模拟数据
 
 #### API开发和测试重要原则
 
