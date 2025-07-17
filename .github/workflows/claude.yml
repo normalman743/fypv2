@@ -17,38 +17,41 @@ jobs:
       (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
       (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
       (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
-      (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+      (github.event_name == 'issues' && contains(github.event.issue.body, '@claude'))
     
     runs-on: ubuntu-latest
     
     permissions:
-      contents: write
-      pull-requests: write
-      issues: write
+      contents: read
+      pull-requests: read  
+      issues: read
       id-token: write
     
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 1
       
-      - name: Run Claude Code
+      - name: Run Claude Code Action
         uses: anthropics/claude-code-action@beta
         with:
           # Max 用户使用 OAuth token（推荐）
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           
-          # 或者使用 API key（二选一）
+          # 或者使用 API key（二选一，不要同时使用）
           # anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           
           github_token: ${{ secrets.GITHUB_TOKEN }}
           
-          # 可选：自定义触发短语（默认是 @claude）
-          # trigger_phrase: "/claude"
+          # 可选配置项：
+          # trigger_phrase: "@claude"  # 默认触发短语
+          # assignee_trigger: "claude"  # 通过指派触发
+          # label_trigger: "claude"     # 通过标签触发
+          # max_turns: "5"              # 限制对话轮数
           
-          # 可选：限制对话轮数
-          # max_turns: "5"
-          
-          # 可选：允许的工具（提高安全性）
-          # allowed_tools: "View,Edit,GlobTool,GrepTool,Bash(git:*)"
+          # 可选：自定义环境变量
+          # claude_env: |
+          #   NODE_ENV: test
+          #   DEBUG: true
+          #   API_URL: https://api.example.com
