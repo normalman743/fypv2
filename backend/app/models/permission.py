@@ -23,7 +23,7 @@ class Permission(Base):
     
     # 条件和元数据
     conditions = Column(JSON, nullable=True)  # 复杂条件: 时间、IP、设备等
-    extra_data = Column(JSON, nullable=True)  # 扩展字段
+    permission_metadata = Column(JSON, nullable=True)  # 扩展字段
     
     # 管理字段
     granted_by = Column(Integer, ForeignKey("users.id"), nullable=True)
