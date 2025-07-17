@@ -5,6 +5,7 @@ from sqlalchemy.exc import IntegrityError
 from app.models.chat import Chat
 from app.models.message import Message
 from app.models.file import File
+from app.models.folder import Folder
 from app.models.course import Course
 from app.models.message_reference import MessageFileReference, MessageRAGSource
 from app.schemas.message import SendMessageRequest, EditMessageRequest
@@ -16,6 +17,75 @@ class MessageService:
     def __init__(self, db: Session):
         self.db = db
         self.ai_service = create_ai_service()
+
+    def _get_files_from_folders_and_files(self, file_ids: List[int], folder_ids: List[int], user_id: int) -> tuple[List[File], List[int]]:
+        """获取文件夹中的文件和直接指定的文件，合并去重"""
+        all_files = []
+        all_file_ids = []
+        
+        # 处理直接指定的文件
+        if file_ids:
+            files = self.db.query(File).filter(File.id.in_(file_ids)).all()
+            if len(files) != len(file_ids):
+                raise BadRequestError("Some files not found", "FILE_NOT_FOUND")
+            all_files.extend(files)
+            all_file_ids.extend(file_ids)
+        
+        # 处理文件夹中的文件
+        if folder_ids:
+            folders = self.db.query(Folder).filter(Folder.id.in_(folder_ids)).all()
+            if len(folders) != len(folder_ids):
+                raise BadRequestError("Some folders not found", "FOLDER_NOT_FOUND")
+            
+            # 验证文件夹权限
+            for folder in folders:
+                course = self.db.query(Course).filter(
+                    Course.id == folder.course_id,
+                    Course.user_id == user_id
+                ).first()
+                if not course:
+                    raise ForbiddenError("Access denied to some folders")
+            
+            # 获取文件夹中的文件
+            for folder_id in folder_ids:
+                folder_files = self.db.query(File).filter(File.folder_id == folder_id).all()
+                all_files.extend(folder_files)
+                all_file_ids.extend([f.id for f in folder_files])
+        
+        # 去重
+        unique_file_ids = list(set(all_file_ids))
+        unique_files = []
+        seen_ids = set()
+        
+        for file in all_files:
+            if file.id not in seen_ids:
+                unique_files.append(file)
+                seen_ids.add(file.id)
+        
+        # 验证所有文件的权限
+        for file in unique_files:
+            if file.course_id:
+                course = self.db.query(Course).filter(
+                    Course.id == file.course_id,
+                    Course.user_id == user_id
+                ).first()
+                if not course:
+                    raise ForbiddenError("Access denied to some files")
+        
+        return unique_files, unique_file_ids
+
+    def _get_file_contents_for_ai(self, files: List[File]) -> str:
+        """获取文件内容用于AI上下文"""
+        if not files:
+            return ""
+        
+        context_parts = []
+        for file in files:
+            # 只处理已处理的文件
+            if file.is_processed and file.content_preview:
+                context_parts.append(f"文件名: {file.original_name}\n内容预览:\n{file.content_preview}\n")
+        
+        return "\n" + "="*50 + "\n".join(context_parts) if context_parts else ""
 
     def get_chat_messages(self, chat_id: int, user_id: int) -> List[Message]:
         """Get all messages in a chat (check chat ownership)"""
@@ -43,22 +113,15 @@ class MessageService:
         if not chat:
             raise NotFoundError("Chat not found", "CHAT_NOT_FOUND")
 
-        # Validate file_ids if provided
-        files = []
-        if message_data.file_ids:
-            files = self.db.query(File).filter(File.id.in_(message_data.file_ids)).all()
-            if len(files) != len(message_data.file_ids):
-                raise BadRequestError("Some files not found", "FILE_NOT_FOUND")
-            
-            # Check file access permissions
-            for file in files:
-                if file.course_id:  # Course file
-                    course = self.db.query(Course).filter(
-                        Course.id == file.course_id,
-                        Course.user_id == user_id
-                    ).first()
-                    if not course:
-                        raise ForbiddenError("Access denied to some files")
+        # 处理文件夹和文件ID，合并去重
+        files, unique_file_ids = self._get_files_from_folders_and_files(
+            message_data.file_ids or [], 
+            message_data.folder_ids or [], 
+            user_id
+        )
+        
+        # 获取文件内容用于AI上下文
+        file_context = self._get_file_contents_for_ai(files)
 
         try:
             # Create user message
@@ -72,29 +135,38 @@ class MessageService:
             self.db.add(user_message)
             self.db.flush()
 
-            # Add file attachments if any
+            # Add file attachments for all unique files
             file_attachments = []
-            if message_data.file_ids:
-                for file_id in message_data.file_ids:
-                    file = next(f for f in files if f.id == file_id)
-                    attachment = MessageFileReference(
+            for file in files:
+                attachment = MessageFileReference(
+                    message_id=user_message.id,
+                    file_id=file.id,
+                    reference_type='file'
+                )
+                self.db.add(attachment)
+                file_attachments.append({
+                    "id": file.id,
+                    "filename": file.original_name,
+                    "original_name": file.original_name,
+                    "file_size": file.file_size
+                })
+            
+            # Add folder references if any
+            if message_data.folder_ids:
+                for folder_id in message_data.folder_ids:
+                    folder_ref = MessageFileReference(
                         message_id=user_message.id,
-                        file_id=file_id,
-                        reference_type='file'
+                        file_id=folder_id,
+                        reference_type='folder'
                     )
-                    self.db.add(attachment)
-                    file_attachments.append({
-                        "id": file_id,
-                        "filename": file.original_name,
-                        "original_name": file.original_name,
-                        "file_size": file.file_size
-                    })
+                    self.db.add(folder_ref)
 
-            # Generate AI response
+            # Generate AI response with file context
             ai_response = self.ai_service.generate_response(
                 message=message_data.content,
                 chat_type=chat.chat_type,
-                course_id=chat.course_id
+                course_id=chat.course_id,
+                file_context=file_context
             )
 
             # Create AI message

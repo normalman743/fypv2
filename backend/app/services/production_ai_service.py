@@ -65,7 +65,7 @@ class ProductionAIService:
         
         print("✅ Production AI Service ready")
     
-    def generate_response(self, message: str, chat_type: str = "general", course_id: int = None) -> AIResponse:
+    def generate_response(self, message: str, chat_type: str = "general", course_id: int = None, file_context: str = "") -> AIResponse:
         """使用真实RAG和OpenAI生成响应"""
         
         # 1. 使用RAG检索相关文档
@@ -93,7 +93,7 @@ class ProductionAIService:
             # 继续执行，但没有RAG上下文
         
         # 2. 构建系统提示
-        system_prompt = self._build_system_prompt(chat_type, context_text)
+        system_prompt = self._build_system_prompt(chat_type, context_text, file_context)
         
         # 3. 调用OpenAI API
         try:
@@ -154,20 +154,37 @@ class ProductionAIService:
             # 如果生成失败，返回默认标题
             return "新聊天"
     
-    def _build_system_prompt(self, chat_type: str, context_text: str) -> str:
+    def _build_system_prompt(self, chat_type: str, context_text: str, file_context: str = "") -> str:
         """构建系统提示"""
         
-        base_prompt = """你是一个智能的校园助手，专门为大学生提供帮助。请基于提供的上下文信息回答问题，如果上下文中没有相关信息，请诚实地告知用户。"""
+        base_prompt = """你是香港中文大学(CUHK)的学生助手，使命是帮助学生更好地学习和生活。你的名字是星空（star），使命是提供准确、友好和专业的回答。
+
+你有两种信息源：
+1. 知识库检索结果（RAG）- 来自课程资料和校园信息
+2. 用户指定的参考文档 - 学生当前关注的具体文件
+
+请综合这两种信息源，以友好、专业的方式回答学生问题。
+
+回答原则：
+- 如果用户指定文档中有相关信息，请优先使用
+- 结合知识库信息提供更全面的答案
+- 保持学术严谨性，引用具体来源
+- 用简洁明了的中文回答（除非用户要求其他语言）
+
+你的目标是成为学生学习路上的可靠伙伴。"""
         
         if chat_type == "course":
             base_prompt += "\n\n你正在协助学生学习课程内容。请专注于教学和学习相关的问题。"
         elif chat_type == "general":
             base_prompt += "\n\n你正在帮助学生了解校园生活、设施和服务。"
         
-        if context_text.strip():
-            base_prompt += f"\n\n相关上下文信息：\n{context_text}"
+        # 添加用户指定的文档上下文
+        if file_context.strip():
+            base_prompt += f"\n\n用户指定的参考文档：\n{file_context}"
         
-        base_prompt += "\n\n请用中文回答，语言要友好、准确、有帮助。"
+        # 添加RAG检索的上下文
+        if context_text.strip():
+            base_prompt += f"\n\n知识库检索结果：\n{context_text}"
         
         return base_prompt
 

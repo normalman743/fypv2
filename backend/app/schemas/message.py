@@ -30,6 +30,7 @@ class MessageListResponse(SuccessResponse):
 class SendMessageRequest(BaseModel):
     content: str
     file_ids: Optional[List[int]] = []
+    folder_ids: Optional[List[int]] = []
 
 class EditMessageRequest(BaseModel):
     content: str
