@@ -35,7 +35,8 @@ class Settings(BaseSettings):
     workers: int = int(os.getenv("WORKERS", "1"))
     
     # CORS配置
-    cors_origins: str = os.getenv("CORS_ORIGINS", "*")
+    cors_origins: str = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001")
+    cors_allow_credentials: bool = os.getenv("CORS_ALLOW_CREDENTIALS", "true").lower() == "true"
     
     # 文件上传配置
     upload_dir: str = os.getenv("UPLOAD_DIR", "./storage/uploads")
@@ -62,7 +63,25 @@ class Settings(BaseSettings):
         """将逗号分隔的CORS源转换为列表"""
         if self.cors_origins == "*":
             return ["*"]
-        return [origin.strip() for origin in self.cors_origins.split(",")]
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+    
+    @property
+    def cors_origins_for_credentials(self) -> List[str]:
+        """
+        获取用于带凭据请求的CORS源列表
+        当启用credentials时，不能使用通配符"*"，必须指定具体的源
+        """
+        if self.cors_origins == "*":
+            # 如果设置为通配符，返回常用的开发环境源
+            return [
+                "http://localhost:3000",
+                "http://localhost:3001", 
+                "http://localhost:5173",  # Vite 默认端口
+                "http://127.0.0.1:3000",
+                "http://127.0.0.1:3001",
+                "http://127.0.0.1:5173"
+            ]
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
     
     class Config:
         env_file = ".env"
