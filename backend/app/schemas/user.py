@@ -33,3 +33,10 @@ class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
     preferred_language: Optional[str] = None
     preferred_theme: Optional[str] = None
+
+class EmailVerificationRequest(BaseModel):
+    email: EmailStr
+    code: str
+
+class ResendVerificationRequest(BaseModel):
+    email: EmailStr

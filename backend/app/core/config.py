@@ -52,6 +52,17 @@ class Settings(BaseSettings):
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
     log_file: str = os.getenv("LOG_FILE", "./logs/app.log")
     
+    # 注册配置
+    registration_enabled: bool = os.getenv("REGISTRATION_ENABLED", "True").lower() == "true"
+    registration_email_verification: bool = os.getenv("REGISTRATION_EMAIL_VERIFICATION", "False").lower() == "true"
+    registration_invite_code_verification: bool = os.getenv("REGISTRATION_INVITE_CODE_VERIFICATION", "True").lower() == "true"
+    
+    # 邮件配置
+    resend_api_key: str = os.getenv("RESEND_API_KEY", "")
+    email_from_address: str = os.getenv("EMAIL_ADDRESS", "no-reply@api.584743.xyz")
+    email_domain_restriction: str = os.getenv("EMAIL_DOMAIN_RESTRICTION", "")
+    verification_code_expire_minutes: int = int(os.getenv("VERIFICATION_CODE_EXPIRE_MINUTES", "5"))
+    
     @property
     def allowed_extensions_list(self) -> List[str]:
         """将逗号分隔的字符串转换为列表"""
@@ -63,6 +74,13 @@ class Settings(BaseSettings):
         if self.cors_origins == "*":
             return ["*"]
         return [origin.strip() for origin in self.cors_origins.split(",")]
+    
+    @property
+    def allowed_email_domains_list(self) -> List[str]:
+        """将逗号分隔的允许邮箱域名转换为列表"""
+        if not self.email_domain_restriction:
+            return []
+        return [domain.strip() for domain in self.email_domain_restriction.split(",")]
     
     class Config:
         env_file = ".env"

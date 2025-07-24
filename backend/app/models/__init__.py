@@ -10,6 +10,7 @@ from .database import Base
 # Import all model classes
 from .user import User
 from .invite_code import InviteCode
+from .email_verification import EmailVerification
 from .semester import Semester
 from .course import Course
 from .folder import Folder
@@ -32,6 +33,7 @@ __all__ = [
     # User management
     'User',
     'InviteCode',
+    'EmailVerification',
     
     # Course management
     'Semester', 
