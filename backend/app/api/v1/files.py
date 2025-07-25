@@ -239,17 +239,18 @@ async def download_file(
 @router.get("/files/temporary/{token}/download")
 async def download_temporary_file(
     token: str = Path(..., description="临时文件访问token"),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     下载临时文件
     
-    通过token访问临时文件，不需要登录验证
+    通过token访问临时文件，需要登录验证和文件所有权验证
     """
     from app.services.unified_file_service import UnifiedFileService
     
     service = UnifiedFileService(db)
-    temp_file, content = service.download_temporary_file(token)
+    temp_file, content = service.download_temporary_file_with_auth(token, current_user.id)
     
     # Encode filename properly for Content-Disposition header
     from urllib.parse import quote

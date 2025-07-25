@@ -251,6 +251,30 @@ async def reprocess_file_rag(
         if not file_record:
             raise HTTPException(status_code=404, detail="File not found")
         
+        # 安全检查：管理员只能处理非私人范围的文件或自己的文件
+        if file_record.scope == 'personal' and file_record.user_id != current_user.id:
+            raise HTTPException(
+                status_code=403, 
+                detail="Access denied: Cannot reprocess private files of other users"
+            )
+        
+        # 对于课程文件，记录管理员操作日志
+        if file_record.scope == 'course':
+            from app.models.audit_log import AuditLog
+            audit_log = AuditLog(
+                user_id=current_user.id,
+                action='admin_file_reprocess',
+                entity_type='file',
+                entity_id=file_record.id,
+                details={
+                    'file_name': file_record.original_name,
+                    'file_scope': file_record.scope,
+                    'owner_id': file_record.user_id
+                }
+            )
+            db.add(audit_log)
+            db.commit()
+        
         physical_file = db.query(PhysicalFile).filter(
             PhysicalFile.id == file_record.physical_file_id
         ).first()

@@ -72,11 +72,12 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
     invite_code_obj = None
     if settings.registration_invite_code_verification:
         print(f"Checking invite code: {user_data.invite_code}")
+        # 使用行级锁防止多个用户同时使用同一邀请码
         invite_code_obj = db.query(InviteCode).filter(
             InviteCode.code == user_data.invite_code,
             InviteCode.is_used == False,
             InviteCode.expires_at > datetime.now()
-        ).first()
+        ).with_for_update().first()
         print(f"Invite code query result: {invite_code_obj}")
         if not invite_code_obj:
             print("Invite code is invalid or expired.")
@@ -89,6 +90,9 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
             )
         else:
             print(f"Invite code {user_data.invite_code} is valid and not used.")
+            # 立即标记为已使用以防止其他并发请求使用
+            invite_code_obj.is_used = True
+            invite_code_obj.used_at = datetime.now()
     # 创建用户
     hashed_password = get_password_hash(user_data.password)
     user = User(
@@ -99,11 +103,17 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
     )
     db.add(user)
     
-    # 标记邀请码为已使用（如果启用）
+    # 设置邀请码使用者（如果启用）
     if settings.registration_invite_code_verification and invite_code_obj:
-        invite_code_obj.is_used = True
+        invite_code_obj.used_by = user.id  # This will be set after user creation
     
     db.commit()
+    db.refresh(user)
+    
+    # 更新邀请码使用者ID
+    if settings.registration_invite_code_verification and invite_code_obj:
+        invite_code_obj.used_by = user.id
+        db.commit()
     db.refresh(user)
     
     # 发送验证邮件（如果启用）

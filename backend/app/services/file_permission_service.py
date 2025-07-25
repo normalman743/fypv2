@@ -134,15 +134,76 @@ class FilePermissionService:
         if course.user_id == user_id:
             return True
         
-        # 如果文件可见性是 'course'，需要检查用户是否是课程成员
+        # 如果文件可见性是 'course'，需要检查用户是否有课程访问权限
         if file_visibility == 'course':
-            # TODO: 实现课程成员检查
-            # 目前简化处理：如果有课程级别的共享，则允许访问
-            course_share = self.db.query(FileShare).filter(
-                FileShare.shared_with_type == 'course',
-                FileShare.shared_with_id == course_id
+            return self._check_course_membership(course_id, user_id)
+        
+        return False
+    
+    def _check_course_membership(self, course_id: int, user_id: int) -> bool:
+        """检查用户是否有课程访问权限"""
+        
+        # 方法1: 检查是否有课程级别的文件共享
+        course_share = self.db.query(FileShare).filter(
+            FileShare.shared_with_type == 'course',
+            FileShare.shared_with_id == course_id
+        ).first()
+        if course_share:
+            return True
+        
+        # 方法2: 检查是否有通过用户组获得的课程访问权限
+        from app.models.file_share import FileGroupMember
+        user_groups = self.db.query(FileGroupMember).filter(
+            FileGroupMember.user_id == user_id
+        ).all()
+        
+        for group_membership in user_groups:
+            group_course_share = self.db.query(FileShare).filter(
+                FileShare.shared_with_type == 'group',
+                FileShare.shared_with_id == group_membership.group_id
             ).first()
-            return course_share is not None
+            if group_course_share:
+                return True
+        
+        # 方法3: 检查基于权限表的课程访问权限
+        from app.models.permission import Permission
+        course_permission = self.db.query(Permission).filter(
+            Permission.resource_type == 'course',
+            Permission.resource_id == str(course_id),
+            Permission.subject_type == 'user',
+            Permission.subject_id == str(user_id),
+            Permission.action.in_(['read', 'access']),
+            Permission.effect == 'allow',
+            Permission.is_active == True
+        ).first()
+        
+        if course_permission:
+            # 检查权限是否过期
+            if course_permission.expires_at is None or course_permission.expires_at > func.now():
+                return True
+        
+        # 方法4: 检查用户是否通过角色获得课程访问权限
+        from app.models.permission import SubjectRole, Role
+        user_roles = self.db.query(SubjectRole).filter(
+            SubjectRole.subject_type == 'user',
+            SubjectRole.subject_id == str(user_id),
+            SubjectRole.is_active == True
+        ).all()
+        
+        for role_assignment in user_roles:
+            role_permission = self.db.query(Permission).filter(
+                Permission.resource_type == 'course',
+                Permission.resource_id == str(course_id),
+                Permission.subject_type == 'role',
+                Permission.subject_id == str(role_assignment.role_id),
+                Permission.action.in_(['read', 'access']),
+                Permission.effect == 'allow',
+                Permission.is_active == True
+            ).first()
+            
+            if role_permission:
+                if role_permission.expires_at is None or role_permission.expires_at > func.now():
+                    return True
         
         return False
     

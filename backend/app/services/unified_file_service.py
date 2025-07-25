@@ -148,16 +148,26 @@ class UnifiedFileService:
     ) -> PhysicalFile:
         """获取或创建 PhysicalFile 记录"""
         
-        # 检查是否已存在相同 hash 的物理文件
+        # 检查是否已存在相同 hash 的物理文件 (使用行级锁防止竞态条件)
         physical_file = self.db.query(PhysicalFile).filter(
             PhysicalFile.file_hash == file_info['file_hash']
-        ).first()
+        ).with_for_update().first()
         
         if physical_file:
-            # 更新引用计数
+            # 更新引用计数 (已持有锁)
             physical_file.reference_count += 1
             self.db.commit()
             return physical_file
+        else:
+            # 双重检查 - 在获取锁期间可能有其他进程创建了文件
+            physical_file = self.db.query(PhysicalFile).filter(
+                PhysicalFile.file_hash == file_info['file_hash']
+            ).first()
+            
+            if physical_file:
+                physical_file.reference_count += 1
+                self.db.commit()
+                return physical_file
         
         # 创建新的物理文件
         storage_path = self._generate_storage_path(file_info, scope)
@@ -530,7 +540,7 @@ class UnifiedFileService:
 
     def download_temporary_file(self, token: str) -> Tuple[TemporaryFile, bytes]:
         """
-        通过token下载临时文件
+        通过token下载临时文件 (不推荐：无身份验证)
         
         Returns:
             (temp_file, file_content): 临时文件对象和文件内容
@@ -538,6 +548,42 @@ class UnifiedFileService:
         temp_file = self.get_temporary_file_by_token(token)
         if not temp_file:
             raise HTTPException(status_code=404, detail="文件不存在或已过期")
+        
+        # 获取物理文件
+        physical_file = temp_file.physical_file
+        if not physical_file:
+            raise HTTPException(status_code=404, detail="物理文件不存在")
+        
+        # 安全地构建文件路径
+        file_path = self._validate_and_resolve_path(physical_file.storage_path)
+        
+        try:
+            with open(file_path, 'rb') as f:
+                content = f.read()
+            return temp_file, content
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="文件不存在")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"读取文件失败: {str(e)}")
+
+    def download_temporary_file_with_auth(self, token: str, user_id: int) -> Tuple[TemporaryFile, bytes]:
+        """
+        通过token下载临时文件 (带身份验证)
+        
+        Args:
+            token: 临时文件token
+            user_id: 请求用户ID
+            
+        Returns:
+            (temp_file, file_content): 临时文件对象和文件内容
+        """
+        temp_file = self.get_temporary_file_by_token(token)
+        if not temp_file:
+            raise HTTPException(status_code=404, detail="文件不存在或已过期")
+        
+        # 验证文件所有权
+        if temp_file.user_id != user_id:
+            raise HTTPException(status_code=403, detail="无权访问此文件")
         
         # 获取物理文件
         physical_file = temp_file.physical_file
