@@ -31,7 +31,7 @@ MODEL_MAPPING = {
         "max_tokens": 2000
     },
     AIModel.STAR_CODE: {
-        "base": "gpt-4.1",
+        "base": "gpt-4.1",  # 代码专用模型
         "search": None,  # 不支持搜索
         "supports_search": False,
         "input_cost_per_million": 2.00,  # $2.00 per 1M input tokens

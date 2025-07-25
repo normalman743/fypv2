@@ -289,6 +289,9 @@ class ChatService:
                     "course_id": chat.course_id,
                     "user_id": chat.user_id,
                     "custom_prompt": chat.custom_prompt,
+                    "ai_model": chat.ai_model,
+                    "search_enabled": chat.search_enabled,
+                    "context_mode": chat.context_mode,
                     "created_at": chat.created_at,
                     "updated_at": chat.updated_at
                 },
@@ -327,10 +330,25 @@ class ChatService:
         # 暂时使用非流式方式，完整实现需要重构较多代码
         result = self.create_chat_with_first_message(chat_data, user_id)
         
+        # 转换datetime和Decimal对象为字符串以便JSON序列化
+        def convert_for_json(obj):
+            from decimal import Decimal
+            if isinstance(obj, dict):
+                return {k: convert_for_json(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_for_json(item) for item in obj]
+            elif hasattr(obj, 'isoformat'):  # datetime对象
+                return obj.isoformat()
+            elif isinstance(obj, Decimal):  # Decimal对象
+                return float(obj)
+            return obj
+        
+        serializable_result = convert_for_json(result)
+        
         # 发送创建完成的消息
         yield {
             "type": "chat_created",
-            "data": result
+            "data": serializable_result
         }
 
     def update_chat(self, chat_id: int, chat_data: UpdateChatRequest, user_id: int) -> Chat:
