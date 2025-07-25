@@ -12,6 +12,7 @@ from app.models.user import User
 from app.models.course import Course
 from app.services.local_file_storage import local_file_storage
 from app.services.rag_service import ProductionRAGService
+from app.utils.file_validation import validate_regular_file_upload, FileValidator
 
 
 class UnifiedFileService:
@@ -48,7 +49,12 @@ class UnifiedFileService:
         # 1. 验证参数
         self._validate_upload_params(scope, course_id, user_id)
         
-        # 2. 读取和处理文件内容
+        # 2. 验证文件类型（白名单）
+        valid, error_msg = validate_regular_file_upload(file.filename)
+        if not valid:
+            raise HTTPException(status_code=400, detail=error_msg)
+        
+        # 3. 读取和处理文件内容
         file_content = file.file.read()
         file_hash = hashlib.sha256(file_content).hexdigest()
         file.file.seek(0)
@@ -244,6 +250,21 @@ class UnifiedFileService:
         """触发 RAG 处理"""
         try:
             full_path = local_file_storage.base_dir / physical_file.storage_path
+            
+            # 先验证文件内容是否可解析
+            is_valid, error_msg = FileValidator.validate_document_parsing(
+                str(full_path), file_record.original_name
+            )
+            
+            if not is_valid:
+                # 内容验证失败，标记为失败状态
+                file_record.processing_status = "failed"
+                file_record.processing_error = error_msg
+                file_record.is_processed = False
+                self.db.commit()
+                return
+            
+            # 内容验证通过，执行RAG处理
             rag_service = ProductionRAGService(db_session=self.db)
             rag_service.process_file(file_record, str(full_path))
             

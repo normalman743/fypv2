@@ -67,7 +67,7 @@ class ProductionAIService:
     
     def generate_response(self, message: str, chat_type: str = "general", course_id: int = None, 
                          file_context: str = "", ai_model: str = "Star", search_enabled: bool = False,
-                         conversation_history: list = None, stream: bool = False) -> AIResponse:
+                         conversation_history: list = None, stream: bool = False, images: list = None) -> AIResponse:
         """使用真实RAG和OpenAI生成响应"""
         
         # 获取实际的OpenAI模型名称
@@ -115,7 +115,15 @@ class ProductionAIService:
             print(f"💬 Added {len(conversation_history)} history messages")
         
         # 添加当前用户消息
-        messages.append({"role": "user", "content": message})
+        if images:
+            # 如果有图片，构建包含图片的消息格式
+            content = [{"type": "text", "text": message}]
+            content.extend(images)
+            messages.append({"role": "user", "content": content})
+            print(f"🖼️ Added {len(images)} images to user message")
+        else:
+            # 没有图片，使用普通文本格式
+            messages.append({"role": "user", "content": message})
         
         # 调用OpenAI API
         try:

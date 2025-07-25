@@ -1,6 +1,8 @@
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError
+import os
+import logging
 
 from app.models.chat import Chat
 from app.models.course import Course
@@ -9,11 +11,15 @@ from app.models.file import File
 from app.models.folder import Folder
 from app.models.user import User
 from app.models.message_reference import MessageFileReference, MessageRAGSource
+from app.models.temporary_file import TemporaryFile
 from app.schemas.chat import CreateChatRequest, UpdateChatRequest
 from app.schemas.message import SendMessageRequest
 from app.services.production_ai_service import create_ai_service
 from app.core.exceptions import NotFoundError, ForbiddenError, BadRequestError
 from app.utils.file_processing_utils import FileProcessingUtils
+from app.utils.image_utils import image_to_base64, get_image_mime_type, is_image_file
+
+logger = logging.getLogger(__name__)
 
 
 class ChatService:
@@ -89,6 +95,70 @@ class ChatService:
                 context_parts.append(f"文件名: {file.original_name}\n内容预览:\n{file.content_preview}\n")
         
         return "\n" + "="*50 + "\n".join(context_parts) if context_parts else ""
+
+    def _prepare_images_for_ai(self, temporary_files: List[TemporaryFile]) -> List[Dict[str, Any]]:
+        """
+        准备图片文件用于AI处理
+        
+        Args:
+            temporary_files: 临时文件列表
+            
+        Returns:
+            图片数据列表，格式适合AI API调用
+        """
+        images = []
+        image_count = 0
+        
+        for temp_file in temporary_files:
+            if is_image_file(temp_file.original_name):
+                image_count += 1
+                # 获取物理文件路径
+                if temp_file.physical_file and temp_file.physical_file.storage_path:
+                    storage_path = temp_file.physical_file.storage_path
+                    logger.info(f"   原始存储路径: {storage_path}")
+                    
+                    # 如果路径是相对路径，拼接完整路径
+                    if not os.path.isabs(storage_path):
+                        from app.services.local_file_storage import local_file_storage
+                        base_dir = str(local_file_storage.base_dir)
+                        logger.info(f"   Base目录: {base_dir}")
+                        
+                        # 检查是否已经包含base_dir路径，避免重复拼接
+                        if storage_path.startswith('storage/uploads/'):
+                            # 去掉前缀，直接使用当前工作目录拼接
+                            file_path = os.path.join(os.getcwd(), storage_path)
+                        else:
+                            file_path = os.path.join(base_dir, storage_path)
+                    else:
+                        file_path = storage_path
+                        
+                    logger.info(f"   最终文件路径: {file_path}")
+                    logger.info(f"   文件是否存在: {os.path.exists(file_path)}")
+                    
+                    # 转换为base64
+                    base64_image = image_to_base64(file_path)
+                    if base64_image:
+                        mime_type = get_image_mime_type(temp_file.original_name)
+                        images.append({
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{mime_type};base64,{base64_image}"
+                            }
+                        })
+                        # 添加base64数据调试日志
+                        logger.info(f"🖼️ 准备图片 {image_count}: {temp_file.original_name} ({mime_type})")
+                        logger.info(f"   Base64长度: {len(base64_image)} 字符")
+                        logger.info(f"   Base64前缀: {base64_image[:50]}...")
+                        logger.info(f"   完整URL: data:{mime_type};base64,{base64_image[:100]}...")
+                    else:
+                        logger.warning(f"❌ 图片 {image_count}: {temp_file.original_name} 转换base64失败")
+                else:
+                    logger.warning(f"❌ 图片 {image_count}: {temp_file.original_name} 物理文件路径缺失")
+        
+        if image_count > 0:
+            logger.info(f"📊 图片处理总结: 发现 {image_count} 个图片文件，成功准备 {len(images)} 个")
+        
+        return images
 
     def get_user_chats(self, user_id: int) -> List[Chat]:
         """Get all chats for a user with course info and stats"""
@@ -236,6 +306,11 @@ class ChatService:
                     "expires_at": temp_file.expires_at.isoformat()
                 })
 
+            # Prepare images for AI
+            images = self._prepare_images_for_ai(temp_files)
+            if images:
+                logger.info(f"🖼️ 准备了 {len(images)} 张图片用于AI处理")
+            
             # Generate AI response with file context and model settings (first message, no history)
             ai_response = self.ai_service.generate_response(
                 message=chat_data.first_message,
@@ -245,7 +320,8 @@ class ChatService:
                 ai_model=chat.ai_model,
                 search_enabled=chat.search_enabled,
                 conversation_history=[],  # 第一条消息没有历史
-                stream=False
+                stream=False,
+                images=images  # 传递图片数据
             )
 
             # Create AI message

@@ -142,18 +142,17 @@ class ProductionRAGService:
         # 向量存储缓存
         self.vectorstores: Dict[str, Chroma] = {}
         
-        # 支持的文档加载器
-        self.loaders = {
+        # 支持的文档加载器 - 专门格式用专门解析器，其他用TextLoader
+        self.specialized_loaders = {
+            # 需要专门解析器的格式
             '.pdf': PyPDFLoader,
             '.docx': Docx2txtLoader,
-            '.txt': TextLoader,
+            '.doc': Docx2txtLoader,  # Word文档的旧格式
             '.md': UnstructuredMarkdownLoader,
-            '.py': TextLoader,
-            '.js': TextLoader,
-            '.html': TextLoader,
-            '.json': TextLoader,
-            '.csv': TextLoader
         }
+        
+        # TextLoader作为通用解析器，处理所有文本类文件
+        self.text_loader = TextLoader
         
         print(f"📁 RAG Service initialized with data directory: {data_dir}")
     
@@ -173,18 +172,30 @@ class ProductionRAGService:
         print(f"📋 File size: {file_size/1024/1024:.2f} MB")
         start_time = time.time()
         
-        # 1. 检查文件类型
+        # 1. 检查文件类型并选择解析器（白名单验证）
         print(f"🔍 Step 1/6: Checking file type...")
         file_ext = os.path.splitext(file.original_name)[1].lower()
-        if file_ext not in self.loaders:
+        
+        # 验证文件类型是否在白名单中
+        from app.utils.file_validation import FileValidator
+        if not FileValidator.is_supported_document(file.original_name):
             raise ValueError(f"Unsupported file type: {file_ext}")
-        print(f"✅ File type: {file_ext} - supported")
+        
+        # 选择合适的解析器
+        if file_ext in self.specialized_loaders:
+            loader_class = self.specialized_loaders[file_ext]
+            print(f"✅ File type: {file_ext} - using specialized loader: {loader_class.__name__}")
+        else:
+            loader_class = self.text_loader
+            print(f"✅ File type: {file_ext} - using TextLoader")
         
         # 2. 加载文档
         print(f"📖 Step 2/6: Loading document content...")
-        loader_class = self.loaders[file_ext]
-        loader = loader_class(file_path)
-        documents = loader.load()
+        try:
+            loader = loader_class(file_path)
+            documents = loader.load()
+        except Exception as e:
+            raise ValueError(f"Failed to parse file {file.original_name}: {str(e)}")
         total_chars = sum(len(doc.page_content) for doc in documents)
         print(f"✅ Loaded {len(documents)} documents, {total_chars:,} characters total")
         

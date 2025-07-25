@@ -9,6 +9,7 @@ from app.models.physical_file import PhysicalFile
 from app.models.user import User
 from app.core.config import settings
 from app.services.local_file_storage import local_file_storage
+from app.utils.file_validation import validate_temporary_file_upload
 import hashlib
 import logging
 
@@ -30,6 +31,12 @@ class TemporaryFileService:
         """
         try:
             logger.info(f"📤 上传临时文件: {file.filename} ({user.username})")
+            
+            # 验证文件类型（文档+图片）
+            valid, error_msg = validate_temporary_file_upload(file.filename)
+            if not valid:
+                logger.error(f"文件类型验证失败: {error_msg}")
+                raise HTTPException(status_code=400, detail=error_msg)
             
             # 使用现有的本地文件存储，临时文件也用course_id=0, folder_id=0
             file_path, local_path = local_file_storage.upload_file(file, course_id=0, folder_id=0)
