@@ -9,13 +9,15 @@ class MessageFileReference(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     message_id = Column(Integer, ForeignKey("messages.id", ondelete="CASCADE"), nullable=False)
-    file_id = Column(Integer, ForeignKey("files.id"), nullable=False)
-    reference_type = Column(Enum('file', 'folder', name='reference_type'), nullable=False)
+    file_id = Column(Integer, ForeignKey("files.id"), nullable=True)  # 改为可选，支持临时文件
+    temporary_file_id = Column(Integer, ForeignKey("temporary_files.id"), nullable=True)  # 新增临时文件引用
+    reference_type = Column(Enum('file', 'folder', 'temporary_file', name='reference_type'), nullable=False)
     created_at = Column(DateTime, default=func.now())
     
     # 关系
     message = relationship("Message", back_populates="file_references")
     file = relationship("File")
+    temporary_file = relationship("TemporaryFile")
 
 
 class MessageRAGSource(Base):

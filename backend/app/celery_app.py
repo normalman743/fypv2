@@ -12,7 +12,7 @@ celery_app = Celery(
     "campus_llm",
     broker=os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0"),
     backend=os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/0"),
-    include=["app.tasks.file_processing"]
+    include=["app.tasks.file_processing", "app.tasks.cleanup_tasks"]
 )
 
 # Celery配置
@@ -27,6 +27,7 @@ celery_app.conf.update(
     # 任务路由
     task_routes={
         "app.tasks.file_processing.*": {"queue": "file_processing"},
+        "app.tasks.cleanup_tasks.*": {"queue": "cleanup"},
     },
     
     # 工作进程配置
@@ -43,3 +44,13 @@ celery_app.conf.update(
     task_default_retry_delay=60,  # 重试延迟60秒
     task_max_retries=3,
 )
+
+# 配置定时任务
+from celery.schedules import crontab
+
+celery_app.conf.beat_schedule = {
+    'cleanup-expired-temporary-files': {
+        'task': 'app.tasks.cleanup_tasks.cleanup_expired_temporary_files',
+        'schedule': crontab(minute='0'),  # 每小时执行一次
+    },
+}

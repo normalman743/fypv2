@@ -112,3 +112,6 @@ python -m pytest test_specific_module.py -v
 - [ ] 对比三者找出不一致之处
 - [ ] 优先以数据库结构为准，更新API文档和实现
 
+
+
+### 注意 不要再main上开发 每次改bug 测试新功能使用new branch

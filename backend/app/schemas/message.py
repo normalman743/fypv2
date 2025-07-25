@@ -31,6 +31,7 @@ class SendMessageRequest(BaseModel):
     content: str
     file_ids: Optional[List[int]] = []
     folder_ids: Optional[List[int]] = []
+    temporary_file_tokens: Optional[List[str]] = []  # 临时文件通过token引用
 
 class EditMessageRequest(BaseModel):
     content: str

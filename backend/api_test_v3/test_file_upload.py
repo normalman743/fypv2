@@ -284,6 +284,196 @@ def test_file_sharing():
             print("\n2️⃣ 文件分享功能测试")
             print("   (需要实际文件ID来测试分享功能)")
 
+def test_temporary_file_upload():
+    """测试临时文件上传功能"""
+    print("\n📤 临时文件上传测试")
+    print("=" * 50)
+    
+    client = APIClient()
+    
+    # 获取用户权限
+    user_token = get_user_token("user")
+    if not user_token:
+        print("❌ 无法获取用户token，跳过测试")
+        return None, None
+    
+    client.set_auth_token(user_token)
+    
+    # 使用指定的测试文件
+    test_file_path = '/Users/mannormal/Downloads/fyp/test_file/算法复杂度分析简介.txt'
+    
+    # 检查文件是否存在
+    if not os.path.exists(test_file_path):
+        print(f"❌ 测试文件不存在: {test_file_path}")
+        # fallback到创建临时文件
+        test_file_path = create_test_file()
+        use_real_file = False
+    else:
+        use_real_file = True
+        print(f"✅ 使用真实测试文件: {test_file_path}")
+    
+    try:
+        # 1. 上传临时文件 - POST /api/v1/files/temporary
+        print("\n1️⃣ 上传临时文件")
+        
+        with open(test_file_path, 'rb') as f:
+            files = {'file': (os.path.basename(test_file_path), f, 'text/plain')}
+            data = {
+                'purpose': 'chat_upload'
+                # 不指定expiry_hours，使用配置默认值
+            }
+            upload_response = client.post("/api/v1/files/temporary", files=files, data=data)
+            print_response(upload_response, "上传临时文件")
+            
+            temp_file_id = None
+            temp_file_token = None
+            if upload_response.status_code == 200:
+                result = upload_response.json()
+                if result.get("success"):
+                    temp_file_id = result["data"]["file"]["id"]
+                    temp_file_token = result["data"]["file"]["token"]
+                    expires_at = result["data"]["file"]["expires_at"]
+                    print(f"✅ 临时文件上传成功")
+                    print(f"   文件ID: {temp_file_id}")
+                    print(f"   访问Token: {temp_file_token}")
+                    print(f"   过期时间: {expires_at}")
+                    print(f"   文件大小: {result['data']['file']['file_size']} bytes")
+                    
+                    # 2. 通过token下载临时文件 - GET /api/v1/files/temporary/{token}/download
+                    print(f"\n2️⃣ 通过token下载临时文件")
+                    download_response = client.get(f"/api/v1/files/temporary/{temp_file_token}/download")
+                    if download_response.status_code == 200:
+                        print("✅ 临时文件下载成功")
+                        print(f"   Content-Type: {download_response.headers.get('content-type', 'N/A')}")
+                        print(f"   Content-Length: {download_response.headers.get('content-length', 'N/A')}")
+                        # 显示文件内容前100个字符
+                        content_preview = download_response.content.decode('utf-8', errors='ignore')[:100]
+                        print(f"   内容预览: {content_preview}...")
+                    else:
+                        print_response(download_response, "下载临时文件")
+                    
+                    return temp_file_id, temp_file_token
+    
+    finally:
+        # 只清理我们创建的临时文件，不删除真实测试文件
+        if not use_real_file:
+            try:
+                os.unlink(test_file_path)
+            except:
+                pass
+    
+    return None, None
+
+def test_temporary_file_in_chat():
+    """测试在聊天中使用临时文件"""
+    print("\n💬 聊天中使用临时文件测试")
+    print("=" * 50)
+    
+    client = APIClient()
+    
+    # 获取用户权限
+    user_token = get_user_token("user")
+    if not user_token:
+        print("❌ 无法获取用户token，跳过测试")
+        return
+    
+    client.set_auth_token(user_token)
+    
+    # 先上传临时文件
+    temp_file_id, temp_file_token = test_temporary_file_upload()
+    if not temp_file_token:
+        print("❌ 临时文件上传失败，跳过聊天测试")
+        return
+    
+    try:
+        # 1. 创建聊天
+        print("\n1️⃣ 创建新聊天")
+        
+        # 获取课程ID
+        courses_response = client.get("/api/v1/courses")
+        course_id = None
+        if courses_response.status_code == 200:
+            result = courses_response.json()
+            if result.get("success") and result["data"]["courses"]:
+                course_id = result["data"]["courses"][0]["id"]
+        
+        if not course_id:
+            print("❌ 无法获取课程ID，跳过测试")
+            return
+        
+        chat_data = {
+            "title": "临时文件测试聊天",
+            "chat_type": "course_qa",
+            "course_id": course_id
+        }
+        
+        create_chat_response = client.post("/api/v1/chats", json=chat_data)
+        print_response(create_chat_response, "创建聊天")
+        
+        chat_id = None
+        if create_chat_response.status_code == 200:
+            result = create_chat_response.json()
+            if result.get("success"):
+                chat_id = result["data"]["chat"]["id"]
+                print(f"✅ 聊天创建成功，ID: {chat_id}")
+        
+        if not chat_id:
+            print("❌ 聊天创建失败")
+            return
+        
+        # 2. 发送包含临时文件的消息
+        print(f"\n2️⃣ 发送包含临时文件的消息")
+        message_data = {
+            "content": "请分析这个文件中的算法复杂度内容，并给出总结",
+            "temporary_file_tokens": [temp_file_token]
+        }
+        
+        print(f"📤 发送消息到聊天 {chat_id}，包含临时文件token: {temp_file_token[:16]}...")
+        send_message_response = client.post(f"/api/v1/chats/{chat_id}/messages", json=message_data)
+        print_response(send_message_response, "发送包含临时文件的消息", show_full_response=True)
+        
+        # 3. 获取聊天消息历史
+        print(f"\n3️⃣ 获取聊天消息历史")
+        messages_response = client.get(f"/api/v1/chats/{chat_id}/messages")
+        if messages_response.status_code == 200:
+            result = messages_response.json()
+            if result.get("success"):
+                messages = result["data"]["messages"]
+                print(f"✅ 获取到 {len(messages)} 条消息")
+                
+                for i, msg in enumerate(messages, 1):
+                    print(f"\n   消息 {i} ({msg['role']}):")
+                    print(f"   内容: {msg['content'][:100]}...")
+                    if msg.get('file_attachments'):
+                        print(f"   附件: {len(msg['file_attachments'])} 个")
+                        for att in msg['file_attachments']:
+                            if att.get('is_temporary'):
+                                print(f"     - 临时文件: {att['original_name']} (过期: {att.get('expires_at', 'N/A')})")
+                            else:
+                                print(f"     - 普通文件: {att['original_name']}")
+        
+        # 4. 测试过期文件处理（可选）
+        print(f"\n4️⃣ 测试过期文件处理")
+        print("   (需要等待文件过期或手动删除文件来测试过期逻辑)")
+        
+    except Exception as e:
+        print(f"❌ 聊天测试过程中发生错误: {str(e)}")
+        import traceback
+        traceback.print_exc()
+    
+    finally:
+        # 清理临时文件
+        if temp_file_id:
+            try:
+                print(f"\n🧹 清理临时文件 {temp_file_id}")
+                delete_response = client.delete(f"/api/v1/files/temporary/{temp_file_id}")
+                if delete_response.status_code == 200:
+                    print("✅ 临时文件清理成功")
+                else:
+                    print_response(delete_response, "清理临时文件")
+            except Exception as cleanup_error:
+                print(f"❌ 清理临时文件失败: {cleanup_error}")
+
 def test_file_deletion():
     """测试文件删除功能"""
     print("\n🗑️ 文件删除测试")
@@ -360,6 +550,12 @@ if __name__ == "__main__":
         
         # 测试文件分享
         test_file_sharing()
+        
+        # 测试临时文件上传
+        test_temporary_file_upload()
+        
+        # 测试聊天中使用临时文件
+        test_temporary_file_in_chat()
         
         # 测试文件删除
         test_file_deletion()

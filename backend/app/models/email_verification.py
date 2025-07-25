@@ -2,7 +2,7 @@ from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Index
 from sqlalchemy.orm import relationship
 from datetime import datetime
 
-from app.db.base_class import Base
+from app.models.database import Base
 
 class EmailVerification(Base):
     __tablename__ = "email_verifications"

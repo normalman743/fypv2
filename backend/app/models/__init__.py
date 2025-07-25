@@ -24,6 +24,7 @@ from .permission import Permission, Role, SubjectRole  # 权限系统模型
 from .message_reference import MessageFileReference, MessageRAGSource  # 消息关联模型
 from .audit_log import AuditLog  # 审计日志模型
 from .system_config import SystemConfig  # 系统配置模型
+from .temporary_file import TemporaryFile  # 临时文件模型
 
 # Export all models
 __all__ = [
@@ -63,4 +64,5 @@ __all__ = [
     # System management
     'AuditLog',
     'SystemConfig',
+    'TemporaryFile',
 ]

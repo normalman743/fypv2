@@ -16,6 +16,9 @@ from datetime import datetime
 from dotenv import load_dotenv
 load_dotenv()
 
+# 禁用Chroma telemetry
+os.environ["ANONYMIZED_TELEMETRY"] = "False"
+
 # LangChain imports
 from langchain_community.document_loaders import (
     PyPDFLoader, 
@@ -166,33 +169,56 @@ class ProductionRAGService:
             处理结果信息
         """
         print(f"🚀 Processing file: {file.original_name} (ID: {file.id})")
+        file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
+        print(f"📋 File size: {file_size/1024/1024:.2f} MB")
         start_time = time.time()
         
         # 1. 检查文件类型
+        print(f"🔍 Step 1/6: Checking file type...")
         file_ext = os.path.splitext(file.original_name)[1].lower()
         if file_ext not in self.loaders:
             raise ValueError(f"Unsupported file type: {file_ext}")
+        print(f"✅ File type: {file_ext} - supported")
         
         # 2. 加载文档
+        print(f"📖 Step 2/6: Loading document content...")
         loader_class = self.loaders[file_ext]
         loader = loader_class(file_path)
         documents = loader.load()
+        total_chars = sum(len(doc.page_content) for doc in documents)
+        print(f"✅ Loaded {len(documents)} documents, {total_chars:,} characters total")
         
         # 3. 分割文档
+        print(f"✂️ Step 3/6: Splitting documents into chunks...")
         chunks = self.text_splitter.split_documents(documents)
+        avg_chunk_size = sum(len(chunk.page_content) for chunk in chunks) // len(chunks) if chunks else 0
+        print(f"✅ Created {len(chunks)} chunks, average size: {avg_chunk_size} characters")
         
         # 4. 添加元数据
+        print(f"🏷️ Step 4/6: Adding metadata to chunks...")
+        
+        # 根据文件名确定贡献者
+        contributor_name = "unknown"
+        if file.original_name == "post_messages.txt":
+            contributor_name = "triple u"
+        # 可以继续添加其他文件的贡献者映射
+        
         for i, chunk in enumerate(chunks):
+            if i % 100 == 0 and i > 0:  # 每100个chunk输出一次进度
+                print(f"   📝 Processing metadata: {i}/{len(chunks)} chunks ({i/len(chunks)*100:.1f}%)")
             chunk.metadata.update({
                 "file_id": str(file.id),
                 "course_id": str(file.course_id) if hasattr(file, "course_id") and getattr(file, "course_id", None) else "global",
                 "filename": file.original_name,
                 "file_type": getattr(file, "file_type", "global"),
                 "chunk_id": i,
-                "processed_at": datetime.now().isoformat()
+                "processed_at": datetime.now().isoformat(),
+                "contributor": contributor_name  # 新增贡献者信息
             })
+        print(f"✅ Metadata added to all {len(chunks)} chunks")
         
         # 5. 根据文件作用域确定集合名称
+        print(f"📂 Step 5/6: Determining vector collection...")
         file_scope = getattr(file, "scope", "course")
         if file_scope == "global":
             collection_name = "global"
@@ -200,10 +226,21 @@ class ProductionRAGService:
             collection_name = f"course_{file.course_id}"
         else:
             collection_name = "personal"
+        print(f"✅ Using collection: {collection_name}")
         
         # 6. 存储到向量数据库
+        print(f"🧠 Step 6/6: Creating embeddings and storing to vector database...")
+        print(f"   ⚠️ This may take a while for large files (embedding {len(chunks)} chunks)...")
         vectorstore = self._get_or_create_vectorstore(collection_name)
-        vectorstore.add_documents(chunks)
+        
+        # 分批处理chunks以显示进度
+        batch_size = 50
+        for i in range(0, len(chunks), batch_size):
+            batch = chunks[i:i+batch_size]
+            print(f"   🔄 Processing embeddings batch {i//batch_size + 1}/{(len(chunks)-1)//batch_size + 1} ({i+len(batch)}/{len(chunks)} chunks)")
+            vectorstore.add_documents(batch)
+        
+        print(f"✅ All chunks stored in vector database")
         
         # 7. 同步保存文档切片到数据库
         if self.db_session:
@@ -370,6 +407,64 @@ class ProductionRAGService:
                 stats["collections"][collection_name] = "unknown"
         
         return stats
+    
+    def remove_file_chunks(self, file_id: int):
+        """
+        从向量数据库和MySQL数据库中删除指定文件的所有chunks
+        
+        Args:
+            file_id: 文件ID
+        """
+        print(f"🗑️ Removing chunks for file {file_id} from both vector and MySQL databases")
+        
+        try:
+            # 1. 从MySQL数据库删除chunks
+            if self.db_session:
+                print(f"📊 Deleting chunks from MySQL database...")
+                deleted_count = self.db_session.query(DocumentChunk).filter(
+                    DocumentChunk.file_id == file_id
+                ).delete()
+                self.db_session.commit()
+                print(f"✅ Deleted {deleted_count} chunks from MySQL database")
+            else:
+                print(f"⚠️ Database session not available, skipping MySQL cleanup")
+            
+            # 2. 从向量数据库删除chunks
+            print(f"🧠 Deleting chunks from vector databases...")
+            removed_vector_count = 0
+            
+            # 遍历所有collection查找并删除相关chunks
+            for collection_name, vectorstore in self.vectorstores.items():
+                try:
+                    # 获取collection中的所有文档
+                    collection = vectorstore._collection
+                    results = collection.get(include=['metadatas'])
+                    
+                    # 找到匹配file_id的文档ID
+                    ids_to_delete = []
+                    if results['metadatas']:
+                        for i, metadata in enumerate(results['metadatas']):
+                            if metadata and metadata.get('file_id') == str(file_id):
+                                ids_to_delete.append(results['ids'][i])
+                    
+                    # 删除匹配的文档
+                    if ids_to_delete:
+                        collection.delete(ids=ids_to_delete)
+                        removed_vector_count += len(ids_to_delete)
+                        print(f"   ✅ Deleted {len(ids_to_delete)} chunks from collection '{collection_name}'")
+                    
+                except Exception as e:
+                    print(f"   ⚠️ Failed to delete from collection '{collection_name}': {e}")
+                    continue
+            
+            print(f"✅ Successfully removed {removed_vector_count} chunks from vector databases")
+            print(f"🎯 File {file_id} cleanup completed")
+            
+        except Exception as e:
+            print(f"❌ Error removing chunks for file {file_id}: {e}")
+            if self.db_session:
+                self.db_session.rollback()
+            raise
 
 
 # 全局RAG服务实例 - 单例模式

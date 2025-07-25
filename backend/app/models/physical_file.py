@@ -15,3 +15,4 @@ class PhysicalFile(Base):
 
     # 关系
     files = relationship("File", back_populates="physical_file")
+    temporary_files = relationship("TemporaryFile", back_populates="physical_file")

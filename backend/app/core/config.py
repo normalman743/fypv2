@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     max_file_size: int = int(os.getenv("MAX_FILE_SIZE", str(50 * 1024 * 1024)))  # 50MB
     allowed_extensions: str = os.getenv("ALLOWED_EXTENSIONS", "pdf,doc,docx,txt,md")
     
+    # 临时文件配置
+    temporary_file_expiry_hours: int = int(os.getenv("TEMPORARY_FILE_EXPIRY_HOURS", "5"))  # 默认5小时
+    
     # AI 和 RAG 配置
     openai_api_key: Optional[str] = os.getenv("OPENAI_API_KEY")
     chroma_data_dir: str = os.getenv("CHROMA_DATA_DIR", "./data/chroma")
@@ -59,7 +62,7 @@ class Settings(BaseSettings):
     
     # 邮件配置
     resend_api_key: str = os.getenv("RESEND_API_KEY", "")
-    email_from_address: str = os.getenv("EMAIL_ADDRESS", "no-reply@api.584743.xyz")
+    email_from_address: str = os.getenv("EMAIL_ADDRESS", "no-reply@icu.584743.xyz")
     email_domain_restriction: str = os.getenv("EMAIL_DOMAIN_RESTRICTION", "")
     verification_code_expire_minutes: int = int(os.getenv("VERIFICATION_CODE_EXPIRE_MINUTES", "5"))
     
@@ -84,5 +87,6 @@ class Settings(BaseSettings):
     
     class Config:
         env_file = ".env"
+        extra = "ignore"  # 忽略额外的环境变量
 
 settings = Settings()

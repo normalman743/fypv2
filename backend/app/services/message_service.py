@@ -1,6 +1,7 @@
 from typing import List, Optional
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError
+import logging
 
 from app.models.chat import Chat
 from app.models.message import Message
@@ -8,9 +9,12 @@ from app.models.file import File
 from app.models.folder import Folder
 from app.models.course import Course
 from app.models.message_reference import MessageFileReference, MessageRAGSource
+from app.models.temporary_file import TemporaryFile
 from app.schemas.message import SendMessageRequest, EditMessageRequest
 from app.services.production_ai_service import create_ai_service
 from app.core.exceptions import NotFoundError, ForbiddenError, BadRequestError
+
+logger = logging.getLogger(__name__)
 
 
 class MessageService:
@@ -105,6 +109,9 @@ class MessageService:
     def send_message(self, chat_id: int, message_data: SendMessageRequest, user_id: int) -> dict:
         """Send message and get AI response"""
         
+        logger.info(f"📨 发送消息到聊天 {chat_id}，用户 {user_id}")
+        logger.info(f"   消息内容: {message_data.content[:100]}{'...' if len(message_data.content) > 100 else ''}")
+        
         # Check if chat exists and user has access
         chat = self.db.query(Chat).options(joinedload(Chat.course)).filter(
             Chat.id == chat_id,
@@ -120,11 +127,69 @@ class MessageService:
             user_id
         )
         
-        # 获取文件内容用于AI上下文
+        if files:
+            logger.info(f"📎 附加了 {len(files)} 个普通文件: {[f.original_name for f in files]}")
+        
+        # 处理临时文件
+        temporary_files = []
+        expired_file_info = []
+        if message_data.temporary_file_tokens:
+            logger.info(f"🔄 处理 {len(message_data.temporary_file_tokens)} 个临时文件")
+            for i, token in enumerate(message_data.temporary_file_tokens, 1):
+                temp_file = self.db.query(TemporaryFile).filter(
+                    TemporaryFile.token == token,
+                    TemporaryFile.user_id == user_id  # 验证文件属于当前用户
+                ).first()
+                
+                if not temp_file:
+                    # 文件不存在，可能已被删除
+                    logger.warning(f"   ❌ 临时文件 {i}: token {token[:8]}... 不存在或已被删除")
+                    expired_file_info.append(f"临时文件 (token: {token[:8]}...) 不存在或已被删除，用户可能需要重新上传")
+                    continue
+                
+                if temp_file.is_expired:
+                    # 文件已过期，记录信息但不阻止对话
+                    logger.warning(f"   ⏰ 临时文件 {i}: '{temp_file.original_name}' 已过期 ({temp_file.expires_at})")
+                    expired_file_info.append(f"临时文件 '{temp_file.original_name}' 已于 {temp_file.expires_at.strftime('%Y-%m-%d %H:%M:%S')} 过期，用户可能需要重新上传")
+                    continue
+                
+                logger.info(f"   ✅ 临时文件 {i}: '{temp_file.original_name}' ({temp_file.file_size} bytes)")
+                temporary_files.append(temp_file)
+        
+        # 获取文件内容用于AI上下文（包括临时文件）
         file_context = self._get_file_contents_for_ai(files)
+        
+        # 添加临时文件内容到上下文
+        if temporary_files:
+            temp_context_parts = []
+            for temp_file in temporary_files:
+                # 读取临时文件内容预览
+                if temp_file.physical_file:
+                    try:
+                        with open(temp_file.physical_file.storage_path, 'r', encoding='utf-8') as f:
+                            content_preview = f.read(1000)  # 读取前1000个字符作为预览
+                            temp_context_parts.append(f"临时文件: {temp_file.original_name}\n内容预览:\n{content_preview}\n")
+                    except:
+                        # 如果无法读取文件内容，仅添加文件名
+                        temp_context_parts.append(f"临时文件: {temp_file.original_name}\n")
+            
+            if temp_context_parts:
+                file_context += "\n" + "="*50 + "\n".join(temp_context_parts)
+        
+        # 添加过期文件信息到上下文
+        if expired_file_info:
+            logger.warning(f"⚠️ 有 {len(expired_file_info)} 个文件无法访问，将告知AI")
+            file_context += "\n" + "="*50 + "\n注意：以下文件无法访问：\n" + "\n".join(expired_file_info) + "\n"
+
+        # 记录上下文信息
+        if file_context:
+            context_preview = file_context[:200].replace('\n', ' ')
+            logger.info(f"📋 文件上下文长度: {len(file_context)} 字符")
+            logger.info(f"   预览: {context_preview}...")
 
         try:
             # Create user message
+            logger.info(f"💾 创建用户消息记录")
             user_message = Message(
                 chat_id=chat_id,
                 content=message_data.content,
@@ -160,16 +225,40 @@ class MessageService:
                         reference_type='folder'
                     )
                     self.db.add(folder_ref)
+            
+            # Add temporary file references
+            for temp_file in temporary_files:
+                temp_attachment = MessageFileReference(
+                    message_id=user_message.id,
+                    temporary_file_id=temp_file.id,
+                    reference_type='temporary_file'
+                )
+                self.db.add(temp_attachment)
+                file_attachments.append({
+                    "id": temp_file.id,
+                    "filename": temp_file.original_name,
+                    "original_name": temp_file.original_name,
+                    "file_size": temp_file.file_size,
+                    "is_temporary": True,
+                    "token": temp_file.token
+                })
 
             # Generate AI response with file context
+            logger.info(f"🤖 调用AI服务生成回复...")
             ai_response = self.ai_service.generate_response(
                 message=message_data.content,
                 chat_type=chat.chat_type,
                 course_id=chat.course_id,
                 file_context=file_context
             )
+            
+            logger.info(f"✅ AI回复生成完成")
+            logger.info(f"   回复长度: {len(ai_response.content)} 字符")
+            logger.info(f"   使用token: {ai_response.tokens_used}")
+            logger.info(f"   花费: ${ai_response.cost:.4f}")
 
             # Create AI message
+            logger.info(f"💾 创建AI消息记录")
             ai_message = Message(
                 chat_id=chat_id,
                 content=ai_response.content,
@@ -182,6 +271,7 @@ class MessageService:
 
             # Add RAG sources (V2.1: 存储在message的rag_sources JSON字段中)
             if hasattr(ai_response, 'rag_sources') and ai_response.rag_sources:
+                logger.info(f"📚 添加 {len(ai_response.rag_sources)} 个RAG来源")
                 ai_message.rag_sources = ai_response.rag_sources
 
             # Check if this is the first user message (excluding system messages)
@@ -195,9 +285,11 @@ class MessageService:
             
             # If this is the first user message and chat has default title, update it
             if message_count == 1 and chat.title == "新聊天":
+                logger.info(f"🏷️ 生成聊天标题...")
                 new_chat_title = self.ai_service.generate_chat_title(message_data.content)
                 chat.title = new_chat_title
                 chat_title_updated = True
+                logger.info(f"   新标题: {new_chat_title}")
 
             # Update chat timestamp
             self.db.query(Chat).filter(Chat.id == chat_id).update({
@@ -205,6 +297,7 @@ class MessageService:
             })
 
             self.db.commit()
+            logger.info(f"✅ 消息对话完成，用户消息ID: {user_message.id}，AI消息ID: {ai_message.id}")
 
             # Build response
             return {
@@ -285,12 +378,28 @@ class MessageService:
         file_attachments = []
         if hasattr(message, 'file_references') and message.file_references:
             for attachment in message.file_references:
-                file_attachments.append({
-                    "id": attachment.file_id,
-                    "filename": attachment.file.original_name if attachment.file else f"file_{attachment.file_id}",
-                    "original_name": attachment.file.original_name if attachment.file else f"file_{attachment.file_id}",
-                    "file_size": attachment.file.file_size if attachment.file else 0
-                })
+                if attachment.reference_type == 'temporary_file' and attachment.temporary_file:
+                    # 临时文件
+                    temp_file = attachment.temporary_file
+                    file_attachments.append({
+                        "id": temp_file.id,
+                        "filename": temp_file.original_name,
+                        "original_name": temp_file.original_name,
+                        "file_size": temp_file.file_size,
+                        "is_temporary": True,
+                        "token": temp_file.token,
+                        "expires_at": temp_file.expires_at.isoformat(),
+                        "is_expired": temp_file.is_expired
+                    })
+                elif attachment.reference_type == 'file' and attachment.file:
+                    # 普通文件
+                    file_attachments.append({
+                        "id": attachment.file.id,
+                        "filename": attachment.file.original_name,
+                        "original_name": attachment.file.original_name,
+                        "file_size": attachment.file.file_size,
+                        "is_temporary": False
+                    })
 
         rag_sources = []
         if hasattr(message, 'rag_sources_tracked') and message.rag_sources_tracked:

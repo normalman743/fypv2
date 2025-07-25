@@ -85,6 +85,26 @@ class TestConfig:
             "code": "USER2024", 
             "description": "普通用户邀请码",
             "is_active": True
+        },
+        {
+            "code": "TEST2024",
+            "description": "测试邀请码",
+            "is_active": True
+        },
+        {
+            "code": "INVITE2025",
+            "description": "默认邀请码",
+            "is_active": True
+        },
+        {
+            "code": "TEST2025",
+            "description": "测试邀请码2025",
+            "is_active": True
+        },
+        {
+            "code": "TEST2026",
+            "description": "测试邀请码2026",
+            "is_active": True
         }
     ]
 

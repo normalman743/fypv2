@@ -11,12 +11,61 @@ from app.schemas.file import (
     FilePreviewResponse,
     UploadFileResponse,
     FileResponse,
-    FolderInfo
+    FolderInfo,
+    UploadTemporaryFileResponse,
+    TemporaryFileResponse
 )
 from app.schemas.common import SuccessResponse
 from app.models.user import User
 
 router = APIRouter(tags=["files"])
+
+
+@router.post("/files/temporary", response_model=UploadTemporaryFileResponse, operation_id="upload_temporary_file")
+async def upload_temporary_file(
+    file: UploadFile = File(...),
+    purpose: Optional[str] = Form(None, description="文件用途，如 'chat_upload', 'preview' 等"),
+    expiry_hours: Optional[int] = Form(None, description="过期时间（小时），默认从配置读取"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    上传临时文件
+    
+    临时文件特点：
+    - 不需要关联到特定课程
+    - 自动在指定时间后删除（默认从配置读取）
+    - 通过唯一token访问
+    - 适用于聊天上传、预览等临时用途
+    """
+    from app.services.temporary_file_service import TemporaryFileService
+    
+    service = TemporaryFileService()
+    temp_file = await service.upload_temporary_file(
+        db=db,
+        user=current_user,
+        file=file,
+        purpose=purpose,
+        expiry_hours=expiry_hours
+    )
+    
+    # Convert to response format
+    file_data = TemporaryFileResponse(
+        id=temp_file.id,
+        token=temp_file.token,
+        original_name=temp_file.original_name,
+        file_type=temp_file.file_type,
+        file_size=temp_file.file_size,
+        mime_type=temp_file.mime_type,
+        expires_at=temp_file.expires_at,
+        purpose=temp_file.purpose,
+        created_at=temp_file.created_at
+    )
+    
+    return UploadTemporaryFileResponse(
+        success=True,
+        data={"file": file_data.model_dump()}
+    )
 
 
 @router.post("/files/upload", response_model=UploadFileResponse, operation_id="upload_course_file")
@@ -186,6 +235,68 @@ async def download_file(
             "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
         }
     )
+
+
+@router.get("/files/temporary/{token}/download")
+async def download_temporary_file(
+    token: str = Path(..., description="临时文件访问token"),
+    db: Session = Depends(get_db)
+):
+    """
+    下载临时文件
+    
+    通过token访问临时文件，不需要登录验证
+    """
+    from app.services.temporary_file_service import TemporaryFileService
+    
+    service = TemporaryFileService()
+    temp_file = service.get_temporary_file_by_token(db, token)
+    
+    if not temp_file:
+        raise HTTPException(status_code=404, detail="文件不存在或已过期")
+    
+    # 读取文件内容
+    physical_file = temp_file.physical_file
+    with open(physical_file.storage_path, 'rb') as f:
+        content = f.read()
+    
+    # Encode filename properly for Content-Disposition header
+    from urllib.parse import quote
+    encoded_filename = quote(temp_file.original_name.encode('utf-8'))
+    
+    return StreamingResponse(
+        io.BytesIO(content),
+        media_type=temp_file.mime_type,
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
+        }
+    )
+
+
+@router.delete("/files/temporary/{file_id}", response_model=SuccessResponse)
+async def delete_temporary_file(
+    file_id: int = Path(..., description="临时文件ID"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    删除临时文件
+    
+    只能删除自己上传的临时文件
+    """
+    from app.services.temporary_file_service import TemporaryFileService
+    
+    service = TemporaryFileService()
+    temp_file = service.get_temporary_file_by_id(db, file_id, current_user.id)
+    
+    if not temp_file:
+        raise HTTPException(status_code=404, detail="文件不存在或已过期")
+    
+    success = service.delete_temporary_file(db, temp_file)
+    if not success:
+        raise HTTPException(status_code=500, detail="删除文件失败")
+    
+    return SuccessResponse(success=True)
 
 
 @router.delete("/files/{file_id}", response_model=SuccessResponse, operation_id="delete_course_file")

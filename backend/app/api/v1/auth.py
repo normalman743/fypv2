@@ -196,6 +196,8 @@ async def update_me(
         current_user.preferred_language = user_data.preferred_language
     if user_data.preferred_theme:
         current_user.preferred_theme = user_data.preferred_theme
+    if user_data.last_opened_semester_id:
+        current_user.last_opened_semester_id = user_data.last_opened_semester_id
     db.commit()
     db.refresh(current_user)
     return SuccessResponse(
