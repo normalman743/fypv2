@@ -143,8 +143,9 @@ class EmailProcessor:
             <hr style="border: none; border-top: 1px solid #dee2e6; margin: 30px 0;">
             
             <div style="text-align: center; color: #6c757d; font-size: 12px;">
+                <p>这是一个自动回复邮箱请不要回复。</p>
                 <p>此邮件由校园LLM系统自动发送，请勿直接回复。</p>
-                <p>如需联系，请发送邮件至 <a href="mailto:support@icu.584743.xyz" style="color: #6c757d;">support@icu.584743.xyz</a></p>
+                <p>遇到问题请发邮件到 <a href="mailto:support@icu.584743.xyz" style="color: #6c757d;">support@icu.584743.xyz</a></p>
             </div>
         </div>
         """
