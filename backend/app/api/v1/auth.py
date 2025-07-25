@@ -48,8 +48,10 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
     
     # 检查邮箱域名限制
     if settings.registration_email_verification and settings.allowed_email_domains_list:
+
+        email_domain = user_data.email.split('@')[-1] if '@' in user_data.email else ""
         email_domain_valid = any(
-            user_data.email.endswith(f"@{domain}") or user_data.email.endswith(f".{domain}")
+            email_domain == domain or email_domain.endswith(f".{domain}")
             for domain in settings.allowed_email_domains_list
         )
         if not email_domain_valid:
@@ -59,19 +61,25 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
                     success=False,
                     error={
                         "code": "INVALID_EMAIL_DOMAIN",
-                        "message": f"邮箱必须以以下域名结尾: {', '.join(settings.allowed_email_domains_list)}"
+                        "message": f"邮箱域名必须是: {', '.join(settings.allowed_email_domains_list)}"
                     }
                 ).model_dump()
             )
     
     # 检查邀请码（如果启用）
+    print(f"User invite code: {user_data.invite_code}")
+    print(f"Invite code list: {settings.registration_invite_code_verification}")
+    invite_code_obj = None
     if settings.registration_invite_code_verification:
-        invite_code = db.query(InviteCode).filter(
+        print(f"Checking invite code: {user_data.invite_code}")
+        invite_code_obj = db.query(InviteCode).filter(
             InviteCode.code == user_data.invite_code,
             InviteCode.is_used == False,
             InviteCode.expires_at > datetime.now()
         ).first()
-        if not invite_code:
+        print(f"Invite code query result: {invite_code_obj}")
+        if not invite_code_obj:
+            print("Invite code is invalid or expired.")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=ErrorResponse(
@@ -79,7 +87,8 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
                     error={"code": "INVALID_INVITE_CODE", "message": "邀请码无效或已过期"}
                 ).model_dump()
             )
-    
+        else:
+            print(f"Invite code {user_data.invite_code} is valid and not used.")
     # 创建用户
     hashed_password = get_password_hash(user_data.password)
     user = User(
@@ -91,8 +100,8 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
     db.add(user)
     
     # 标记邀请码为已使用（如果启用）
-    if settings.registration_invite_code_verification and 'invite_code' in locals():
-        invite_code.is_used = True
+    if settings.registration_invite_code_verification and invite_code_obj:
+        invite_code_obj.is_used = True
     
     db.commit()
     db.refresh(user)
@@ -172,6 +181,7 @@ async def update_me(
     # 检查邮箱是否已被其他用户使用
     if user_data.email and user_data.email != current_user.email:
         # 如果启用邮箱验证，禁止修改邮箱
+
         if settings.registration_email_verification:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

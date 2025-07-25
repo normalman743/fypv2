@@ -62,21 +62,48 @@ class EmailService:
                     resend.Emails.send({
                         "from": settings.email_from_address,
                         "to": user.email,
-                        "subject": "校园LLM系统 - 邮箱验证码",
+                        "subject": "🌟 欢迎加入ICU智能学习助手！",
                         "html": f"""
-                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                            <h2>邮箱验证</h2>
-                            <p>您好 {user.username}，</p>
-                            <p>您的验证码是：</p>
-                            <h1 style="color: #333; text-align: center; font-size: 36px; letter-spacing: 5px;">
-                                {code}
-                            </h1>
-                            <p>验证码将在 {settings.verification_code_expire_minutes} 分钟内有效。</p>
-                            <p>如果您没有请求此验证码，请忽略此邮件。</p>
-                            <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
-                            <p style="color: #666; font-size: 12px;">
-                                此邮件由校园LLM系统自动发送，请勿回复。
-                            </p>
+                        <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 20px; border-radius: 15px;">
+                            <div style="background: white; padding: 40px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1);">
+                                <div style="text-align: center; margin-bottom: 30px;">
+                                    <h1 style="color: #667eea; font-size: 28px; margin: 0; font-weight: 700;">🏫 ICU智能学习助手</h1>
+                                    <div style="width: 50px; height: 3px; background: linear-gradient(90deg, #667eea, #764ba2); margin: 15px auto;"></div>
+                                </div>
+                                
+                                <div style="text-align: center; margin-bottom: 30px;">
+                                    <div style="background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%); width: 80px; height: 80px; border-radius: 50%; margin: 0 auto 15px; display: flex; align-items: center; justify-content: center; font-size: 40px;">⭐</div>
+                                    <h2 style="color: #333; font-size: 24px; margin: 0; font-weight: 600;">你好，{user.username}！</h2>
+                                    <p style="color: #666; font-size: 16px; margin: 10px 0; line-height: 1.6;">我是你的专属AI学习助手 <strong style="color: #667eea;">Star</strong>✨</p>
+                                </div>
+                                
+                                <div style="background: #f8f9ff; padding: 25px; border-radius: 12px; text-align: center; margin: 30px 0;">
+                                    <p style="color: #555; font-size: 16px; margin: 0 0 15px;">欢迎来到ICU智能学习平台！请使用以下验证码完成注册：</p>
+                                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; font-size: 42px; font-weight: bold; letter-spacing: 8px; padding: 20px; border-radius: 10px; margin: 20px 0; font-family: 'Courier New', monospace;">
+                                        {code}
+                                    </div>
+                                    <p style="color: #888; font-size: 14px; margin: 15px 0 0;">验证码有效期：<strong>{settings.verification_code_expire_minutes}分钟</strong></p>
+                                </div>
+                                
+                                <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 25px 0; border-radius: 5px;">
+                                    <p style="color: #856404; margin: 0; font-size: 14px;">🔒 为了您的账户安全，请不要将验证码分享给他人</p>
+                                </div>
+                                
+                                <div style="text-align: center; margin-top: 35px;">
+                                    <p style="color: #666; font-size: 14px; margin: 0; line-height: 1.5;">
+                                        即将开启你的智能学习之旅！🚀<br>
+                                        如果您没有申请注册，请忽略此邮件
+                                    </p>
+                                </div>
+                                
+                                <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+                                <div style="text-align: center;">
+                                    <p style="color: #999; font-size: 12px; margin: 0;">
+                                        💌 此邮件由ICU智能学习助手系统自动发送<br>
+                                        <span style="color: #667eea;">Star助手</span> 期待与你一起学习成长
+                                    </p>
+                                </div>
+                            </div>
                         </div>
                         """
                     })
