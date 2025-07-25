@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends, Path
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
+import json
 
 from app.dependencies import get_db, get_current_user
 from app.services.chat_service import ChatService
@@ -50,6 +52,9 @@ async def get_chats(
             course_id=chat.course_id,
             user_id=chat.user_id,
             custom_prompt=chat.custom_prompt,
+            ai_model=chat.ai_model,
+            search_enabled=chat.search_enabled,
+            context_mode=chat.context_mode,
             created_at=chat.created_at,
             updated_at=chat.updated_at,
             course=course_info,
@@ -63,7 +68,7 @@ async def get_chats(
     )
 
 
-@router.post("", response_model=ChatCreateResponse)
+@router.post("")
 async def create_chat(
     chat_data: CreateChatRequest,
     current_user: User = Depends(get_current_user),
@@ -71,12 +76,35 @@ async def create_chat(
 ):
     """Create chat with first message and AI response"""
     service = ChatService(db)
-    result = service.create_chat_with_first_message(chat_data, current_user.id)
     
-    return ChatCreateResponse(
-        success=True,
-        data=result
-    )
+    if chat_data.stream:
+        # 流式响应
+        def generate_stream():
+            try:
+                for chunk in service.create_chat_with_first_message_stream(chat_data, current_user.id):
+                    yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+                yield "data: [DONE]\n\n"
+            except Exception as e:
+                error_chunk = {"type": "error", "error": str(e)}
+                yield f"data: {json.dumps(error_chunk, ensure_ascii=False)}\n\n"
+        
+        return StreamingResponse(
+            generate_stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "*"
+            }
+        )
+    else:
+        # 非流式响应
+        result = service.create_chat_with_first_message(chat_data, current_user.id)
+        return ChatCreateResponse(
+            success=True,
+            data=result
+        )
 
 
 @router.put("/{chat_id}", response_model=ChatUpdateResponse)

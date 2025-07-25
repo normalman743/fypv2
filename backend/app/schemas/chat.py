@@ -18,6 +18,9 @@ class ChatResponse(BaseModel):
     course_id: Optional[int]
     user_id: int
     custom_prompt: Optional[str]
+    ai_model: str
+    search_enabled: bool
+    context_mode: str
     created_at: datetime
     updated_at: datetime
     course: Optional[CourseInfo] = None
@@ -31,9 +34,13 @@ class CreateChatRequest(BaseModel):
     first_message: str
     course_id: Optional[int] = None
     custom_prompt: Optional[str] = None
+    ai_model: str = "Star"  # "Star", "StarPlus", "StarCode"
+    search_enabled: bool = False
+    context_mode: str = "Standard"  # "Economy", "Standard", "Premium", "Max"
     file_ids: Optional[List[int]] = []
     folder_ids: Optional[List[int]] = []
     temporary_file_tokens: Optional[List[str]] = []
+    stream: bool = False  # 是否启用streaming模式
 
 class UpdateChatRequest(BaseModel):
     title: str

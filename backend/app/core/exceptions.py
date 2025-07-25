@@ -89,3 +89,18 @@ class InsufficientPermissionsError(HTTPException):
                 }
             }
         )
+
+
+class InsufficientBalanceError(HTTPException):
+    """余额不足异常 (402)"""
+    def __init__(self, detail: str = "余额不足，请充值后继续使用"):
+        super().__init__(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail={
+                "success": False,
+                "error": {
+                    "code": "INSUFFICIENT_BALANCE",
+                    "message": detail
+                }
+            }
+        )

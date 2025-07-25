@@ -116,14 +116,17 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
 @router.post("/login", response_model=SuccessResponse)
 async def login(user_data: UserLogin, db: Session = Depends(get_db)):
     """用户登录"""
-    user = db.query(User).filter(User.username == user_data.username).first()
+    # 支持用户名或邮箱登录
+    user = db.query(User).filter(
+        (User.username == user_data.username) | (User.email == user_data.username)
+    ).first()
     
     if not user or not verify_password(user_data.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=ErrorResponse(
                 success=False,
-                error={"code": "INVALID_CREDENTIALS", "message": "用户名或密码错误"}
+                error={"code": "INVALID_CREDENTIALS", "message": "用户名/邮箱或密码错误"}
             ).model_dump()
         )
     

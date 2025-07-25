@@ -8,6 +8,7 @@ from app.models.message import Message
 from app.models.file import File
 from app.models.folder import Folder
 from app.models.course import Course
+from app.models.user import User
 from app.models.message_reference import MessageFileReference, MessageRAGSource
 from app.models.temporary_file import TemporaryFile
 from app.schemas.message import SendMessageRequest, EditMessageRequest
@@ -243,13 +244,42 @@ class MessageService:
                     "token": temp_file.token
                 })
 
+            # Check user balance before generating response
+            from app.core.exceptions import InsufficientBalanceError
+            user = self.db.query(User).filter(User.id == chat.user_id).first()
+            if user.balance <= 0:
+                raise InsufficientBalanceError("余额不足，请充值后继续使用AI模型")
+            
+            # Get conversation history based on context mode
+            from app.core.context_config import get_context_message_limit
+            message_limit = get_context_message_limit(chat.context_mode)
+            
+            history_messages = self.db.query(Message).filter(
+                Message.chat_id == chat_id
+            ).order_by(Message.created_at.desc()).limit(message_limit).all()
+            
+            # Build conversation history for AI (reverse to chronological order)
+            conversation_history = []
+            for msg in reversed(history_messages):
+                conversation_history.append({
+                    "role": msg.role,
+                    "content": msg.content
+                })
+            
+            logger.info(f"📚 历史对话({chat.context_mode}模式): {len(conversation_history)} 条消息 (限制:{message_limit})")
+            
             # Generate AI response with file context
             logger.info(f"🤖 调用AI服务生成回复...")
+            logger.info(f"   模型: {chat.ai_model} (搜索: {chat.search_enabled})")
             ai_response = self.ai_service.generate_response(
                 message=message_data.content,
                 chat_type=chat.chat_type,
                 course_id=chat.course_id,
-                file_context=file_context
+                file_context=file_context,
+                ai_model=chat.ai_model,
+                search_enabled=chat.search_enabled,
+                conversation_history=conversation_history,
+                stream=False
             )
             
             logger.info(f"✅ AI回复生成完成")
@@ -264,6 +294,8 @@ class MessageService:
                 content=ai_response.content,
                 role="assistant",
                 tokens_used=ai_response.tokens_used,
+                input_tokens=ai_response.input_tokens,
+                output_tokens=ai_response.output_tokens,
                 cost=ai_response.cost
             )
             self.db.add(ai_message)
@@ -290,6 +322,12 @@ class MessageService:
                 chat.title = new_chat_title
                 chat_title_updated = True
                 logger.info(f"   新标题: {new_chat_title}")
+
+            # Update user balance
+            from decimal import Decimal
+            cost_decimal = Decimal(str(ai_response.cost))
+            user.balance -= cost_decimal
+            user.total_spent += cost_decimal
 
             # Update chat timestamp
             self.db.query(Chat).filter(Chat.id == chat_id).update({
@@ -329,6 +367,248 @@ class MessageService:
         except IntegrityError:
             self.db.rollback()
             raise BadRequestError("Failed to send message", "MESSAGE_SEND_FAILED")
+
+    def send_message_stream(self, chat_id: int, message_data: SendMessageRequest, user_id: int):
+        """流式发送消息和获取AI回复"""
+        
+        logger.info(f"📨 流式发送消息到聊天 {chat_id}，用户 {user_id}")
+        
+        # Check if chat exists and user has access
+        chat = self.db.query(Chat).options(joinedload(Chat.course)).filter(
+            Chat.id == chat_id,
+            Chat.user_id == user_id
+        ).first()
+        if not chat:
+            raise NotFoundError("Chat not found", "CHAT_NOT_FOUND")
+
+        # Check user balance before generating response
+        from app.core.exceptions import InsufficientBalanceError
+        user = self.db.query(User).filter(User.id == chat.user_id).first()
+        if user.balance <= 0:
+            raise InsufficientBalanceError("余额不足，请充值后继续使用AI模型")
+
+        # 处理文件夹和文件ID，合并去重
+        files, unique_file_ids = self._get_files_from_folders_and_files(
+            message_data.file_ids or [], 
+            message_data.folder_ids or [], 
+            user_id
+        )
+        
+        # 处理临时文件
+        temporary_files = []
+        expired_file_info = []
+        if message_data.temporary_file_tokens:
+            for token in message_data.temporary_file_tokens:
+                temp_file = self.db.query(TemporaryFile).filter(
+                    TemporaryFile.token == token,
+                    TemporaryFile.user_id == user_id
+                ).first()
+                
+                if not temp_file:
+                    expired_file_info.append(f"临时文件 (token: {token[:8]}...) 不存在或已被删除")
+                    continue
+                
+                if temp_file.is_expired:
+                    expired_file_info.append(f"临时文件 '{temp_file.original_name}' 已过期")
+                    continue
+                
+                temporary_files.append(temp_file)
+
+        # 获取文件内容用于AI上下文
+        file_context = self._get_file_contents_for_ai(files)
+        
+        # 添加临时文件内容到上下文
+        if temporary_files:
+            temp_context_parts = []
+            for temp_file in temporary_files:
+                if temp_file.physical_file:
+                    try:
+                        with open(temp_file.physical_file.storage_path, 'r', encoding='utf-8') as f:
+                            content_preview = f.read(1000)
+                            temp_context_parts.append(f"临时文件: {temp_file.original_name}\\n内容预览:\\n{content_preview}\\n")
+                    except:
+                        temp_context_parts.append(f"临时文件: {temp_file.original_name}\\n")
+            
+            if temp_context_parts:
+                file_context += "\\n" + "="*50 + "\\n".join(temp_context_parts)
+        
+        # 添加过期文件信息到上下文
+        if expired_file_info:
+            file_context += "\\n" + "="*50 + "\\n注意：以下文件无法访问：\\n" + "\\n".join(expired_file_info) + "\\n"
+
+        try:
+            # Create user message
+            user_message = Message(
+                chat_id=chat_id,
+                content=message_data.content,
+                role="user",
+                tokens_used=None,
+                cost=None
+            )
+            self.db.add(user_message)
+            self.db.flush()
+
+            # Add file attachments
+            file_attachments = []
+            for file in files:
+                attachment = MessageFileReference(
+                    message_id=user_message.id,
+                    file_id=file.id,
+                    reference_type='file'
+                )
+                self.db.add(attachment)
+                file_attachments.append({
+                    "id": file.id,
+                    "filename": file.original_name,
+                    "original_name": file.original_name,
+                    "file_size": file.file_size
+                })
+            
+            # Add folder references
+            if message_data.folder_ids:
+                for folder_id in message_data.folder_ids:
+                    folder_ref = MessageFileReference(
+                        message_id=user_message.id,
+                        file_id=folder_id,
+                        reference_type='folder'
+                    )
+                    self.db.add(folder_ref)
+            
+            # Add temporary file references
+            for temp_file in temporary_files:
+                temp_attachment = MessageFileReference(
+                    message_id=user_message.id,
+                    temporary_file_id=temp_file.id,
+                    reference_type='temporary_file'
+                )
+                self.db.add(temp_attachment)
+                file_attachments.append({
+                    "id": temp_file.id,
+                    "filename": temp_file.original_name,
+                    "original_name": temp_file.original_name,
+                    "file_size": temp_file.file_size,
+                    "is_temporary": True,
+                    "token": temp_file.token
+                })
+
+            # Get conversation history
+            from app.core.context_config import get_context_message_limit
+            message_limit = get_context_message_limit(chat.context_mode)
+            
+            history_messages = self.db.query(Message).filter(
+                Message.chat_id == chat_id
+            ).order_by(Message.created_at.desc()).limit(message_limit).all()
+            
+            conversation_history = []
+            for msg in reversed(history_messages):
+                conversation_history.append({
+                    "role": msg.role,
+                    "content": msg.content
+                })
+
+            # 发送用户消息信息
+            yield {
+                "type": "user_message",
+                "user_message": {
+                    "id": user_message.id,
+                    "chat_id": user_message.chat_id,
+                    "content": user_message.content,
+                    "role": user_message.role,
+                    "created_at": user_message.created_at.isoformat(),
+                    "file_attachments": file_attachments
+                }
+            }
+
+            # Generate AI response with streaming
+            ai_stream = self.ai_service.generate_response(
+                message=message_data.content,
+                chat_type=chat.chat_type,
+                course_id=chat.course_id,
+                file_context=file_context,
+                ai_model=chat.ai_model,
+                search_enabled=chat.search_enabled,
+                conversation_history=conversation_history,
+                stream=True
+            )
+
+            # Create AI message placeholder
+            ai_message = Message(
+                chat_id=chat_id,
+                content="",
+                role="assistant",
+                tokens_used=None,
+                input_tokens=None,
+                output_tokens=None,
+                cost=None
+            )
+            self.db.add(ai_message)
+            self.db.flush()
+
+            # Process stream
+            full_content = ""
+            for chunk in ai_stream:
+                if chunk["type"] == "content":
+                    full_content += chunk["content"]
+                    yield {
+                        "type": "content",
+                        "content": chunk["content"],
+                        "ai_message_id": ai_message.id
+                    }
+                elif chunk["type"] == "usage":
+                    # Update AI message with final content and usage
+                    ai_message.content = full_content
+                    ai_message.tokens_used = chunk["tokens_used"]
+                    ai_message.input_tokens = chunk["input_tokens"]
+                    ai_message.output_tokens = chunk["output_tokens"]
+                    ai_message.cost = chunk["cost"]
+                    ai_message.rag_sources = chunk["rag_sources"]
+
+                    # Update user balance
+                    from decimal import Decimal
+                    cost_decimal = Decimal(str(chunk["cost"]))
+                    user.balance -= cost_decimal
+                    user.total_spent += cost_decimal
+
+                    # Update chat title if needed
+                    message_count = self.db.query(Message).filter(
+                        Message.chat_id == chat_id,
+                        Message.role == "user"
+                    ).count()
+                    
+                    chat_title_updated = False
+                    new_chat_title = None
+                    if message_count == 1 and chat.title == "新聊天":
+                        new_chat_title = self.ai_service.generate_chat_title(message_data.content)
+                        chat.title = new_chat_title
+                        chat_title_updated = True
+
+                    # Update chat timestamp
+                    self.db.query(Chat).filter(Chat.id == chat_id).update({
+                        "updated_at": user_message.created_at
+                    })
+
+                    self.db.commit()
+
+                    # Send final usage info
+                    yield {
+                        "type": "completion",
+                        "ai_message": {
+                            "id": ai_message.id,
+                            "chat_id": ai_message.chat_id,
+                            "content": ai_message.content,
+                            "role": ai_message.role,
+                            "tokens_used": ai_message.tokens_used,
+                            "cost": ai_message.cost,
+                            "created_at": ai_message.created_at.isoformat(),
+                            "rag_sources": chunk["rag_sources"]
+                        },
+                        "chat_title_updated": chat_title_updated,
+                        "new_chat_title": new_chat_title
+                    }
+
+        except Exception as e:
+            self.db.rollback()
+            raise e
 
     def edit_message(self, message_id: int, message_data: EditMessageRequest, user_id: int) -> Message:
         """Edit message content (only user messages)"""
