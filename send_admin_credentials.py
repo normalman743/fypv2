@@ -1,45 +1,59 @@
 #!/usr/bin/env python3
 """
-发送管理员账号信息邮件
-向4个管理员账号发送包含用户名、邮箱、密码的邮件
+🚨 SECURITY WARNING: This file has been secured to prevent credential exposure.
+Admin account management should now use secure credential management.
+
+发送管理员账号信息邮件 - 安全版本
+使用环境变量配置管理员账号信息，不再在源代码中存储明文密码
 """
 
 import resend
 import os
+import secrets
+import string
 from dotenv import load_dotenv
-from typing import List
+from typing import List, Dict
 
 # 加载环境变量
 load_dotenv("/Users/mannormal/Downloads/fyp/backend/.env")
 
-# 管理员账号信息
-ADMIN_ACCOUNTS = [
-    {
-        "username": "admin",
-        "email": "admin@icu.584743.xyz",
-        "password": "admin123456"
-    },
-    {
-        "username": "ad-xiong",
-        "email": "ad-xiong@icu.584743.xyz",
-        "password": "xiong123"
-    },
-    {
-        "username": "ad-qi", 
-        "email": "ad-qi@icu.584743.xyz",
-        "password": "qi123"
-    },
-    {
-        "username": "ad-shen",
-        "email": "ad-shen@icu.584743.xyz", 
-        "password": "shen123"
-    },
-    {
-        "username": "ad-chen",
-        "email": "ad-chen@icu.584743.xyz",
-        "password": "chen123"
-    }
-]
+# 🔒 SECURITY IMPROVEMENT: Remove hardcoded credentials
+# Admin accounts now must be configured via environment variables or secure credential store
+def get_admin_accounts_from_env() -> List[Dict[str, str]]:
+    """
+    从环境变量或安全配置中获取管理员账号信息
+    Environment variables format:
+    ADMIN_ACCOUNT_1_USERNAME=admin
+    ADMIN_ACCOUNT_1_EMAIL=admin@example.com
+    ADMIN_ACCOUNT_1_PASSWORD=secure_password_here
+    """
+    admin_accounts = []
+    
+    # Check for environment-based admin accounts
+    for i in range(1, 6):  # Support up to 5 admin accounts
+        username = os.getenv(f"ADMIN_ACCOUNT_{i}_USERNAME")
+        email = os.getenv(f"ADMIN_ACCOUNT_{i}_EMAIL") 
+        password = os.getenv(f"ADMIN_ACCOUNT_{i}_PASSWORD")
+        
+        if username and email and password:
+            admin_accounts.append({
+                "username": username,
+                "email": email,
+                "password": password
+            })
+    
+    if not admin_accounts:
+        print("⚠️  WARNING: No admin accounts configured via environment variables.")
+        print("   Please set ADMIN_ACCOUNT_*_USERNAME, ADMIN_ACCOUNT_*_EMAIL, and ADMIN_ACCOUNT_*_PASSWORD")
+        print("   environment variables for secure admin account management.")
+        return []
+    
+    return admin_accounts
+
+def generate_secure_password(length: int = 16) -> str:
+    """生成安全的随机密码"""
+    alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
+    return ''.join(secrets.choice(alphabet) for _ in range(length))
 
 def setup_resend():
     """设置Resend API"""
@@ -129,14 +143,21 @@ def create_email_content(admin_info):
     return html_content
 
 def send_all_admin_emails():
-    """批量发送所有管理员邮件"""
+    """批量发送所有管理员邮件 - 安全版本"""
     try:
+        # 🔒 SECURITY IMPROVEMENT: Get admin accounts from secure configuration
+        admin_accounts = get_admin_accounts_from_env()
+        
+        if not admin_accounts:
+            print("❌ 无法获取管理员账号信息，邮件发送中止")
+            return False
+        
         # 准备批量发送参数
         from_email = f"Campus LLM <{os.getenv('EMAIL_ADDRESS', 'no-reply@icu.584743.xyz')}>"
         
         params: List[resend.Emails.SendParams] = []
         
-        for admin in ADMIN_ACCOUNTS:
+        for admin in admin_accounts:
             email_content = create_email_content(admin)
             
             email_param = {
@@ -158,7 +179,7 @@ def send_all_admin_emails():
         
         if hasattr(response, 'data') and response.data:
             for i, result in enumerate(response.data):
-                admin = ADMIN_ACCOUNTS[i]
+                admin = admin_accounts[i]
                 if hasattr(result, 'id'):
                     print(f"   ✅ {admin['username']}: 邮件ID = {result.id}")
                 else:
@@ -182,17 +203,31 @@ def send_all_admin_emails():
         return False
 
 def main():
-    """主函数"""
-    print("📧 校园LLM系统 - 管理员账号信息邮件发送器")
-    print("=" * 60)
+    """主函数 - 安全版本"""
+    print("📧 校园LLM系统 - 管理员账号信息邮件发送器 (安全版本)")
+    print("=" * 70)
+    print("🔒 SECURITY: 已移除硬编码凭据，现使用环境变量配置")
+    print("=" * 70)
     
     try:
+        # 🔒 SECURITY IMPROVEMENT: Get admin accounts from secure configuration
+        admin_accounts = get_admin_accounts_from_env()
+        
+        if not admin_accounts:
+            print("\n❌ 错误：未找到管理员账号配置")
+            print("请设置以下环境变量：")
+            print("  ADMIN_ACCOUNT_1_USERNAME=your_username")
+            print("  ADMIN_ACCOUNT_1_EMAIL=your_email")
+            print("  ADMIN_ACCOUNT_1_PASSWORD=your_secure_password")
+            print("  (以此类推，支持最多5个管理员账号)")
+            return
+        
         # 设置Resend API
         setup_resend()
         
-        # 显示要发送的账号
-        print(f"\n准备向以下 {len(ADMIN_ACCOUNTS)} 个管理员发送账号信息：")
-        for admin in ADMIN_ACCOUNTS:
+        # 显示要发送的账号（不显示密码）
+        print(f"\n准备向以下 {len(admin_accounts)} 个管理员发送账号信息：")
+        for admin in admin_accounts:
             print(f"  - {admin['username']} ({admin['email']})")
         
         print(f"\n🚀 开始批量发送邮件...")
@@ -201,9 +236,10 @@ def main():
         success = send_all_admin_emails()
         
         # 总结
-        print(f"\n" + "=" * 60)
+        print(f"\n" + "=" * 70)
         if success:
             print("🎉 邮件批量发送完成！")
+            print("🔒 提醒：建议管理员首次登录后立即修改密码")
         else:
             print("❌ 邮件发送失败")
             

@@ -1,6 +1,8 @@
 from pydantic_settings import BaseSettings
 from typing import Optional, List
 import os
+import secrets
+import warnings
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -17,12 +19,53 @@ class Settings(BaseSettings):
     test_database_url: Optional[str] = os.getenv("TEST_DATABASE_URL")
     
     # JWT配置
-    secret_key: str = os.getenv("SECRET_KEY", "your-secret-key-here-change-in-production")
+    # 🔒 SECURITY IMPROVEMENT: Secure secret key management
+    secret_key: str = os.getenv("SECRET_KEY", "")
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 1440  # 24小时
     
-    # 邀请码配置
-    default_invite_code: str = "INVITE2025"
+    def __post_init__(self):
+        # Validate SECRET_KEY security
+        if not self.secret_key:
+            # Generate a secure random key for development/testing
+            self.secret_key = secrets.token_urlsafe(64)
+            warnings.warn(
+                "🚨 WARNING: SECRET_KEY not set! Generated temporary key for this session. "
+                "For production, set SECRET_KEY environment variable with a secure random key.",
+                UserWarning
+            )
+        elif self.secret_key == "your-secret-key-here-change-in-production":
+            raise ValueError(
+                "🚨 CRITICAL SECURITY ERROR: Default secret key detected! "
+                "You MUST set a secure SECRET_KEY environment variable before running in production. "
+                "Generate one with: python -c 'import secrets; print(secrets.token_urlsafe(64))'"
+            )
+        elif len(self.secret_key) < 32:
+            warnings.warn(
+                "⚠️  WARNING: SECRET_KEY is too short (< 32 characters). "
+                "Use a longer, more secure key for better security.",
+                UserWarning
+            )
+        
+        # Validate DEFAULT_INVITE_CODE security
+        if not self.default_invite_code:
+            # Generate a secure random invite code for this session
+            self.default_invite_code = secrets.token_urlsafe(8).upper()
+            warnings.warn(
+                f"🚨 WARNING: DEFAULT_INVITE_CODE not set! Generated temporary code '{self.default_invite_code}' for this session. "
+                "For production, set DEFAULT_INVITE_CODE environment variable with a secure code.",
+                UserWarning
+            )
+        elif self.default_invite_code in ["INVITE2025", "ADMIN2024", "USER2024", "TEST2024"]:
+            warnings.warn(
+                "⚠️  SECURITY WARNING: Using predictable default invite code. "
+                "Consider setting a more secure DEFAULT_INVITE_CODE environment variable.",
+                UserWarning
+            )
+    
+    # 邀请码配置  
+    # 🔒 SECURITY IMPROVEMENT: Secure default invite code
+    default_invite_code: str = os.getenv("DEFAULT_INVITE_CODE", "")
     
     # Redis和Celery配置
     redis_url: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
@@ -35,7 +78,8 @@ class Settings(BaseSettings):
     workers: int = int(os.getenv("WORKERS", "1"))
     
     # CORS配置
-    cors_origins: str = os.getenv("CORS_ORIGINS", "*")
+    # 🔒 SECURITY IMPROVEMENT: More secure CORS defaults
+    cors_origins: str = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:8080,https://icu.584743.xyz")
     
     # 文件上传配置
     upload_dir: str = os.getenv("UPLOAD_DIR", "./storage/uploads")
@@ -73,8 +117,13 @@ class Settings(BaseSettings):
     
     @property
     def cors_origins_list(self) -> List[str]:
-        """将逗号分隔的CORS源转换为列表"""
+        """将逗号分隔的CORS源转换为列表 - 安全版本"""
         if self.cors_origins == "*":
+            warnings.warn(
+                "⚠️  SECURITY WARNING: CORS is configured to allow ALL origins (*). "
+                "This is insecure for production. Set CORS_ORIGINS to specific domains.",
+                UserWarning
+            )
             return ["*"]
         return [origin.strip() for origin in self.cors_origins.split(",")]
     
