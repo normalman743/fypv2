@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 from app.core.config import settings
 from app.models.database import engine, Base
 from app.schemas.common import ErrorResponse
+from app.middleware.rate_limiter import RateLimitMiddleware
 import os
 
 # 创建数据库表
@@ -16,13 +17,29 @@ app = FastAPI(
     debug=settings.debug
 )
 
+# 验证CORS配置安全性
+if settings.environment == "production" and "*" in settings.cors_origins_list:
+    import logging
+    logging.critical("生产环境CORS配置不安全: 允许所有来源 (*). 请设置 CORS_ORIGINS 环境变量.")
+    # 在生产环境强制使用安全默认值
+    safe_origins = ["https://your-domain.com"]  # 生产环境应该设置具体域名
+else:
+    safe_origins = settings.cors_origins_list
+
 # 添加CORS中间件
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins_list,
+    allow_origins=safe_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  # 限制允许的方法
+    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],  # 限制允许的头部
+)
+
+# 添加速率限制中间件（防止资源耗尽攻击）
+app.add_middleware(
+    RateLimitMiddleware,
+    calls_per_minute=120,  # 每分钟最多120次请求
+    calls_per_hour=1000    # 每小时最多1000次请求
 )
 
 # 全局异常处理器

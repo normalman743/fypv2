@@ -34,8 +34,8 @@ class Settings(BaseSettings):
     port: int = int(os.getenv("PORT", "8000"))
     workers: int = int(os.getenv("WORKERS", "1"))
     
-    # CORS配置
-    cors_origins: str = os.getenv("CORS_ORIGINS", "*")
+    # CORS配置 - 默认只允许本地开发，生产环境需要明确设置
+    cors_origins: str = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080")
     
     # 文件上传配置
     upload_dir: str = os.getenv("UPLOAD_DIR", "./storage/uploads")

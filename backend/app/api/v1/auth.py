@@ -67,19 +67,14 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
             )
     
     # 检查邀请码（如果启用）
-    print(f"User invite code: {user_data.invite_code}")
-    print(f"Invite code list: {settings.registration_invite_code_verification}")
     invite_code_obj = None
     if settings.registration_invite_code_verification:
-        print(f"Checking invite code: {user_data.invite_code}")
         invite_code_obj = db.query(InviteCode).filter(
             InviteCode.code == user_data.invite_code,
             InviteCode.is_used == False,
             InviteCode.expires_at > datetime.now()
         ).first()
-        print(f"Invite code query result: {invite_code_obj}")
         if not invite_code_obj:
-            print("Invite code is invalid or expired.")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=ErrorResponse(
@@ -87,8 +82,6 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
                     error={"code": "INVALID_INVITE_CODE", "message": "邀请码无效或已过期"}
                 ).model_dump()
             )
-        else:
-            print(f"Invite code {user_data.invite_code} is valid and not used.")
     # 创建用户
     hashed_password = get_password_hash(user_data.password)
     user = User(

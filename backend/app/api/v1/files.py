@@ -38,6 +38,14 @@ async def upload_temporary_file(
     - 通过唯一token访问
     - 适用于聊天上传、预览等临时用途
     """
+    from app.core.config import settings
+    
+    # 文件大小验证
+    if hasattr(file, 'size') and file.size and file.size > settings.max_file_size:
+        raise HTTPException(
+            status_code=413,
+            detail=f"文件大小超出限制，最大允许 {settings.max_file_size // (1024*1024)}MB"
+        )
     from app.services.unified_file_service import UnifiedFileService
     
     service = UnifiedFileService(db)
@@ -76,6 +84,14 @@ async def upload_file(
     db: Session = Depends(get_db)
 ):
     """Upload file to folder"""
+    from app.core.config import settings
+    
+    # 文件大小验证
+    if hasattr(file, 'size') and file.size and file.size > settings.max_file_size:
+        raise HTTPException(
+            status_code=413,
+            detail=f"文件大小超出限制，最大允许 {settings.max_file_size // (1024*1024)}MB"
+        )
     service = FileService(db)
     file_record = service.upload_file(file, course_id, folder_id, current_user.id)
     
@@ -239,17 +255,22 @@ async def download_file(
 @router.get("/files/temporary/{token}/download")
 async def download_temporary_file(
     token: str = Path(..., description="临时文件访问token"),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     下载临时文件
     
-    通过token访问临时文件，不需要登录验证
+    通过token访问临时文件，需要登录验证以确保安全性
     """
     from app.services.unified_file_service import UnifiedFileService
     
     service = UnifiedFileService(db)
     temp_file, content = service.download_temporary_file(token)
+    
+    # 安全检查：确保用户只能下载自己的临时文件
+    if temp_file.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="无权访问此文件")
     
     # Encode filename properly for Content-Disposition header
     from urllib.parse import quote

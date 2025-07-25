@@ -59,11 +59,17 @@ class UnifiedFileService:
         
         # 3. 读取和处理文件内容
         file_content = file.file.read()
+        
+        # 安全检查：验证实际文件大小
+        from app.core.config import settings
+        if len(file_content) > settings.max_file_size:
+            raise HTTPException(
+                status_code=413, 
+                detail=f"文件实际大小超出限制，最大允许 {settings.max_file_size // (1024*1024)}MB"
+            )
+        
         file_hash = hashlib.sha256(file_content).hexdigest()
         file.file.seek(0)
-        
-        # 调试信息
-        print(f"File upload: {file.filename}, size: {len(file_content)}, hash: {file_hash}")
         
         file_info = {
             'original_name': file.filename,
