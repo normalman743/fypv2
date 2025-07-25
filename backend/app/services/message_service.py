@@ -232,13 +232,57 @@ class MessageService:
             for temp_file in temporary_files:
                 # 读取临时文件内容预览
                 if temp_file.physical_file:
+                    # 获取正确的文件路径
+                    storage_path = temp_file.physical_file.storage_path
+                    if not os.path.isabs(storage_path):
+                        from app.services.local_file_storage import local_file_storage
+                        file_path = os.path.join(str(local_file_storage.base_dir), storage_path)
+                    else:
+                        file_path = storage_path
+                    
+                    file_extension = temp_file.original_name.split('.')[-1].lower() if '.' in temp_file.original_name else ''
+                    
                     try:
-                        with open(temp_file.physical_file.storage_path, 'r', encoding='utf-8') as f:
-                            content_preview = f.read(1000)  # 读取前1000个字符作为预览
-                            temp_context_parts.append(f"临时文件: {temp_file.original_name}\n内容预览:\n{content_preview}\n")
-                    except:
-                        # 如果无法读取文件内容，仅添加文件名
-                        temp_context_parts.append(f"临时文件: {temp_file.original_name}\n")
+                        content_preview = None
+                        
+                        # 根据文件类型选择合适的解析器
+                        if file_extension == 'pdf':
+                            from langchain.document_loaders import PyPDFLoader
+                            loader = PyPDFLoader(file_path)
+                            documents = loader.load()
+                            # 合并所有页面的内容
+                            content_preview = "\n".join([doc.page_content[:500] for doc in documents[:3]])  # 前3页，每页500字符
+                            logger.info(f"✅ 成功解析PDF: {temp_file.original_name}")
+                        
+                        elif file_extension in ['doc', 'docx']:
+                            from langchain.document_loaders import Docx2txtLoader
+                            loader = Docx2txtLoader(file_path)
+                            documents = loader.load()
+                            content_preview = documents[0].page_content[:1500] if documents else ""
+                            logger.info(f"✅ 成功解析Word文档: {temp_file.original_name}")
+                        
+                        elif file_extension in ['txt', 'md', 'py', 'js', 'html', 'css', 'json', 'csv', 'xml']:
+                            # 文本文件直接读取
+                            with open(file_path, 'r', encoding='utf-8') as f:
+                                content_preview = f.read(1500)
+                            logger.info(f"✅ 成功读取文本文件: {temp_file.original_name}")
+                        
+                        else:
+                            # 其他文件类型，尝试作为文本读取
+                            try:
+                                with open(file_path, 'r', encoding='utf-8') as f:
+                                    content_preview = f.read(1000)
+                            except:
+                                content_preview = None
+                        
+                        if content_preview:
+                            temp_context_parts.append(f"临时文件: {temp_file.original_name}\n文件类型: {file_extension}\n内容:\n{content_preview}\n")
+                        else:
+                            temp_context_parts.append(f"临时文件: {temp_file.original_name} (类型: {file_extension}，无法解析内容)\n")
+                            
+                    except Exception as e:
+                        logger.warning(f"解析临时文件失败 {temp_file.original_name}: {str(e)}")
+                        temp_context_parts.append(f"临时文件: {temp_file.original_name} (解析失败: {str(e)})\n")
             
             if temp_context_parts:
                 file_context += "\n" + "="*50 + "\n".join(temp_context_parts)
@@ -492,12 +536,50 @@ class MessageService:
             temp_context_parts = []
             for temp_file in temporary_files:
                 if temp_file.physical_file:
+                    # 获取正确的文件路径
+                    storage_path = temp_file.physical_file.storage_path
+                    if not os.path.isabs(storage_path):
+                        from app.services.local_file_storage import local_file_storage
+                        file_path = os.path.join(str(local_file_storage.base_dir), storage_path)
+                    else:
+                        file_path = storage_path
+                    
+                    file_extension = temp_file.original_name.split('.')[-1].lower() if '.' in temp_file.original_name else ''
+                    
                     try:
-                        with open(temp_file.physical_file.storage_path, 'r', encoding='utf-8') as f:
-                            content_preview = f.read(1000)
-                            temp_context_parts.append(f"临时文件: {temp_file.original_name}\\n内容预览:\\n{content_preview}\\n")
-                    except:
-                        temp_context_parts.append(f"临时文件: {temp_file.original_name}\\n")
+                        content_preview = None
+                        
+                        # 根据文件类型选择合适的解析器
+                        if file_extension == 'pdf':
+                            from langchain.document_loaders import PyPDFLoader
+                            loader = PyPDFLoader(file_path)
+                            documents = loader.load()
+                            content_preview = "\\n".join([doc.page_content[:500] for doc in documents[:3]])
+                        
+                        elif file_extension in ['doc', 'docx']:
+                            from langchain.document_loaders import Docx2txtLoader
+                            loader = Docx2txtLoader(file_path)
+                            documents = loader.load()
+                            content_preview = documents[0].page_content[:1500] if documents else ""
+                        
+                        elif file_extension in ['txt', 'md', 'py', 'js', 'html', 'css', 'json', 'csv', 'xml']:
+                            with open(file_path, 'r', encoding='utf-8') as f:
+                                content_preview = f.read(1500)
+                        
+                        else:
+                            try:
+                                with open(file_path, 'r', encoding='utf-8') as f:
+                                    content_preview = f.read(1000)
+                            except:
+                                content_preview = None
+                        
+                        if content_preview:
+                            temp_context_parts.append(f"临时文件: {temp_file.original_name}\\n文件类型: {file_extension}\\n内容:\\n{content_preview}\\n")
+                        else:
+                            temp_context_parts.append(f"临时文件: {temp_file.original_name} (类型: {file_extension}，无法解析内容)\\n")
+                            
+                    except Exception as e:
+                        temp_context_parts.append(f"临时文件: {temp_file.original_name} (解析失败: {str(e)})\\n")
             
             if temp_context_parts:
                 file_context += "\\n" + "="*50 + "\\n".join(temp_context_parts)

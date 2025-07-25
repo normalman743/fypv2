@@ -246,18 +246,10 @@ async def download_temporary_file(
     
     通过token访问临时文件，不需要登录验证
     """
-    from app.services.temporary_file_service import TemporaryFileService
+    from app.services.unified_file_service import UnifiedFileService
     
-    service = TemporaryFileService()
-    temp_file = service.get_temporary_file_by_token(db, token)
-    
-    if not temp_file:
-        raise HTTPException(status_code=404, detail="文件不存在或已过期")
-    
-    # 读取文件内容
-    physical_file = temp_file.physical_file
-    with open(physical_file.storage_path, 'rb') as f:
-        content = f.read()
+    service = UnifiedFileService(db)
+    temp_file, content = service.download_temporary_file(token)
     
     # Encode filename properly for Content-Disposition header
     from urllib.parse import quote
@@ -283,15 +275,15 @@ async def delete_temporary_file(
     
     只能删除自己上传的临时文件
     """
-    from app.services.temporary_file_service import TemporaryFileService
+    from app.services.unified_file_service import UnifiedFileService
     
-    service = TemporaryFileService()
-    temp_file = service.get_temporary_file_by_id(db, file_id, current_user.id)
+    service = UnifiedFileService(db)
+    temp_file = service.get_temporary_file_by_id(file_id, current_user.id)
     
     if not temp_file:
         raise HTTPException(status_code=404, detail="文件不存在或已过期")
     
-    success = service.delete_temporary_file(db, temp_file)
+    success = service.delete_temporary_file(temp_file)
     if not success:
         raise HTTPException(status_code=500, detail="删除文件失败")
     
