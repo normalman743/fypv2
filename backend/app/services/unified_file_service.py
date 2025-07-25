@@ -1,7 +1,7 @@
 import hashlib
 import os
 import tempfile
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 from sqlalchemy.orm import Session
 from fastapi import UploadFile, HTTPException
 
@@ -15,7 +15,6 @@ from app.services.local_file_storage import local_file_storage
 from app.services.rag_service import ProductionRAGService
 from app.utils.file_validation import validate_regular_file_upload, validate_temporary_file_upload, FileValidator
 import secrets
-import hashlib
 from datetime import datetime, timedelta
 
 
@@ -513,3 +512,113 @@ class UnifiedFileService:
         print(f"✅ Temporary file created: ID={temp_file.id}, Token={token[:16]}...")
         
         return temp_file
+
+    def get_temporary_file_by_token(self, token: str) -> Optional[TemporaryFile]:
+        """通过token获取临时文件"""
+        return self.db.query(TemporaryFile).filter(
+            TemporaryFile.token == token,
+            TemporaryFile.expires_at > datetime.utcnow()
+        ).first()
+
+    def get_temporary_file_by_id(self, file_id: int, user_id: int) -> Optional[TemporaryFile]:
+        """通过ID获取用户的临时文件"""
+        return self.db.query(TemporaryFile).filter(
+            TemporaryFile.id == file_id,
+            TemporaryFile.user_id == user_id,
+            TemporaryFile.expires_at > datetime.utcnow()
+        ).first()
+
+    def download_temporary_file(self, token: str) -> Tuple[TemporaryFile, bytes]:
+        """
+        通过token下载临时文件
+        
+        Returns:
+            (temp_file, file_content): 临时文件对象和文件内容
+        """
+        temp_file = self.get_temporary_file_by_token(token)
+        if not temp_file:
+            raise HTTPException(status_code=404, detail="文件不存在或已过期")
+        
+        # 获取物理文件
+        physical_file = temp_file.physical_file
+        if not physical_file:
+            raise HTTPException(status_code=404, detail="物理文件不存在")
+        
+        # 安全地构建文件路径
+        file_path = self._validate_and_resolve_path(physical_file.storage_path)
+        
+        try:
+            with open(file_path, 'rb') as f:
+                content = f.read()
+            return temp_file, content
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="文件不存在")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"读取文件失败: {str(e)}")
+
+    def delete_temporary_file(self, temp_file: TemporaryFile) -> bool:
+        """
+        删除临时文件
+        
+        Args:
+            temp_file: 要删除的临时文件对象
+            
+        Returns:
+            是否删除成功
+        """
+        try:
+            # 删除临时文件记录
+            self.db.delete(temp_file)
+            
+            # 更新物理文件引用计数
+            physical_file = temp_file.physical_file
+            if physical_file:
+                physical_file.reference_count -= 1
+                
+                # 如果没有其他引用，删除物理文件
+                if physical_file.reference_count <= 0:
+                    try:
+                        file_path = self._validate_and_resolve_path(physical_file.storage_path)
+                        if os.path.exists(file_path):
+                            os.remove(file_path)
+                        self.db.delete(physical_file)
+                    except Exception as e:
+                        print(f"Failed to delete physical file: {e}")
+            
+            self.db.commit()
+            return True
+        except Exception as e:
+            self.db.rollback()
+            print(f"Failed to delete temporary file: {e}")
+            return False
+
+    def _validate_and_resolve_path(self, storage_path: str) -> str:
+        """
+        验证并解析安全的文件路径
+        
+        Args:
+            storage_path: 存储路径
+            
+        Returns:
+            完整的安全文件路径
+            
+        Raises:
+            HTTPException: 路径不安全时抛出异常
+        """
+        # 如果已经是绝对路径，直接验证
+        if os.path.isabs(storage_path):
+            full_path = storage_path
+        else:
+            # 相对路径，基于base_dir构建
+            full_path = local_file_storage.base_dir / storage_path
+            full_path = str(full_path)
+        
+        # 规范化路径
+        full_path = os.path.normpath(full_path)
+        base_dir = str(local_file_storage.base_dir.resolve())
+        
+        # 检查路径是否在允许的目录内（防止目录遍历攻击）
+        if not full_path.startswith(base_dir):
+            raise HTTPException(status_code=403, detail="访问被拒绝：路径不在允许范围内")
+        
+        return full_path
