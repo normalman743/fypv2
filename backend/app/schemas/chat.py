@@ -1,5 +1,5 @@
-from pydantic import BaseModel
-from typing import Optional, List
+from pydantic import BaseModel, validator
+from typing import Optional, List, Literal
 from datetime import datetime
 from app.schemas.common import SuccessResponse
 
@@ -30,13 +30,13 @@ class ChatListResponse(SuccessResponse):
     data: dict  # {"chats": List[ChatResponse]}
 
 class CreateChatRequest(BaseModel):
-    chat_type: str  # "general" or "course"
+    chat_type: Literal["general", "course"] = "general"  # 限制只能是 "general" 或 "course"
     first_message: str
     course_id: Optional[int] = None
     custom_prompt: Optional[str] = None
-    ai_model: str = "Star"  # "Star", "StarPlus", "StarCode"
+    ai_model: Literal["Star", "StarPlus", "StarCode"] = "Star"  # 限制AI模型选项
     search_enabled: bool = False
-    context_mode: str = "Standard"  # "Economy", "Standard", "Premium", "Max"
+    context_mode: Literal["Economy", "Standard", "Premium", "Max"] = "Standard"  # 限制上下文模式选项
     file_ids: Optional[List[int]] = []
     folder_ids: Optional[List[int]] = []
     temporary_file_tokens: Optional[List[str]] = []
