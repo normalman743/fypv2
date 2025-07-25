@@ -7,6 +7,7 @@ from app.models.course import Course
 from app.models.message import Message
 from app.models.file import File
 from app.models.folder import Folder
+from app.models.user import User
 from app.models.message_reference import MessageFileReference, MessageRAGSource
 from app.schemas.chat import CreateChatRequest, UpdateChatRequest
 from app.schemas.message import SendMessageRequest
@@ -143,13 +144,30 @@ class ChatService:
             file_context = file_context + expired_context
 
         try:
+            # Validate model and search combination
+            from app.core.model_config import validate_model_search_combination
+            if not validate_model_search_combination(chat_data.ai_model, chat_data.search_enabled):
+                raise BadRequestError(
+                    f"Model {chat_data.ai_model} does not support search functionality" if chat_data.search_enabled 
+                    else f"Invalid AI model: {chat_data.ai_model}",
+                    "INVALID_MODEL_CONFIG"
+                )
+            
+            # Check user balance
+            from app.core.exceptions import InsufficientBalanceError
+            user = self.db.query(User).filter(User.id == user_id).first()
+            if user.balance <= 0:
+                raise InsufficientBalanceError("余额不足，请充值后继续使用AI模型")
+            
             # Create chat with temporary title
             chat = Chat(
                 title="新聊天",  # Will be updated after AI response
                 chat_type=chat_data.chat_type,
                 course_id=chat_data.course_id,
                 user_id=user_id,
-                custom_prompt=chat_data.custom_prompt
+                custom_prompt=chat_data.custom_prompt,
+                ai_model=chat_data.ai_model,
+                search_enabled=chat_data.search_enabled
             )
             self.db.add(chat)
             self.db.flush()  # Get chat ID without committing
@@ -208,12 +226,15 @@ class ChatService:
                     "expires_at": temp_file.expires_at.isoformat()
                 })
 
-            # Generate AI response with file context
+            # Generate AI response with file context and model settings (first message, no history)
             ai_response = self.ai_service.generate_response(
                 message=chat_data.first_message,
                 chat_type=chat_data.chat_type,
                 course_id=chat_data.course_id,
-                file_context=file_context
+                file_context=file_context,
+                ai_model=chat.ai_model,
+                search_enabled=chat.search_enabled,
+                conversation_history=[]  # 第一条消息没有历史
             )
 
             # Create AI message
@@ -222,6 +243,8 @@ class ChatService:
                 content=ai_response.content,
                 role="assistant",
                 tokens_used=ai_response.tokens_used,
+                input_tokens=ai_response.input_tokens,
+                output_tokens=ai_response.output_tokens,
                 cost=ai_response.cost
             )
             self.db.add(ai_message)
@@ -231,6 +254,12 @@ class ChatService:
             if hasattr(ai_response, 'rag_sources') and ai_response.rag_sources:
                 ai_message.rag_sources = ai_response.rag_sources
 
+            # Update user balance
+            from decimal import Decimal
+            cost_decimal = Decimal(str(ai_response.cost))
+            user.balance -= cost_decimal
+            user.total_spent += cost_decimal
+            
             # Generate and update chat title
             new_title = self.ai_service.generate_chat_title(chat_data.first_message)
             chat.title = new_title

@@ -18,6 +18,8 @@ class ChatResponse(BaseModel):
     course_id: Optional[int]
     user_id: int
     custom_prompt: Optional[str]
+    ai_model: str
+    search_enabled: bool
     created_at: datetime
     updated_at: datetime
     course: Optional[CourseInfo] = None
@@ -31,6 +33,8 @@ class CreateChatRequest(BaseModel):
     first_message: str
     course_id: Optional[int] = None
     custom_prompt: Optional[str] = None
+    ai_model: str = "Star"  # "Star", "StarPlus", "StarCode"
+    search_enabled: bool = False
     file_ids: Optional[List[int]] = []
     folder_ids: Optional[List[int]] = []
     temporary_file_tokens: Optional[List[str]] = []

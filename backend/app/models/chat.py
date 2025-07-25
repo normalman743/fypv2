@@ -12,6 +12,10 @@ class Chat(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     custom_prompt = Column(Text, nullable=True)
     
+    # AI模型配置
+    ai_model = Column(String(20), nullable=False, default='Star', index=True)  # 'Star', 'StarPlus', 'StarCode'
+    search_enabled = Column(Boolean, nullable=False, default=False)
+    
     # RAG配置
     rag_enabled = Column(Boolean, default=True)
     max_context_length = Column(Integer, default=4000)

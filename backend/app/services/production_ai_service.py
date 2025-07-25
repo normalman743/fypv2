@@ -65,8 +65,19 @@ class ProductionAIService:
         
         print("✅ Production AI Service ready")
     
-    def generate_response(self, message: str, chat_type: str = "general", course_id: int = None, file_context: str = "") -> AIResponse:
+    def generate_response(self, message: str, chat_type: str = "general", course_id: int = None, 
+                         file_context: str = "", ai_model: str = "Star", search_enabled: bool = False,
+                         conversation_history: list = None) -> AIResponse:
         """使用真实RAG和OpenAI生成响应"""
+        
+        # 获取实际的OpenAI模型名称
+        from app.core.model_config import get_openai_model, get_model_config
+        try:
+            openai_model = get_openai_model(ai_model, search_enabled)
+            model_config = get_model_config(ai_model)
+            print(f"🤖 Using model: {ai_model} -> {openai_model} (search: {search_enabled})")
+        except ValueError as e:
+            raise RuntimeError(f"Invalid model configuration: {e}")
         
         # 1. 使用RAG检索相关文档
         rag_sources = []
@@ -95,29 +106,45 @@ class ProductionAIService:
         # 2. 构建系统提示
         system_prompt = self._build_system_prompt(chat_type, context_text, file_context)
         
-        # 3. 调用OpenAI API
+        # 3. 构建完整的消息列表
+        messages = [{"role": "system", "content": system_prompt}]
+        
+        # 添加历史对话
+        if conversation_history:
+            messages.extend(conversation_history)
+            print(f"💬 Added {len(conversation_history)} history messages")
+        
+        # 添加当前用户消息
+        messages.append({"role": "user", "content": message})
+        
+        # 调用OpenAI API
         try:
             response = self.openai_client.chat.completions.create(
-                model="gpt-4o-mini",  # 使用更经济的模型
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": message}
-                ],
-                max_tokens=1000,
+                model=openai_model,  # 使用动态模型
+                messages=messages,
+                max_tokens=model_config["max_tokens"],
                 temperature=0.7
             )
             
             content = response.choices[0].message.content
-            tokens_used = response.usage.total_tokens
             
-            # 估算成本（gpt-4o-mini的定价）
-            cost = tokens_used * 0.00000015  # $0.15 per 1M tokens
+            # 获取详细的token使用情况
+            input_tokens = response.usage.prompt_tokens
+            output_tokens = response.usage.completion_tokens
+            total_tokens = response.usage.total_tokens
+            
+            # 按input/output分别计算成本
+            input_cost = (input_tokens / 1_000_000) * model_config["input_cost_per_million"]
+            output_cost = (output_tokens / 1_000_000) * model_config["output_cost_per_million"]
+            total_cost = input_cost + output_cost
             
             return AIResponse(
                 content=content,
-                tokens_used=tokens_used,
-                cost=cost,
-                rag_sources=rag_sources
+                tokens_used=total_tokens,
+                cost=total_cost,
+                rag_sources=rag_sources,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens
             )
             
         except Exception as e:
@@ -157,7 +184,7 @@ class ProductionAIService:
     def _build_system_prompt(self, chat_type: str, context_text: str, file_context: str = "") -> str:
         """构建系统提示"""
         
-        base_prompt = """你是香港中文大学(CUHK)的学生助手，使命是帮助学生更好地学习和生活。你的名字是星空（star），使命是提供准确、友好和专业的回答。
+        base_prompt = """你是香港中文大学(CUHK)的AI助手。你的使命是帮助学生更好地学习和生活，提供准确、友好和专业的回答。
 
 你有两种信息源：
 1. 知识库检索结果（RAG）- 来自课程资料和校园信息

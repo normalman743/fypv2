@@ -13,7 +13,9 @@ class Message(Base):
     # AI相关字段
     model_name = Column(String(50), nullable=True, index=True)
     tokens_used = Column(Integer, nullable=True)
-    cost = Column(DECIMAL(10, 4), nullable=True)
+    input_tokens = Column(Integer, nullable=True)
+    output_tokens = Column(Integer, nullable=True)
+    cost = Column(DECIMAL(20, 8), nullable=True)
     response_time_ms = Column(Integer, nullable=True)
     
     # RAG相关

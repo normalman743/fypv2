@@ -8,6 +8,7 @@ from app.models.message import Message
 from app.models.file import File
 from app.models.folder import Folder
 from app.models.course import Course
+from app.models.user import User
 from app.models.message_reference import MessageFileReference, MessageRAGSource
 from app.models.temporary_file import TemporaryFile
 from app.schemas.message import SendMessageRequest, EditMessageRequest
@@ -243,13 +244,38 @@ class MessageService:
                     "token": temp_file.token
                 })
 
+            # Check user balance before generating response
+            from app.core.exceptions import InsufficientBalanceError
+            user = self.db.query(User).filter(User.id == chat.user_id).first()
+            if user.balance <= 0:
+                raise InsufficientBalanceError("余额不足，请充值后继续使用AI模型")
+            
+            # Get conversation history (last 5 rounds, exclude current message)
+            history_messages = self.db.query(Message).filter(
+                Message.chat_id == chat_id
+            ).order_by(Message.created_at.desc()).limit(10).all()  # 最近10条消息(5轮对话)
+            
+            # Build conversation history for AI (reverse to chronological order)
+            conversation_history = []
+            for msg in reversed(history_messages):
+                conversation_history.append({
+                    "role": msg.role,
+                    "content": msg.content
+                })
+            
+            logger.info(f"📚 历史对话: {len(conversation_history)} 条消息")
+            
             # Generate AI response with file context
             logger.info(f"🤖 调用AI服务生成回复...")
+            logger.info(f"   模型: {chat.ai_model} (搜索: {chat.search_enabled})")
             ai_response = self.ai_service.generate_response(
                 message=message_data.content,
                 chat_type=chat.chat_type,
                 course_id=chat.course_id,
-                file_context=file_context
+                file_context=file_context,
+                ai_model=chat.ai_model,
+                search_enabled=chat.search_enabled,
+                conversation_history=conversation_history
             )
             
             logger.info(f"✅ AI回复生成完成")
@@ -264,6 +290,8 @@ class MessageService:
                 content=ai_response.content,
                 role="assistant",
                 tokens_used=ai_response.tokens_used,
+                input_tokens=ai_response.input_tokens,
+                output_tokens=ai_response.output_tokens,
                 cost=ai_response.cost
             )
             self.db.add(ai_message)
@@ -290,6 +318,12 @@ class MessageService:
                 chat.title = new_chat_title
                 chat_title_updated = True
                 logger.info(f"   新标题: {new_chat_title}")
+
+            # Update user balance
+            from decimal import Decimal
+            cost_decimal = Decimal(str(ai_response.cost))
+            user.balance -= cost_decimal
+            user.total_spent += cost_decimal
 
             # Update chat timestamp
             self.db.query(Chat).filter(Chat.id == chat_id).update({
