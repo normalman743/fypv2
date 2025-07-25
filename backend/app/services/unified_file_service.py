@@ -10,9 +10,13 @@ from app.models.physical_file import PhysicalFile
 from app.models.file_share import FileShare, FileAccessLog
 from app.models.user import User
 from app.models.course import Course
+from app.models.temporary_file import TemporaryFile
 from app.services.local_file_storage import local_file_storage
 from app.services.rag_service import ProductionRAGService
-from app.utils.file_validation import validate_regular_file_upload, FileValidator
+from app.utils.file_validation import validate_regular_file_upload, validate_temporary_file_upload, FileValidator
+import secrets
+import hashlib
+from datetime import datetime, timedelta
 
 
 class UnifiedFileService:
@@ -191,6 +195,8 @@ class UnifiedFileService:
             return f"global/{file_hash}_{original_name}"
         elif scope == 'course':
             return f"course/{file_hash}_{original_name}"
+        elif scope == 'temporary':
+            return f"temporary/{file_hash}_{original_name}"
         else:  # personal
             return f"personal/{file_hash}_{original_name}"
 
@@ -437,3 +443,73 @@ class UnifiedFileService:
             tags=tags,
             visibility='public'
         )
+
+    def upload_temporary_file(
+        self,
+        file: UploadFile,
+        user_id: int,
+        purpose: Optional[str] = None,
+        expiry_hours: Optional[int] = None
+    ) -> TemporaryFile:
+        """
+        上传临时文件 - 复用普通文件上传的去重逻辑
+        
+        Args:
+            file: 上传的文件
+            user_id: 上传用户ID
+            purpose: 用途说明，如 'chat_upload', 'preview' 等
+            expiry_hours: 过期小时数
+        """
+        
+        # 1. 验证文件类型（文档+图片）
+        valid, error_msg = validate_temporary_file_upload(file.filename)
+        if not valid:
+            raise HTTPException(status_code=400, detail=error_msg)
+        
+        # 2. 读取和处理文件内容（复用普通文件逻辑）
+        file_content = file.file.read()
+        file_hash = hashlib.sha256(file_content).hexdigest()
+        file.file.seek(0)
+        
+        print(f"Temporary file upload: {file.filename}, size: {len(file_content)}, hash: {file_hash}")
+        
+        file_info = {
+            'original_name': file.filename,
+            'mime_type': file.content_type or "application/octet-stream",
+            'file_size': len(file_content),
+            'file_hash': file_hash
+        }
+        
+        # 3. 获取或创建 PhysicalFile（复用现有方法）
+        physical_file = self._get_or_create_physical_file(file_info, file_content, scope='temporary')
+        
+        # 4. 生成唯一token
+        token = secrets.token_urlsafe(32)
+        
+        # 5. 计算过期时间
+        if expiry_hours is None:
+            from app.core.config import settings
+            expiry_hours = getattr(settings, 'temporary_file_expiry_hours', 24)
+        
+        expires_at = datetime.utcnow() + timedelta(hours=expiry_hours)
+        
+        # 6. 创建临时文件记录
+        temp_file = TemporaryFile(
+            physical_file_id=physical_file.id,
+            original_name=file.filename,
+            file_type=file.filename.split('.')[-1] if '.' in file.filename else '',
+            file_size=len(file_content),
+            mime_type=file.content_type or "application/octet-stream",
+            user_id=user_id,
+            token=token,
+            expires_at=expires_at,
+            purpose=purpose
+        )
+        
+        self.db.add(temp_file)
+        self.db.commit()
+        self.db.refresh(temp_file)
+        
+        print(f"✅ Temporary file created: ID={temp_file.id}, Token={token[:16]}...")
+        
+        return temp_file

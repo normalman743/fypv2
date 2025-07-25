@@ -38,13 +38,12 @@ async def upload_temporary_file(
     - 通过唯一token访问
     - 适用于聊天上传、预览等临时用途
     """
-    from app.services.temporary_file_service import TemporaryFileService
+    from app.services.unified_file_service import UnifiedFileService
     
-    service = TemporaryFileService()
-    temp_file = await service.upload_temporary_file(
-        db=db,
-        user=current_user,
+    service = UnifiedFileService(db)
+    temp_file = service.upload_temporary_file(
         file=file,
+        user_id=current_user.id,
         purpose=purpose,
         expiry_hours=expiry_hours
     )
