@@ -9,17 +9,35 @@ Campus LLM Database Analysis Tool
 import pymysql
 import json
 from datetime import datetime
+from backend.app.core.config import settings
 
-
+database_url = settings.database_url
+# database_url = 'mysql+pymysql://root:Root%40123456@localhost:3306/campus_llm_db'
 # 校园LLM数据库配置
-campus_db_config = {
-    'host': "39.108.113.103",
-    'port': 3306,
-    'user': "campus_user",
-    'password': "CampusLLM123!",
-    'database': "campus_llm_db",
-    'charset': 'utf8mb4'
-}
+from urllib.parse import urlparse, unquote
+
+def parse_mysql_url(url):
+    # Remove driver prefix if present
+    if url.startswith('mysql+pymysql://'):
+        url = url.replace('mysql+pymysql://', '')
+    elif url.startswith('mysql://'):
+        url = url.replace('mysql://', '')
+    parsed = urlparse(f"//{url}", scheme='mysql')
+    user = unquote(parsed.username) if parsed.username else ''
+    password = unquote(parsed.password) if parsed.password else ''
+    host = parsed.hostname or 'localhost'
+    port = parsed.port or 3306
+    database = parsed.path.lstrip('/') if parsed.path else ''
+    return {
+        'host': host,
+        'port': port,
+        'user': user,
+        'password': password,
+        'database': database,
+        'charset': 'utf8mb4'
+    }
+
+campus_db_config = parse_mysql_url(database_url)
 
 
 def get_connection():

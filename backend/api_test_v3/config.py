@@ -25,10 +25,10 @@ class APIConfig:
 @dataclass
 class DatabaseConfig:
     """数据库配置类"""
-    host: str = "39.108.113.103"
+    host: str = os.getenv("DB_HOST", "localhost")
     database: str = "campus_llm_db"
-    user: str = os.getenv("DB_USER", "campus_user")
-    password: str = os.getenv("DB_PASSWORD", "CampusLLM123!")
+    user: str = os.getenv("DB_USER", "root")
+    password: str = os.getenv("DB_PASSWORD", "Root@123456")
     port: int = 3306
 
 @dataclass
@@ -38,13 +38,13 @@ class TestConfig:
     default_users = {
         "admin": {
             "username": "admin",
-            "email": "admin@test.com",
+            "email": "admin@icu.584743.xyz",
             "password": "admin123456",
             "role": "admin"
         },
         "user": {
             "username": "user",
-            "email": "user@test.com", 
+            "email": "user@icu.584743.xyz",
             "password": "user123456",
             "role": "user"
         },

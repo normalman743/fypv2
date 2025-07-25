@@ -8,7 +8,7 @@ load_dotenv()
 class Settings(BaseSettings):
     # 应用配置
     app_name: str = "校园LLM系统"
-    app_version: str = "1.0.0"
+    app_version: str = "1.9.10"
     debug: bool = False
     environment: str = "development"
     

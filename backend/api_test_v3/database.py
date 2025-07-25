@@ -101,11 +101,13 @@ class DatabaseManager:
             
             # Level 1
             "users",
+            "temporary_files",
             
             # Level 0 - 独立表
             "physical_files",
             "roles",
-            "semesters"
+            "semesters",
+            "email_verifications",
         ]
     
     def get_table_row_count(self, table_name: str) -> int:
@@ -195,7 +197,7 @@ class DatabaseManager:
             # 注意：API只能创建普通用户，所以这里统一创建为user角色
             # 管理员需要后台手动修改
             role = "user"  # API限制，只能创建普通用户
-            balance = 100.00 if user_key == "admin" else 50.00
+            balance = 5.00 if user_key == "admin" else 1.00
             
             # 使用与注册接口相同的密码哈希方法
             hashed_password = get_password_hash(password)
