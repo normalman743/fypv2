@@ -119,27 +119,37 @@ class ProductionAIService:
         
         # 调用OpenAI API
         try:
+            # 为搜索预览模型准备特殊参数
+            api_params = {
+                "model": openai_model,
+                "messages": messages,
+                "max_tokens": model_config["max_tokens"]
+            }
+            
+            # 搜索预览模型有特殊限制
+            if "search-preview" in openai_model:
+                # 搜索预览模型不支持 temperature 参数
+                api_params["response_format"] = {"type": "text"}
+                print(f"🔍 Using search preview model (no temperature)")
+            else:
+                # 非搜索模型可以使用 temperature
+                api_params["temperature"] = 0.7
+            
             if stream:
                 # 流式响应
-                response = self.openai_client.chat.completions.create(
-                    model=openai_model,
-                    messages=messages,
-                    max_tokens=model_config["max_tokens"],
-                    temperature=0.7,
-                    stream=True,
-                    stream_options={"include_usage": True}
-                )
+                api_params.update({
+                    "stream": True,
+                    "stream_options": {
+                        "include_usage": True
+                    }
+                })
+                response = self.openai_client.chat.completions.create(**api_params)
                 
                 # 返回generator用于流式响应
                 return self._handle_stream_response(response, model_config, rag_sources)
             else:
                 # 非流式响应
-                response = self.openai_client.chat.completions.create(
-                    model=openai_model,
-                    messages=messages,
-                    max_tokens=model_config["max_tokens"],
-                    temperature=0.7
-                )
+                response = self.openai_client.chat.completions.create(**api_params)
                 
                 content = response.choices[0].message.content
                 
@@ -172,6 +182,7 @@ class ProductionAIService:
         output_tokens = 0
         
         for chunk in response:
+            print(f"🔍 Received chunk: {chunk}")  # 调试信息
             if hasattr(chunk, 'choices') and chunk.choices and chunk.choices[0].delta.content:
                 # 流式内容
                 content_delta = chunk.choices[0].delta.content
@@ -181,7 +192,7 @@ class ProductionAIService:
                     "content": content_delta
                 }
             elif hasattr(chunk, 'usage') and chunk.usage:
-                # 最终的usage信息
+                # 最终的usage信息（如果有的话）
                 input_tokens = chunk.usage.prompt_tokens
                 output_tokens = chunk.usage.completion_tokens
                 total_tokens = chunk.usage.total_tokens
@@ -201,6 +212,22 @@ class ProductionAIService:
                     "cost": total_cost,
                     "rag_sources": rag_sources
                 }
+        
+        # 添加调试信息：打印接收到的所有chunk信息
+        print(f"🔍 Stream completed. Content length: {len(content)}, Input tokens: {input_tokens}, Output tokens: {output_tokens}")
+        
+        # 如果没有收到usage信息，发送一个没有usage的完成信号
+        if input_tokens == 0 and output_tokens == 0:
+            print("⚠️ No usage information received from OpenAI stream")
+            yield {
+                "type": "usage",
+                "content": content,
+                "tokens_used": 0,
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "cost": 0.0,
+                "rag_sources": rag_sources
+            }
     
     def generate_chat_title(self, first_message: str) -> str:
         """根据用户的第一条消息生成聊天标题"""

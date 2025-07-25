@@ -589,7 +589,7 @@ class MessageService:
 
                     self.db.commit()
 
-                    # Send final usage info
+                    # Send final usage info (确保Decimal类型转换)
                     yield {
                         "type": "completion",
                         "ai_message": {
@@ -598,7 +598,7 @@ class MessageService:
                             "content": ai_message.content,
                             "role": ai_message.role,
                             "tokens_used": ai_message.tokens_used,
-                            "cost": ai_message.cost,
+                            "cost": float(ai_message.cost) if ai_message.cost else None,
                             "created_at": ai_message.created_at.isoformat(),
                             "rag_sources": chunk["rag_sources"]
                         },
