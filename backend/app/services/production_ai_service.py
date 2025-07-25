@@ -67,7 +67,8 @@ class ProductionAIService:
     
     def generate_response(self, message: str, chat_type: str = "general", course_id: int = None, 
                          file_context: str = "", ai_model: str = "Star", search_enabled: bool = False,
-                         conversation_history: list = None, stream: bool = False, images: list = None) -> AIResponse:
+                         conversation_history: list = None, stream: bool = False, images: list = None, 
+                         custom_prompt: str = None) -> AIResponse:
         """使用真实RAG和OpenAI生成响应"""
         
         # 获取实际的OpenAI模型名称
@@ -104,15 +105,44 @@ class ProductionAIService:
             # 继续执行，但没有RAG上下文
         
         # 2. 构建系统提示
-        system_prompt = self._build_system_prompt(chat_type, context_text, file_context)
+        system_prompt = self._build_system_prompt(chat_type, context_text, file_context, custom_prompt)
         
         # 3. 构建完整的消息列表
         messages = [{"role": "system", "content": system_prompt}]
+        
+        # 调试：打印系统提示词
+        print(f"🔧 DEBUG - System Prompt:")
+        print(f"   Length: {len(system_prompt)} characters")
+        print(f"   Full Content:\n{system_prompt}")
+        print(f"   ==================== END SYSTEM PROMPT ====================")
+        if custom_prompt:
+            print(f"   Custom Prompt: {custom_prompt}")
+        if file_context.strip():
+            print(f"   File Context ({len(file_context)} chars):\n{file_context}")
+            print(f"   ==================== END FILE CONTEXT ====================")
         
         # 添加历史对话
         if conversation_history:
             messages.extend(conversation_history)
             print(f"💬 Added {len(conversation_history)} history messages")
+            for i, msg in enumerate(conversation_history[-3:]):  # 显示最后3条历史消息
+                content = msg['content']
+                # 检查是否是包含图片的消息
+                if isinstance(content, list):
+                    # 提取文本部分
+                    text_parts = [item['text'] for item in content if item.get('type') == 'text']
+                    text_content = ' '.join(text_parts) if text_parts else '(包含图片)'
+                    image_count = len([item for item in content if item.get('type') == 'image_url'])
+                    if image_count > 0:
+                        print(f"   History {i}: {msg['role']}: {text_content[:500]}... [含{image_count}张图片]")
+                    else:
+                        print(f"   History {i}: {msg['role']}: {text_content[:500]}...")
+                else:
+                    # 普通文本消息，可以选择显示完整内容或截断
+                    if len(content) <= 500:  # 短消息显示完整内容
+                        print(f"   History {i}: {msg['role']}: {content}")
+                    else:  # 长消息截断显示
+                        print(f"   History {i}: {msg['role']}: {content[:500]}...")
         
         # 添加当前用户消息
         if images:
@@ -124,6 +154,9 @@ class ProductionAIService:
         else:
             # 没有图片，使用普通文本格式
             messages.append({"role": "user", "content": message})
+        
+        print(f"📝 Current User Message: {message}")
+        print(f"📊 Total Messages to AI: {len(messages)} (1 system + {len(conversation_history or [])} history + 1 current)")
         
         # 调用OpenAI API
         try:
@@ -268,7 +301,7 @@ class ProductionAIService:
             # 如果生成失败，返回默认标题
             return "新聊天"
     
-    def _build_system_prompt(self, chat_type: str, context_text: str, file_context: str = "") -> str:
+    def _build_system_prompt(self, chat_type: str, context_text: str, file_context: str = "", custom_prompt: str = None) -> str:
         """构建系统提示"""
         
         base_prompt = """你是香港中文大学(CUHK)的AI助手。你的使命是帮助学生更好地学习和生活，提供准确、友好和专业的回答。
@@ -285,6 +318,7 @@ class ProductionAIService:
 - 保持学术严谨性，引用具体来源
 - 用简洁明了的中文回答（除非用户要求其他语言）
 - 当引用知识库信息时，请在相关内容后标注数据贡献者，格式如：(数据提供：contributor_name)
+- 如果用户询问之前上传的文档，而该文档已过期无法访问，请明确告知文档已过期，但你仍可以基于之前的对话历史来回答相关问题
 
 你的目标是成为学生学习路上的可靠伙伴。"""
         
@@ -300,6 +334,10 @@ class ProductionAIService:
         # 添加RAG检索的上下文
         if context_text.strip():
             base_prompt += f"\n\n知识库检索结果：\n{context_text}"
+        
+        # 添加用户自定义提示词
+        if custom_prompt and custom_prompt.strip():
+            base_prompt += f"\n\n用户自定义指令：\n{custom_prompt}"
         
         return base_prompt
 

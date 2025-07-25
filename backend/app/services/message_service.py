@@ -226,10 +226,26 @@ class MessageService:
         # 获取文件内容用于AI上下文（包括临时文件）
         file_context = self._get_file_contents_for_ai(files)
         
+        # 从历史消息中提取临时文件（如果当前消息没有临时文件）
+        historical_temporary_files, historical_expired_files = self._extract_temporary_files_from_history(chat_id, temporary_files)
+        logger.info(f"🔍 历史文件提取结果: {len(historical_temporary_files)} 个有效, {len(historical_expired_files)} 个过期")
+        
+        # 合并当前和历史临时文件
+        all_temporary_files = temporary_files + historical_temporary_files
+        
+        # 合并过期文件信息
+        all_expired_files = expired_file_info + [f"临时文件 '{f.original_name}' 已过期" for f in historical_expired_files]
+        
+        # 如果有历史过期文件，在文件上下文中添加明确说明
+        if historical_expired_files and not temporary_files:
+            expired_context = "\n".join([f"临时文件 '{f.original_name}' 已过期，无法访问原始内容" for f in historical_expired_files])
+            file_context += f"\n\n过期文件说明：\n{expired_context}\n"
+            logger.info(f"📋 添加了 {len(historical_expired_files)} 个过期文件的说明到文件上下文")
+        
         # 添加临时文件内容到上下文
-        if temporary_files:
+        if all_temporary_files:
             temp_context_parts = []
-            for temp_file in temporary_files:
+            for temp_file in all_temporary_files:
                 # 读取临时文件内容预览
                 if temp_file.physical_file:
                     # 获取正确的文件路径
@@ -288,9 +304,9 @@ class MessageService:
                 file_context += "\n" + "="*50 + "\n".join(temp_context_parts)
         
         # 添加过期文件信息到上下文
-        if expired_file_info:
-            logger.warning(f"⚠️ 有 {len(expired_file_info)} 个文件无法访问，将告知AI")
-            file_context += "\n" + "="*50 + "\n注意：以下文件无法访问：\n" + "\n".join(expired_file_info) + "\n"
+        if all_expired_files:
+            logger.warning(f"⚠️ 有 {len(all_expired_files)} 个文件无法访问，将告知AI")
+            file_context += "\n" + "="*50 + "\n注意：以下文件无法访问：\n" + "\n".join(all_expired_files) + "\n"
 
         # 记录上下文信息
         if file_context:
@@ -379,7 +395,7 @@ class MessageService:
             logger.info(f"📚 历史对话({chat.context_mode}模式): {len(conversation_history)} 条消息 (限制:{message_limit})")
             
             # Prepare images for AI
-            images = self._prepare_images_for_ai(temporary_files)
+            images = self._prepare_images_for_ai(all_temporary_files)
             
             # Generate AI response with file context
             logger.info(f"🤖 调用AI服务生成回复...")
@@ -393,7 +409,8 @@ class MessageService:
                 search_enabled=chat.search_enabled,
                 conversation_history=conversation_history,
                 stream=False,
-                images=images  # 传递图片数据
+                images=images,  # 传递图片数据
+                custom_prompt=chat.custom_prompt  # 传递自定义提示词
             )
             
             logger.info(f"✅ AI回复生成完成")
@@ -531,10 +548,25 @@ class MessageService:
         # 获取文件内容用于AI上下文
         file_context = self._get_file_contents_for_ai(files)
         
+        # 从历史消息中提取临时文件（如果当前消息没有临时文件）
+        historical_temporary_files, historical_expired_files = self._extract_temporary_files_from_history(chat_id, temporary_files)
+        
+        # 合并当前和历史临时文件
+        all_temporary_files = temporary_files + historical_temporary_files
+        
+        # 合并过期文件信息
+        all_expired_files = expired_file_info + [f"临时文件 '{f.original_name}' 已过期" for f in historical_expired_files]
+        
+        # 如果有历史过期文件，在文件上下文中添加明确说明
+        if historical_expired_files and not temporary_files:
+            expired_context = "\n".join([f"临时文件 '{f.original_name}' 已过期，无法访问原始内容" for f in historical_expired_files])
+            file_context += f"\n\n过期文件说明：\n{expired_context}\n"
+            logger.info(f"📋 添加了 {len(historical_expired_files)} 个过期文件的说明到文件上下文")
+        
         # 添加临时文件内容到上下文
-        if temporary_files:
+        if all_temporary_files:
             temp_context_parts = []
-            for temp_file in temporary_files:
+            for temp_file in all_temporary_files:
                 if temp_file.physical_file:
                     # 获取正确的文件路径
                     storage_path = temp_file.physical_file.storage_path
@@ -585,8 +617,8 @@ class MessageService:
                 file_context += "\\n" + "="*50 + "\\n".join(temp_context_parts)
         
         # 添加过期文件信息到上下文
-        if expired_file_info:
-            file_context += "\\n" + "="*50 + "\\n注意：以下文件无法访问：\\n" + "\\n".join(expired_file_info) + "\\n"
+        if all_expired_files:
+            file_context += "\\n" + "="*50 + "\\n注意：以下文件无法访问：\\n" + "\\n".join(all_expired_files) + "\\n"
 
         try:
             # Create user message
@@ -672,7 +704,7 @@ class MessageService:
             }
 
             # Prepare images for AI
-            images = self._prepare_images_for_ai(temporary_files)
+            images = self._prepare_images_for_ai(all_temporary_files)
             
             # Generate AI response with streaming
             ai_stream = self.ai_service.generate_response(
@@ -684,7 +716,8 @@ class MessageService:
                 search_enabled=chat.search_enabled,
                 conversation_history=conversation_history,
                 stream=True,
-                images=images  # 传递图片数据
+                images=images,  # 传递图片数据
+                custom_prompt=chat.custom_prompt  # 传递自定义提示词
             )
 
             # Create AI message placeholder
@@ -808,6 +841,77 @@ class MessageService:
         self.db.delete(message)
         self.db.commit()
         return True
+
+    def _extract_temporary_files_from_history(self, chat_id: int, current_temporary_files: List[TemporaryFile]) -> tuple[List[TemporaryFile], List[TemporaryFile]]:
+        """
+        从历史消息中提取临时文件，处理过期和有效的文件
+        
+        Args:
+            chat_id: 聊天ID
+            current_temporary_files: 当前消息的临时文件列表
+            
+        Returns:
+            tuple: (有效的临时文件列表, 过期的临时文件列表)
+        """
+        # 如果当前消息有临时文件，不需要加载历史文件
+        if current_temporary_files:
+            return [], []
+            
+        # 获取聊天的上下文模式和消息限制
+        from app.core.context_config import get_context_message_limit
+        chat = self.db.query(Chat).filter(Chat.id == chat_id).first()
+        if not chat:
+            return [], []
+            
+        message_limit = get_context_message_limit(chat.context_mode)
+        
+        # 获取历史消息ID
+        history_messages = self.db.query(Message.id).filter(
+            Message.chat_id == chat_id
+        ).order_by(Message.created_at.desc()).limit(message_limit).all()
+        
+        if not history_messages:
+            return [], []
+            
+        history_message_ids = [msg.id for msg in history_messages]
+        
+        # 从message_file_references中找到历史消息使用的临时文件
+        temp_file_refs = self.db.query(MessageFileReference).filter(
+            MessageFileReference.message_id.in_(history_message_ids),
+            MessageFileReference.reference_type == 'temporary_file',
+            MessageFileReference.temporary_file_id.is_not(None)
+        ).all()
+        
+        if not temp_file_refs:
+            return [], []
+            
+        # 提取临时文件ID
+        temp_file_ids = list(set([ref.temporary_file_id for ref in temp_file_refs]))
+        
+        # 获取临时文件，检查有效性
+        temp_files = self.db.query(TemporaryFile).filter(
+            TemporaryFile.id.in_(temp_file_ids)
+        ).all()
+        
+        valid_files = []
+        expired_files = []
+        
+        for temp_file in temp_files:
+            if temp_file.is_expired:
+                expired_files.append(temp_file)
+            else:
+                valid_files.append(temp_file)
+        
+        logger.info(f"📚 历史临时文件状态: {len(valid_files)} 个有效, {len(expired_files)} 个过期")
+        
+        # 处理过期文件：在文件上下文中添加过期提示
+        if expired_files:
+            expired_info = []
+            for expired_file in expired_files:
+                expired_info.append(f"临时文件 '{expired_file.original_name}' 已过期")
+            logger.warning(f"⚠️ 过期文件: {', '.join([f.original_name for f in expired_files])}")
+        
+        return valid_files, expired_files
 
     def format_message_response(self, message: Message) -> dict:
         """Format message for API response"""
