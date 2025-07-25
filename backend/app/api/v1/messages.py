@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends, Path
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
+import json
 
 from app.dependencies import get_db, get_current_user
 from app.services.message_service import MessageService
@@ -38,7 +40,7 @@ async def get_chat_messages(
     )
 
 
-@router.post("/chats/{chat_id}/messages", response_model=MessageSendResponse)
+@router.post("/chats/{chat_id}/messages")
 async def send_message(
     chat_id: int = Path(..., description="Chat ID"),
     message_data: SendMessageRequest = ...,
@@ -47,12 +49,35 @@ async def send_message(
 ):
     """Send message and get AI response"""
     service = MessageService(db)
-    result = service.send_message(chat_id, message_data, current_user.id)
     
-    return MessageSendResponse(
-        success=True,
-        data=result
-    )
+    if message_data.stream:
+        # 流式响应
+        def generate_stream():
+            try:
+                for chunk in service.send_message_stream(chat_id, message_data, current_user.id):
+                    yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+                yield "data: [DONE]\n\n"
+            except Exception as e:
+                error_chunk = {"type": "error", "error": str(e)}
+                yield f"data: {json.dumps(error_chunk, ensure_ascii=False)}\n\n"
+        
+        return StreamingResponse(
+            generate_stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "*"
+            }
+        )
+    else:
+        # 非流式响应
+        result = service.send_message(chat_id, message_data, current_user.id)
+        return MessageSendResponse(
+            success=True,
+            data=result
+        )
 
 
 @router.put("/messages/{message_id}", response_model=MessageUpdateResponse)

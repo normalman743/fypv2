@@ -244,7 +244,8 @@ class ChatService:
                 file_context=file_context,
                 ai_model=chat.ai_model,
                 search_enabled=chat.search_enabled,
-                conversation_history=[]  # 第一条消息没有历史
+                conversation_history=[],  # 第一条消息没有历史
+                stream=False
             )
 
             # Create AI message
@@ -320,6 +321,17 @@ class ChatService:
         except IntegrityError:
             self.db.rollback()
             raise BadRequestError("Failed to create chat", "CHAT_CREATE_FAILED")
+
+    def create_chat_with_first_message_stream(self, chat_data: CreateChatRequest, user_id: int):
+        """流式创建聊天和首条消息"""
+        # 暂时使用非流式方式，完整实现需要重构较多代码
+        result = self.create_chat_with_first_message(chat_data, user_id)
+        
+        # 发送创建完成的消息
+        yield {
+            "type": "chat_created",
+            "data": result
+        }
 
     def update_chat(self, chat_id: int, chat_data: UpdateChatRequest, user_id: int) -> Chat:
         """Update chat title"""

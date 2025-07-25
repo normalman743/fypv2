@@ -67,7 +67,7 @@ class ProductionAIService:
     
     def generate_response(self, message: str, chat_type: str = "general", course_id: int = None, 
                          file_context: str = "", ai_model: str = "Star", search_enabled: bool = False,
-                         conversation_history: list = None) -> AIResponse:
+                         conversation_history: list = None, stream: bool = False) -> AIResponse:
         """使用真实RAG和OpenAI生成响应"""
         
         # 获取实际的OpenAI模型名称
@@ -119,36 +119,88 @@ class ProductionAIService:
         
         # 调用OpenAI API
         try:
-            response = self.openai_client.chat.completions.create(
-                model=openai_model,  # 使用动态模型
-                messages=messages,
-                max_tokens=model_config["max_tokens"],
-                temperature=0.7
-            )
-            
-            content = response.choices[0].message.content
-            
-            # 获取详细的token使用情况
-            input_tokens = response.usage.prompt_tokens
-            output_tokens = response.usage.completion_tokens
-            total_tokens = response.usage.total_tokens
-            
-            # 按input/output分别计算成本
-            input_cost = (input_tokens / 1_000_000) * model_config["input_cost_per_million"]
-            output_cost = (output_tokens / 1_000_000) * model_config["output_cost_per_million"]
-            total_cost = input_cost + output_cost
-            
-            return AIResponse(
-                content=content,
-                tokens_used=total_tokens,
-                cost=total_cost,
-                rag_sources=rag_sources,
-                input_tokens=input_tokens,
-                output_tokens=output_tokens
-            )
+            if stream:
+                # 流式响应
+                response = self.openai_client.chat.completions.create(
+                    model=openai_model,
+                    messages=messages,
+                    max_tokens=model_config["max_tokens"],
+                    temperature=0.7,
+                    stream=True,
+                    stream_options={"include_usage": True}
+                )
+                
+                # 返回generator用于流式响应
+                return self._handle_stream_response(response, model_config, rag_sources)
+            else:
+                # 非流式响应
+                response = self.openai_client.chat.completions.create(
+                    model=openai_model,
+                    messages=messages,
+                    max_tokens=model_config["max_tokens"],
+                    temperature=0.7
+                )
+                
+                content = response.choices[0].message.content
+                
+                # 获取详细的token使用情况
+                input_tokens = response.usage.prompt_tokens
+                output_tokens = response.usage.completion_tokens
+                total_tokens = response.usage.total_tokens
+                
+                # 按input/output分别计算成本
+                input_cost = (input_tokens / 1_000_000) * model_config["input_cost_per_million"]
+                output_cost = (output_tokens / 1_000_000) * model_config["output_cost_per_million"]
+                total_cost = input_cost + output_cost
+                
+                return AIResponse(
+                    content=content,
+                    tokens_used=total_tokens,
+                    cost=total_cost,
+                    rag_sources=rag_sources,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens
+                )
             
         except Exception as e:
             raise RuntimeError(f"OpenAI API call failed: {e}")
+    
+    def _handle_stream_response(self, response, model_config, rag_sources):
+        """处理流式响应"""
+        content = ""
+        input_tokens = 0
+        output_tokens = 0
+        
+        for chunk in response:
+            if hasattr(chunk, 'choices') and chunk.choices and chunk.choices[0].delta.content:
+                # 流式内容
+                content_delta = chunk.choices[0].delta.content
+                content += content_delta
+                yield {
+                    "type": "content",
+                    "content": content_delta
+                }
+            elif hasattr(chunk, 'usage') and chunk.usage:
+                # 最终的usage信息
+                input_tokens = chunk.usage.prompt_tokens
+                output_tokens = chunk.usage.completion_tokens
+                total_tokens = chunk.usage.total_tokens
+                
+                # 计算成本
+                input_cost = (input_tokens / 1_000_000) * model_config["input_cost_per_million"]
+                output_cost = (output_tokens / 1_000_000) * model_config["output_cost_per_million"]
+                total_cost = input_cost + output_cost
+                
+                # 发送最终的usage信息
+                yield {
+                    "type": "usage",
+                    "content": content,
+                    "tokens_used": total_tokens,
+                    "input_tokens": input_tokens,
+                    "output_tokens": output_tokens,
+                    "cost": total_cost,
+                    "rag_sources": rag_sources
+                }
     
     def generate_chat_title(self, first_message: str) -> str:
         """根据用户的第一条消息生成聊天标题"""

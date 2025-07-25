@@ -32,6 +32,7 @@ class SendMessageRequest(BaseModel):
     file_ids: Optional[List[int]] = []
     folder_ids: Optional[List[int]] = []
     temporary_file_tokens: Optional[List[str]] = []  # 临时文件通过token引用
+    stream: bool = False  # 是否启用streaming模式
 
 class EditMessageRequest(BaseModel):
     content: str
