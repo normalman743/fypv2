@@ -22,6 +22,7 @@ router = APIRouter(prefix="/semesters", tags=["semesters"])
 
 @router.get("", response_model=SemesterListResponse)
 async def get_semesters(
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get semester list"""
@@ -83,6 +84,7 @@ async def update_semester(
 @router.get("/{semester_id}", response_model=SemesterListResponse)
 async def get_semester(
     semester_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get semester details"""
@@ -103,6 +105,7 @@ async def get_semester(
 @router.get("/{semester_id}/courses", response_model=CourseListResponse)
 async def get_semester_courses(
     semester_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get all courses for a semester"""
@@ -113,9 +116,9 @@ async def get_semester_courses(
     if not semester:
         raise HTTPException(status_code=404, detail="Semester not found")
     
-    # Get courses for this semester
+    # Get courses for this semester (filtered by current user)
     course_service = CourseService(db)
-    courses = course_service.get_courses(semester_id=semester_id)
+    courses = course_service.get_courses(user_id=current_user.id, semester_id=semester_id)
     
     # Convert to response format with semester info and stats
     course_list = []
