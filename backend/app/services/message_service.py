@@ -250,10 +250,13 @@ class MessageService:
             if user.balance <= 0:
                 raise InsufficientBalanceError("余额不足，请充值后继续使用AI模型")
             
-            # Get conversation history (last 5 rounds, exclude current message)
+            # Get conversation history based on context mode
+            from app.core.context_config import get_context_message_limit
+            message_limit = get_context_message_limit(chat.context_mode)
+            
             history_messages = self.db.query(Message).filter(
                 Message.chat_id == chat_id
-            ).order_by(Message.created_at.desc()).limit(10).all()  # 最近10条消息(5轮对话)
+            ).order_by(Message.created_at.desc()).limit(message_limit).all()
             
             # Build conversation history for AI (reverse to chronological order)
             conversation_history = []
@@ -263,7 +266,7 @@ class MessageService:
                     "content": msg.content
                 })
             
-            logger.info(f"📚 历史对话: {len(conversation_history)} 条消息")
+            logger.info(f"📚 历史对话({chat.context_mode}模式): {len(conversation_history)} 条消息 (限制:{message_limit})")
             
             # Generate AI response with file context
             logger.info(f"🤖 调用AI服务生成回复...")

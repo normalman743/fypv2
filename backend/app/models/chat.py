@@ -16,9 +16,11 @@ class Chat(Base):
     ai_model = Column(String(20), nullable=False, default='Star', index=True)  # 'Star', 'StarPlus', 'StarCode'
     search_enabled = Column(Boolean, nullable=False, default=False)
     
+    # 对话配置
+    context_mode = Column(String(20), nullable=False, default='Standard', index=True)  # Economy/Standard/Premium/Max
+    
     # RAG配置
     rag_enabled = Column(Boolean, default=True)
-    max_context_length = Column(Integer, default=4000)
     
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), index=True)

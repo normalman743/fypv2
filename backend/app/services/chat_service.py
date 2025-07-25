@@ -146,11 +146,20 @@ class ChatService:
         try:
             # Validate model and search combination
             from app.core.model_config import validate_model_search_combination
+            from app.core.context_config import validate_context_mode
+            
             if not validate_model_search_combination(chat_data.ai_model, chat_data.search_enabled):
                 raise BadRequestError(
                     f"Model {chat_data.ai_model} does not support search functionality" if chat_data.search_enabled 
                     else f"Invalid AI model: {chat_data.ai_model}",
                     "INVALID_MODEL_CONFIG"
+                )
+            
+            # Validate context mode
+            if not validate_context_mode(chat_data.context_mode):
+                raise BadRequestError(
+                    f"Invalid context mode: {chat_data.context_mode}",
+                    "INVALID_CONTEXT_MODE"
                 )
             
             # Check user balance
@@ -167,7 +176,8 @@ class ChatService:
                 user_id=user_id,
                 custom_prompt=chat_data.custom_prompt,
                 ai_model=chat_data.ai_model,
-                search_enabled=chat_data.search_enabled
+                search_enabled=chat_data.search_enabled,
+                context_mode=chat_data.context_mode
             )
             self.db.add(chat)
             self.db.flush()  # Get chat ID without committing

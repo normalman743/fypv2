@@ -52,6 +52,7 @@ async def get_chats(
             custom_prompt=chat.custom_prompt,
             ai_model=chat.ai_model,
             search_enabled=chat.search_enabled,
+            context_mode=chat.context_mode,
             created_at=chat.created_at,
             updated_at=chat.updated_at,
             course=course_info,

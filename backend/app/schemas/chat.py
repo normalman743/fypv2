@@ -20,6 +20,7 @@ class ChatResponse(BaseModel):
     custom_prompt: Optional[str]
     ai_model: str
     search_enabled: bool
+    context_mode: str
     created_at: datetime
     updated_at: datetime
     course: Optional[CourseInfo] = None
@@ -35,6 +36,7 @@ class CreateChatRequest(BaseModel):
     custom_prompt: Optional[str] = None
     ai_model: str = "Star"  # "Star", "StarPlus", "StarCode"
     search_enabled: bool = False
+    context_mode: str = "Standard"  # "Economy", "Standard", "Premium", "Max"
     file_ids: Optional[List[int]] = []
     folder_ids: Optional[List[int]] = []
     temporary_file_tokens: Optional[List[str]] = []
