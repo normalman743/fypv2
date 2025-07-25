@@ -39,4 +39,18 @@ class UploadFileRequest(BaseModel):
     folder_id: int
 
 class UploadFileResponse(SuccessResponse):
-    data: dict  # {"file": FileResponse} 
+    data: dict  # {"file": FileResponse}
+
+class TemporaryFileResponse(BaseModel):
+    id: int
+    token: str
+    original_name: str
+    file_type: str
+    file_size: int
+    mime_type: str
+    expires_at: datetime
+    purpose: Optional[str] = None
+    created_at: datetime
+
+class UploadTemporaryFileResponse(SuccessResponse):
+    data: dict  # {"file": TemporaryFileResponse} 

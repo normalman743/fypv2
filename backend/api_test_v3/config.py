@@ -47,6 +47,30 @@ class TestConfig:
             "email": "user@test.com", 
             "password": "user123456",
             "role": "user"
+        },
+        "ad-xiong": {
+            "username": "ad-xiong",
+            "email": "ad-xiong@icu.584743.xyz",
+            "password": "xiong123",
+            "role": "admin"
+        },
+        "ad-qi": {
+            "username": "ad-qi",
+            "email": "ad-qi@icu.584743.xyz",
+            "password": "qi123",
+            "role": "admin"
+        },
+        "ad-shen": {
+            "username": "ad-shen",
+            "email": "ad-shen@icu.584743.xyz",
+            "password": "shen123",
+            "role": "admin"
+        },
+        "ad-chen": {
+            "username": "ad-chen",
+            "email": "ad-chen@icu.584743.xyz",
+            "password": "chen123",
+            "role": "admin"
         }
     }
     
@@ -60,6 +84,26 @@ class TestConfig:
         {
             "code": "USER2024", 
             "description": "普通用户邀请码",
+            "is_active": True
+        },
+        {
+            "code": "TEST2024",
+            "description": "测试邀请码",
+            "is_active": True
+        },
+        {
+            "code": "INVITE2025",
+            "description": "默认邀请码",
+            "is_active": True
+        },
+        {
+            "code": "TEST2025",
+            "description": "测试邀请码2025",
+            "is_active": True
+        },
+        {
+            "code": "TEST2026",
+            "description": "测试邀请码2026",
             "is_active": True
         }
     ]

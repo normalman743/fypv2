@@ -33,6 +33,7 @@ class CreateChatRequest(BaseModel):
     custom_prompt: Optional[str] = None
     file_ids: Optional[List[int]] = []
     folder_ids: Optional[List[int]] = []
+    temporary_file_tokens: Optional[List[str]] = []
 
 class UpdateChatRequest(BaseModel):
     title: str

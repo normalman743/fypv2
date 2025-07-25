@@ -12,6 +12,7 @@ from app.schemas.chat import CreateChatRequest, UpdateChatRequest
 from app.schemas.message import SendMessageRequest
 from app.services.production_ai_service import create_ai_service
 from app.core.exceptions import NotFoundError, ForbiddenError, BadRequestError
+from app.utils.file_processing_utils import FileProcessingUtils
 
 
 class ChatService:
@@ -117,8 +118,29 @@ class ChatService:
             user_id
         )
         
+        # 处理临时文件
+        temp_files = []
+        expired_messages = []
+        if chat_data.temporary_file_tokens:
+            temp_files, expired_messages = FileProcessingUtils.process_temporary_files(
+                self.db,
+                chat_data.temporary_file_tokens,
+                user_id
+            )
+        
         # 获取文件内容用于AI上下文
         file_context = self._get_file_contents_for_ai(files)
+        
+        # 获取临时文件内容
+        if temp_files:
+            temp_file_context = FileProcessingUtils.get_temporary_file_contents_for_ai(temp_files, self.db)
+            if temp_file_context:
+                file_context = file_context + ("\n" if file_context else "") + temp_file_context
+        
+        # 如果有过期文件，添加到上下文中
+        if expired_messages:
+            expired_context = "\n\n【注意】以下文件已过期无法访问：\n" + "\n".join(expired_messages)
+            file_context = file_context + expired_context
 
         try:
             # Create chat with temporary title
@@ -168,6 +190,23 @@ class ChatService:
                         reference_type='folder'
                     )
                     self.db.add(folder_ref)
+            
+            # Add temporary file references
+            temp_file_attachments = []
+            for temp_file in temp_files:
+                temp_ref = MessageFileReference(
+                    message_id=user_message.id,
+                    temporary_file_id=temp_file.id,
+                    reference_type='temporary_file'
+                )
+                self.db.add(temp_ref)
+                temp_file_attachments.append({
+                    "id": temp_file.id,
+                    "token": temp_file.token,
+                    "filename": temp_file.original_name,
+                    "file_size": temp_file.file_size,
+                    "expires_at": temp_file.expires_at.isoformat()
+                })
 
             # Generate AI response with file context
             ai_response = self.ai_service.generate_response(
@@ -221,7 +260,8 @@ class ChatService:
                     "tokens_used": user_message.tokens_used,
                     "cost": user_message.cost,
                     "created_at": user_message.created_at,
-                    "file_attachments": file_attachments
+                    "file_attachments": file_attachments,
+                    "temporary_file_attachments": temp_file_attachments
                 },
                 "ai_message": {
                     "id": ai_message.id,

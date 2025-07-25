@@ -187,13 +187,16 @@ class DatabaseManager:
             logger.error("❌ 创建默认学期失败")
             return False
         
-        # 创建默认用户
-        users_data = [
-            ("admin", "admin@test.com", "admin123456", "admin", 100.00),
-            ("user", "user@test.com", "user123456", "user", 50.00)
-        ]
-        
-        for username, email, password, role, balance in users_data:
+        # 创建默认用户（从配置文件读取）
+        for user_key, user_data in test_config.default_users.items():
+            username = user_data["username"]
+            email = user_data["email"]
+            password = user_data["password"]
+            # 注意：API只能创建普通用户，所以这里统一创建为user角色
+            # 管理员需要后台手动修改
+            role = "user"  # API限制，只能创建普通用户
+            balance = 100.00 if user_key == "admin" else 50.00
+            
             # 使用与注册接口相同的密码哈希方法
             hashed_password = get_password_hash(password)
             user_query = """
@@ -203,6 +206,8 @@ class DatabaseManager:
             if not self.execute_query(user_query, (username, email, hashed_password, role, balance)):
                 logger.error(f"❌ 创建用户 {username} 失败")
                 return False
+            
+            logger.info(f"✅ 创建用户 {username} (角色: {role}, 配置期望角色: {user_data.get('role', 'user')})")
         
         # 创建默认邀请码
         from datetime import datetime, timedelta
@@ -242,7 +247,11 @@ class DatabaseManager:
             logger.error("❌ 创建默认文件夹失败")
             return False
         
-        logger.info("✅ 默认数据创建完成（包括学期、用户、邀请码、课程、文件夹）")
+        logger.info(f"✅ 默认数据创建完成：")
+        logger.info(f"   - 用户数: {len(test_config.default_users)}")
+        logger.info(f"   - 邀请码数: {len(test_config.default_invite_codes)}")
+        logger.info("   - 学期、课程、文件夹各1个")
+        logger.info("⚠️  注意：所有用户都创建为普通用户角色，管理员角色需手动在数据库中更新")
         return True
 
 def clear_storage_directory():

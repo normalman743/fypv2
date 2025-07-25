@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, 
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
 import json
+import os
 
 from app.dependencies import get_db, get_current_user, require_admin
 from app.models.user import User
@@ -226,6 +227,90 @@ async def upload_global_file(
                 }
             }
         )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.post("/files/{file_id}/reprocess-rag", response_model=SuccessResponse)
+async def reprocess_file_rag(
+    file_id: int,
+    use_async: bool = Query(True, description="是否使用异步处理"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
+    """
+    重新处理文件RAG（管理员专用）
+    适用于处理失败的文件
+    """
+    try:
+        from app.models.file import File
+        from app.models.physical_file import PhysicalFile
+        from app.services.local_file_storage import local_file_storage
+        
+        # 获取文件记录
+        file_record = db.query(File).filter(File.id == file_id).first()
+        if not file_record:
+            raise HTTPException(status_code=404, detail="File not found")
+        
+        physical_file = db.query(PhysicalFile).filter(
+            PhysicalFile.id == file_record.physical_file_id
+        ).first()
+        if not physical_file:
+            raise HTTPException(status_code=404, detail="Physical file not found")
+        
+        # 检查文件是否存在于磁盘
+        full_path = local_file_storage.base_dir / physical_file.storage_path
+        if not os.path.exists(full_path):
+            raise HTTPException(status_code=404, detail="File not found on disk")
+        
+        # 重置处理状态
+        file_record.processing_status = "processing"
+        file_record.is_processed = False
+        file_record.processing_error = None
+        db.commit()
+        
+        if use_async:
+            # 异步处理
+            from app.tasks.file_processing import process_file_rag_task
+            with open(full_path, 'rb') as f:
+                file_content = f.read()
+            
+            task = process_file_rag_task.delay(file_id, file_content)
+            
+            return SuccessResponse(
+                data={
+                    "message": "RAG processing started",
+                    "task_id": task.id,
+                    "file_id": file_id,
+                    "processing_mode": "async"
+                }
+            )
+        else:
+            # 同步处理
+            from app.services.rag_service import ProductionRAGService
+            try:
+                rag_service = ProductionRAGService(db_session=db)
+                result = rag_service.process_file(file_record, str(full_path))
+                
+                file_record.is_processed = True
+                file_record.processing_status = "completed"
+                db.commit()
+                
+                return SuccessResponse(
+                    data={
+                        "message": "RAG processing completed",
+                        "file_id": file_id,
+                        "processing_mode": "sync",
+                        "result": result
+                    }
+                )
+            except Exception as e:
+                file_record.processing_status = "failed"
+                file_record.processing_error = str(e)
+                db.commit()
+                raise HTTPException(status_code=500, detail=f"RAG processing failed: {str(e)}")
+        
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 

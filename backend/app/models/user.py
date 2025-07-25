@@ -34,3 +34,5 @@ class User(Base):
     chats = relationship("Chat", back_populates="user")
     created_invite_codes = relationship("InviteCode", foreign_keys="InviteCode.created_by", back_populates="creator")
     used_invite_codes = relationship("InviteCode", foreign_keys="InviteCode.used_by", back_populates="user")
+    email_verifications = relationship("EmailVerification", back_populates="user")
+    temporary_files = relationship("TemporaryFile", back_populates="user")

@@ -100,7 +100,7 @@ def format_response(response: requests.Response) -> Dict[str, Any]:
     
     return result
 
-def print_response(response: requests.Response, title: str = "API Response"):
+def print_response(response: requests.Response, title: str = "API Response", show_full_response: bool = False):
     """打印响应信息"""
     print(f"\n{'='*50}")
     print(f"{title}")
@@ -110,7 +110,32 @@ def print_response(response: requests.Response, title: str = "API Response"):
     
     try:
         data = response.json()
-        print(f"Response: {json.dumps(data, indent=2, ensure_ascii=False)}")
+        if show_full_response:
+            print(f"Response: {json.dumps(data, indent=2, ensure_ascii=False)}")
+        else:
+            # 简化显示，只显示关键信息
+            if isinstance(data, dict):
+                if "success" in data:
+                    print(f"Success: {data['success']}")
+                if "message" in data:
+                    print(f"Message: {data['message']}")
+                if "data" in data and data["data"]:
+                    # 只显示data的概要信息
+                    data_info = data["data"]
+                    if isinstance(data_info, dict):
+                        keys = list(data_info.keys())[:3]  # 只显示前3个key
+                        summary = {k: str(data_info[k])[:50] + "..." if len(str(data_info[k])) > 50 else data_info[k] for k in keys}
+                        if len(data_info) > 3:
+                            summary["..."] = f"(还有 {len(data_info) - 3} 个字段)"
+                        print(f"Data Summary: {json.dumps(summary, indent=2, ensure_ascii=False)}")
+                    elif isinstance(data_info, list):
+                        print(f"Data: [{len(data_info)} items]")
+                    else:
+                        print(f"Data: {str(data_info)[:100]}...")
+                else:
+                    print(f"Response: {json.dumps(data, indent=2, ensure_ascii=False)}")
+            else:
+                print(f"Response: {json.dumps(data, indent=2, ensure_ascii=False)}")
     except json.JSONDecodeError:
         print(f"Response: {response.text}")
     

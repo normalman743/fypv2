@@ -2,7 +2,7 @@
 
 - **Database**: campus_llm_db
 - **Host**: 39.108.113.103
-- **Analysis Time**: 2025-07-14 22:32:29
+- **Analysis Time**: 2025-07-16 02:49:23
 
 ## 📋 1. TABLE STRUCTURES
 
@@ -24,8 +24,8 @@
 
 ### 🔹 Table: chats
 - **Engine**: InnoDB
-- **Rows**: 0
-- **Auto_increment**: 1
+- **Rows**: 3
+- **Auto_increment**: 4
 
 | Field | Type | Null | Key | Default | Extra |
 |-------|------|------|-----|---------|-------|
@@ -42,8 +42,8 @@
 
 ### 🔹 Table: courses
 - **Engine**: InnoDB
-- **Rows**: 0
-- **Auto_increment**: 1
+- **Rows**: 2
+- **Auto_increment**: 3
 
 | Field | Type | Null | Key | Default | Extra |
 |-------|------|------|-----|---------|-------|
@@ -57,8 +57,8 @@
 
 ### 🔹 Table: document_chunks
 - **Engine**: InnoDB
-- **Rows**: 0
-- **Auto_increment**: 1
+- **Rows**: 6
+- **Auto_increment**: 9
 
 | Field | Type | Null | Key | Default | Extra |
 |-------|------|------|-----|---------|-------|
@@ -91,8 +91,8 @@
 
 ### 🔹 Table: file_access_logs
 - **Engine**: InnoDB
-- **Rows**: 0
-- **Auto_increment**: 1
+- **Rows**: 2
+- **Auto_increment**: 5
 
 | Field | Type | Null | Key | Default | Extra |
 |-------|------|------|-----|---------|-------|
@@ -140,7 +140,7 @@
 ### 🔹 Table: file_shares
 - **Engine**: InnoDB
 - **Rows**: 0
-- **Auto_increment**: 1
+- **Auto_increment**: 2
 
 | Field | Type | Null | Key | Default | Extra |
 |-------|------|------|-----|---------|-------|
@@ -159,8 +159,8 @@
 
 ### 🔹 Table: files
 - **Engine**: InnoDB
-- **Rows**: 0
-- **Auto_increment**: 1
+- **Rows**: 3
+- **Auto_increment**: 6
 
 | Field | Type | Null | Key | Default | Extra |
 |-------|------|------|-----|---------|-------|
@@ -191,8 +191,8 @@
 
 ### 🔹 Table: folders
 - **Engine**: InnoDB
-- **Rows**: 0
-- **Auto_increment**: 1
+- **Rows**: 2
+- **Auto_increment**: 3
 
 | Field | Type | Null | Key | Default | Extra |
 |-------|------|------|-----|---------|-------|
@@ -205,8 +205,8 @@
 
 ### 🔹 Table: invite_codes
 - **Engine**: InnoDB
-- **Rows**: 0
-- **Auto_increment**: 1
+- **Rows**: 2
+- **Auto_increment**: 4
 
 | Field | Type | Null | Key | Default | Extra |
 |-------|------|------|-----|---------|-------|
@@ -223,8 +223,8 @@
 
 ### 🔹 Table: message_file_references
 - **Engine**: InnoDB
-- **Rows**: 0
-- **Auto_increment**: 1
+- **Rows**: 9
+- **Auto_increment**: 10
 
 | Field | Type | Null | Key | Default | Extra |
 |-------|------|------|-----|---------|-------|
@@ -250,8 +250,8 @@
 
 ### 🔹 Table: messages
 - **Engine**: InnoDB
-- **Rows**: 0
-- **Auto_increment**: 1
+- **Rows**: 12
+- **Auto_increment**: 13
 
 | Field | Type | Null | Key | Default | Extra |
 |-------|------|------|-----|---------|-------|
@@ -292,8 +292,8 @@
 
 ### 🔹 Table: physical_files
 - **Engine**: InnoDB
-- **Rows**: 0
-- **Auto_increment**: 1
+- **Rows**: 3
+- **Auto_increment**: 5
 
 | Field | Type | Null | Key | Default | Extra |
 |-------|------|------|-----|---------|-------|
@@ -324,8 +324,8 @@
 
 ### 🔹 Table: semesters
 - **Engine**: InnoDB
-- **Rows**: 0
-- **Auto_increment**: 2
+- **Rows**: 2
+- **Auto_increment**: 3
 
 | Field | Type | Null | Key | Default | Extra |
 |-------|------|------|-----|---------|-------|
@@ -373,8 +373,8 @@
 
 ### 🔹 Table: users
 - **Engine**: InnoDB
-- **Rows**: 0
-- **Auto_increment**: 1
+- **Rows**: 2
+- **Auto_increment**: 3
 
 | Field | Type | Null | Key | Default | Extra |
 |-------|------|------|-----|---------|-------|
@@ -728,27 +728,27 @@
 | Table | Rows | Sample Fields |
 |-------|------|---------------|
 | audit_logs | 0 |  |
-| chats | 0 |  |
-| courses | 0 |  |
-| document_chunks | 0 |  |
+| chats | 3 | id, title, chat_type, course_id, user_id |
+| courses | 2 | id, name, code, description, semester_id |
+| document_chunks | 6 | id, chunk_text, chunk_index, token_count, chroma_id |
 | document_chunks_backup_20250714 | 18 | id, physical_file_id, global_file_id, chunk_text, chunk_index |
-| file_access_logs | 0 |  |
+| file_access_logs | 2 | id, file_id, user_id, action, access_via |
 | file_group_members | 0 |  |
 | file_groups | 0 |  |
 | file_shares | 0 |  |
-| files | 0 |  |
-| folders | 0 |  |
-| invite_codes | 0 |  |
-| message_file_references | 0 |  |
+| files | 3 | id, physical_file_id, original_name, file_type, course_id |
+| folders | 2 | id, name, folder_type, course_id, is_default |
+| invite_codes | 3 | id, code, description, is_used, used_by |
+| message_file_references | 9 | id, message_id, file_id, reference_type, created_at |
 | message_rag_sources | 0 |  |
-| messages | 0 |  |
+| messages | 12 | id, chat_id, content, role, model_name |
 | permissions | 0 |  |
-| physical_files | 0 |  |
+| physical_files | 3 | id, file_hash, file_size, mime_type, storage_path |
 | roles | 0 |  |
-| semesters | 0 |  |
+| semesters | 2 | id, name, code, start_date, end_date |
 | subject_roles | 0 |  |
 | system_config | 0 |  |
-| users | 0 |  |
+| users | 2 | id, username, email, password_hash, role |
 
 ## 🌐 6. DEPENDENCY GRAPH
 
