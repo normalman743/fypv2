@@ -107,12 +107,18 @@ async def get_folder_files(
     db: Session = Depends(get_db)
 ):
     """Get all files in folder"""
+    import logging
+    logging.info(f"Getting files for folder_id={folder_id}, user_id={current_user.id}")
+    
     service = FileService(db)
     files = service.get_folder_files(folder_id, current_user.id)
     
+    logging.info(f"Found {len(files)} files, starting to process...")
+    
     # Convert to response format with folder info
     file_list = []
-    for file_record in files:
+    for i, file_record in enumerate(files):
+        logging.info(f"Processing file {i+1}/{len(files)}: {file_record.original_name}")
         folder_info = None
         if file_record.folder:
             folder_info = FolderInfo(
@@ -136,7 +142,9 @@ async def get_folder_files(
             folder=folder_info
         )
         file_list.append(file_data)
+        logging.info(f"Completed processing file {i+1}/{len(files)}")
     
+    logging.info(f"All files processed, returning response with {len(file_list)} files")
     return FileListResponse(
         success=True,
         data={"files": [file_data.model_dump() for file_data in file_list]}
