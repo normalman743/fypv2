@@ -1,4 +1,4 @@
-from pydantic import BaseModel, validator
+from pydantic import BaseModel
 from typing import Optional, List, Literal
 from datetime import datetime
 from app.schemas.common import SuccessResponse
@@ -14,13 +14,13 @@ class CourseInfo(BaseModel):
 class ChatResponse(BaseModel):
     id: int
     title: str
-    chat_type: str
-    course_id: Optional[int]
+    chat_type: Literal["general", "course"] = "general"
+    course_id: Optional[int] = None
     user_id: int
-    custom_prompt: Optional[str]
-    ai_model: str
-    search_enabled: bool
-    context_mode: str
+    custom_prompt: Optional[str] = None
+    ai_model: Literal["Star", "StarPlus", "StarCode"] = "Star"
+    search_enabled: bool = False
+    context_mode: Literal["Economy", "Standard", "Premium", "Max"] = "Standard"
     created_at: datetime
     updated_at: datetime
     course: Optional[CourseInfo] = None

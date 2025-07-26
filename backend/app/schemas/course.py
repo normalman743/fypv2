@@ -51,6 +51,5 @@ class CourseListResponse(BaseResponse):
 class CourseCreateResponse(BaseResponse):
     data: dict  # {"course": {"id": int, "created_at": datetime}}
 
-
 class CourseUpdateResponse(BaseResponse):
     data: dict  # {"course": {"id": int, "updated_at": datetime}}

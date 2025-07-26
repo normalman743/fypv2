@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Literal
 from fastapi import UploadFile, Form
 
 # 为了清理复杂的Body类型名称，我们可以创建明确的请求模型

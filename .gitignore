@@ -133,3 +133,18 @@ node_modules/
 # Temporary files
 tmp/
 temp/
+
+# Testing and debugging files
+backend/api_test_v3/
+send_admin_credentials.py
+test_admin_credentials.py
+*_test_credentials.py
+reset_*.py
+
+# Development scripts
+scripts/test_*.py
+scripts/debug_*.py
+
+# Local testing data
+test_data/
+debug_data/

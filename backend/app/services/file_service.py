@@ -80,24 +80,34 @@ class FileService:
         file_hash = hashlib.sha256(file_content).hexdigest()
 
         try:
-            # Check if physical file already exists
+            # Use database-level row locking to prevent race conditions
+            # Check if physical file already exists with FOR UPDATE lock
             physical_file = self.db.query(PhysicalFile).filter(
                 PhysicalFile.file_hash == file_hash
-            ).first()
+            ).with_for_update().first()
             
             if not physical_file:
-                # Create new physical file record
-                physical_file = PhysicalFile(
-                    file_hash=file_hash,
-                    file_size=file_size,
-                    mime_type=file.content_type or "application/octet-stream",
-                    storage_path=file_path,
-                    reference_count=1
-                )
-                self.db.add(physical_file)
-                self.db.flush()  # Get ID without committing
+                # Double-check after acquiring lock - another process might have created it
+                physical_file = self.db.query(PhysicalFile).filter(
+                    PhysicalFile.file_hash == file_hash
+                ).first()
+                
+                if not physical_file:
+                    # Create new physical file record
+                    physical_file = PhysicalFile(
+                        file_hash=file_hash,
+                        file_size=file_size,
+                        mime_type=file.content_type or "application/octet-stream",
+                        storage_path=file_path,
+                        reference_count=1
+                    )
+                    self.db.add(physical_file)
+                    self.db.flush()  # Get ID without committing
+                else:
+                    # Another process created it while we were waiting for lock
+                    physical_file.reference_count += 1
             else:
-                # Increment reference count for existing file
+                # Increment reference count for existing file (already locked)
                 physical_file.reference_count += 1
             
             # Create file record
@@ -255,19 +265,25 @@ class FileService:
         # Delete the file record first
         self.db.delete(file_record)
         
-        # Decrease reference count for physical file
+        # Decrease reference count for physical file with proper locking
         if physical_file:
-            physical_file.reference_count -= 1
+            # Lock the physical file row to prevent race conditions
+            locked_physical_file = self.db.query(PhysicalFile).filter(
+                PhysicalFile.id == physical_file.id
+            ).with_for_update().first()
             
-            # If no more references, delete the physical file and record
-            if physical_file.reference_count <= 0:
-                try:
-                    local_file_storage.delete_file(physical_file.storage_path)
-                except Exception as e:
-                    print(f"⚠️ Failed to delete file from local storage: {e}")
-                    # Continue to delete database record even if local file deletion fails
+            if locked_physical_file:
+                locked_physical_file.reference_count -= 1
                 
-                self.db.delete(physical_file)
+                # If no more references, delete the physical file and record
+                if locked_physical_file.reference_count <= 0:
+                    try:
+                        local_file_storage.delete_file(locked_physical_file.storage_path)
+                    except Exception as e:
+                        print(f"⚠️ Failed to delete file from local storage: {e}")
+                        # Continue to delete database record even if local file deletion fails
+                    
+                    self.db.delete(locked_physical_file)
         
         self.db.commit()
         return True

@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Index
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from sqlalchemy.sql import func
 
 from app.models.database import Base
 
@@ -14,7 +14,7 @@ class EmailVerification(Base):
     expires_at = Column(DateTime, nullable=False, index=True)
     verified_at = Column(DateTime, nullable=True)
     attempts = Column(Integer, default=0)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, server_default=func.now())
     
     # 关系
     user = relationship("User", back_populates="email_verifications")

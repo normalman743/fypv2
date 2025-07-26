@@ -15,8 +15,11 @@ else:
     # MySQL配置
     engine = create_engine(
         settings.database_url,
-        pool_pre_ping=True,
-        pool_recycle=300,
+        pool_pre_ping=True,  # 检测失效连接
+        pool_recycle=300,    # 5分钟回收连接
+        pool_size=20,        # 连接池大小
+        max_overflow=10,     # 最大溢出连接数
+        pool_timeout=30,     # 等待连接超时（秒）
         echo=settings.debug
     )
 
