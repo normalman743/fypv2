@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, ConfigDict
-from typing import Optional
+from typing import Optional, List, Literal
 from datetime import datetime
 
 class UserRegister(BaseModel):
@@ -18,11 +18,11 @@ class UserResponse(BaseModel):
     id: int
     username: str
     email: str
-    role: str
+    role: Literal["admin", "user"] = "user"
     balance: float
     total_spent: float
-    preferred_language: str
-    preferred_theme: str
+    preferred_language: Literal["zh_CN", "en_US"] = "zh_CN"
+    preferred_theme: Literal["light", "dark", "system"] = "light"
     last_opened_semester_id: Optional[int]
     created_at: datetime
     updated_at: datetime
