@@ -21,9 +21,9 @@ router = APIRouter(tags=["统一文件管理"])
 @router.post("/files/upload", response_model=FileUploadResponse, operation_id="unified_upload_file")
 async def upload_file(
     file: UploadFile = File(...),
+    course_id: int = Form(...),
+    folder_id: int = Form(...),
     scope: str = Form('course'),  # 'course', 'global', 'personal'
-    course_id: Optional[int] = Form(None),
-    folder_id: Optional[int] = Form(None),
     description: Optional[str] = Form(None),
     tags: Optional[str] = Form(None),  # JSON string
     visibility: str = Form('private'),  # 'private', 'course', 'public', 'shared'

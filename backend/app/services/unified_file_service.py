@@ -50,7 +50,7 @@ class UnifiedFileService:
         """
         
         # 1. 验证参数
-        self._validate_upload_params(scope, course_id, user_id)
+        self._validate_upload_params(scope, course_id, folder_id, user_id)
         
         # 2. 验证文件类型（白名单）
         valid, error_msg = validate_regular_file_upload(file.filename)
@@ -98,7 +98,7 @@ class UnifiedFileService:
         
         return file_record
 
-    def _validate_upload_params(self, scope: str, course_id: Optional[int], user_id: int):
+    def _validate_upload_params(self, scope: str, course_id: Optional[int], folder_id: Optional[int], user_id: int):
         """验证上传参数"""
         if scope not in ['course', 'global', 'personal']:
             raise HTTPException(status_code=400, detail="Invalid scope")
@@ -112,6 +112,22 @@ class UnifiedFileService:
             if not course:
                 raise HTTPException(status_code=404, detail="Course not found")
             # TODO: 添加课程权限检查
+            
+            # 对于课程文件，folder_id是必需的（与API文档保持一致）
+            if folder_id is None:
+                raise HTTPException(status_code=400, detail="folder_id is required for course scope")
+            
+            # 验证文件夹是否存在且属于该课程
+            from app.models.folder import Folder
+            folder = self.db.query(Folder).filter(
+                Folder.id == folder_id,
+                Folder.course_id == course_id
+            ).first()
+            if not folder:
+                raise HTTPException(
+                    status_code=404, 
+                    detail="Folder not found or does not belong to course"
+                )
 
     def _check_existing_file(
         self, 
