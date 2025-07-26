@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional
 from datetime import datetime
 
@@ -34,14 +34,13 @@ class CourseStats(BaseModel):
 
 
 class CourseResponse(CourseBase):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: int
     user_id: int
     created_at: datetime
     semester: SemesterInfo
     stats: CourseStats
-
-    class Config:
-        from_attributes = True
 
 
 class CourseListResponse(BaseResponse):

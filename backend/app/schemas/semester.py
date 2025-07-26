@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional, List
 from datetime import datetime
 
@@ -25,12 +25,12 @@ class SemesterUpdate(BaseModel):
 
 
 class SemesterResponse(SemesterBase):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: int
-    is_active: bool
+    is_active: bool = True
     created_at: datetime
-
-    class Config:
-        from_attributes = True
+    updated_at: datetime
 
 
 class SemesterListResponse(BaseResponse):

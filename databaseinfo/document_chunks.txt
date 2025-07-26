@@ -1,0 +1,82 @@
+{
+  "table_name": "document_chunks",
+  "row_count": 1,
+  "columns": [
+    {
+      "Field": "id",
+      "Type": "int",
+      "Null": "NO",
+      "Key": "PRI",
+      "Default": null,
+      "Extra": "auto_increment"
+    },
+    {
+      "Field": "chunk_text",
+      "Type": "longtext",
+      "Null": "NO",
+      "Key": "",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "chunk_index",
+      "Type": "int",
+      "Null": "YES",
+      "Key": "",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "token_count",
+      "Type": "int",
+      "Null": "YES",
+      "Key": "",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "chroma_id",
+      "Type": "varchar(36)",
+      "Null": "NO",
+      "Key": "UNI",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "chunk_metadata",
+      "Type": "json",
+      "Null": "YES",
+      "Key": "",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "created_at",
+      "Type": "datetime",
+      "Null": "YES",
+      "Key": "",
+      "Default": "CURRENT_TIMESTAMP",
+      "Extra": "DEFAULT_GENERATED"
+    },
+    {
+      "Field": "file_id",
+      "Type": "int",
+      "Null": "YES",
+      "Key": "MUL",
+      "Default": null,
+      "Extra": ""
+    }
+  ],
+  "data": [
+    {
+      "id": "1",
+      "chunk_text": "测试文件内容\\n第二行内容\\n",
+      "chunk_index": "0",
+      "token_count": "1",
+      "chroma_id": "1683b7cd-8748-4408-b4e7-0e0dee79cee5",
+      "chunk_metadata": "{\"source\": \"storage/uploads/course/71ddaec6679dd6d87f07443d1059f4c947c5f6092f3a6cd5f5384c7a1a4b0536_test.txt\", \"file_id\": \"1\", \"chunk_id\": 0, \"filename\": \"test.txt\", \"course_id\": \"1\", \"file_type\": \"txt\", \"contributor\": \"unknown\", \"processed_at\": \"2025-07-25T21:03:25.696293\"}",
+      "created_at": "2025-07-25T21:03:27",
+      "file_id": "1"
+    }
+  ]
+}

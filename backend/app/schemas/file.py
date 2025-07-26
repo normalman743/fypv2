@@ -1,5 +1,5 @@
-from pydantic import BaseModel
-from typing import Optional, List
+from pydantic import BaseModel, ConfigDict
+from typing import Optional, List, Any
 from datetime import datetime
 from app.schemas.common import SuccessResponse
 
@@ -15,17 +15,32 @@ class FolderInfo(BaseModel):
     folder_type: str
 
 class FileResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: int
+    physical_file_id: int
     original_name: str
     file_type: str
-    file_size: int
-    mime_type: str
-    course_id: int
-    folder_id: int
+    file_size: Optional[int] = None
+    mime_type: Optional[str] = None
+    course_id: Optional[int] = None
+    folder_id: Optional[int] = None
     user_id: int
-    is_processed: bool
-    processing_status: str
+    is_processed: Optional[bool] = False
+    processing_status: Optional[str] = "pending"
+    processing_error: Optional[str] = None
+    processed_at: Optional[datetime] = None
+    chunk_count: Optional[int] = 0
+    content_preview: Optional[str] = None
     created_at: datetime
+    scope: Optional[str] = "course"
+    visibility: Optional[str] = "private"
+    is_shareable: Optional[bool] = True
+    share_settings: Optional[Any] = None  # JSON field
+    tags: Optional[List[str]] = None  # JSON field
+    description: Optional[str] = None
+    file_hash: Optional[str] = None
+    updated_at: Optional[datetime] = None
     folder: Optional[FolderInfo] = None
 
 class FileListResponse(SuccessResponse):

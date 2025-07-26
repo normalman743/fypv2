@@ -954,9 +954,16 @@ class MessageService:
             "chat_id": message.chat_id,
             "content": message.content,
             "role": message.role,
+            "model_name": message.model_name,
             "tokens_used": message.tokens_used,
             "cost": message.cost,
+            "response_time_ms": message.response_time_ms,
+            "rag_sources": message.rag_sources,
             "created_at": message.created_at,
-            "file_attachments": file_attachments,
-            "rag_sources": rag_sources if rag_sources else []
+            "context_size": message.context_size,
+            "direct_file_count": message.direct_file_count,
+            "rag_source_count": message.rag_source_count,
+            "input_tokens": message.input_tokens,
+            "output_tokens": message.output_tokens,
+            "file_attachments": file_attachments
         }

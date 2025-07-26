@@ -19,14 +19,14 @@ class UserResponse(BaseModel):
     username: str
     email: str
     role: Literal["admin", "user"] = "user"
-    balance: float
-    total_spent: float
+    balance: float = 0.0
+    total_spent: float = 0.0
     preferred_language: Literal["zh_CN", "en_US"] = "zh_CN"
     preferred_theme: Literal["light", "dark", "system"] = "light"
-    last_opened_semester_id: Optional[int]
+    last_opened_semester_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
-    is_active: bool
+    is_active: bool = True
 
 class UserUpdate(BaseModel):
     username: Optional[str] = None

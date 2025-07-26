@@ -1,5 +1,5 @@
-from pydantic import BaseModel
-from typing import Optional, List
+from pydantic import BaseModel, ConfigDict
+from typing import Optional, List, Any
 from datetime import datetime
 from app.schemas.common import SuccessResponse
 
@@ -14,15 +14,24 @@ class RAGSource(BaseModel):
     chunk_id: int
 
 class MessageResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: int
     chat_id: int
     content: str
     role: str  # "user" or "assistant"
+    model_name: Optional[str] = None
     tokens_used: Optional[int] = None
     cost: Optional[float] = None
+    response_time_ms: Optional[int] = None
+    rag_sources: Optional[Any] = None  # JSON field
     created_at: datetime
+    context_size: Optional[int] = None
+    direct_file_count: Optional[int] = 0
+    rag_source_count: Optional[int] = 0
+    input_tokens: Optional[int] = None
+    output_tokens: Optional[int] = None
     file_attachments: List[FileAttachment] = []
-    rag_sources: Optional[List[RAGSource]] = []
 
 class MessageListResponse(SuccessResponse):
     data: dict  # {"messages": List[MessageResponse]}

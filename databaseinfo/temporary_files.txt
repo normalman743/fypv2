@@ -1,0 +1,161 @@
+{
+  "table_name": "temporary_files",
+  "row_count": 5,
+  "columns": [
+    {
+      "Field": "id",
+      "Type": "int",
+      "Null": "NO",
+      "Key": "PRI",
+      "Default": null,
+      "Extra": "auto_increment"
+    },
+    {
+      "Field": "physical_file_id",
+      "Type": "int",
+      "Null": "NO",
+      "Key": "MUL",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "original_name",
+      "Type": "varchar(255)",
+      "Null": "NO",
+      "Key": "",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "file_type",
+      "Type": "varchar(50)",
+      "Null": "NO",
+      "Key": "",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "file_size",
+      "Type": "int",
+      "Null": "YES",
+      "Key": "",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "mime_type",
+      "Type": "varchar(100)",
+      "Null": "YES",
+      "Key": "",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "user_id",
+      "Type": "int",
+      "Null": "NO",
+      "Key": "MUL",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "token",
+      "Type": "varchar(64)",
+      "Null": "NO",
+      "Key": "UNI",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "expires_at",
+      "Type": "datetime",
+      "Null": "NO",
+      "Key": "MUL",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "purpose",
+      "Type": "varchar(50)",
+      "Null": "YES",
+      "Key": "",
+      "Default": null,
+      "Extra": ""
+    },
+    {
+      "Field": "created_at",
+      "Type": "datetime",
+      "Null": "YES",
+      "Key": "",
+      "Default": "CURRENT_TIMESTAMP",
+      "Extra": "DEFAULT_GENERATED"
+    }
+  ],
+  "data": [
+    {
+      "id": "44",
+      "physical_file_id": "1",
+      "original_name": "test_image.png",
+      "file_type": "png",
+      "file_size": "59607",
+      "mime_type": "image/png",
+      "user_id": "2",
+      "token": "segr2FTRpSkcsMZhw2mQVibK0al-rs7g5RUzXaLt8dc",
+      "expires_at": "2025-07-25T22:17:35",
+      "purpose": "dedup_test_1",
+      "created_at": "2025-07-25T11:17:34"
+    },
+    {
+      "id": "45",
+      "physical_file_id": "1",
+      "original_name": "test_image.png",
+      "file_type": "png",
+      "file_size": "59607",
+      "mime_type": "image/png",
+      "user_id": "2",
+      "token": "jPj4PhBGp1Q1Sj0y3R1a_sOKe82xCkZ_l8z4nQb3bag",
+      "expires_at": "2025-07-25T22:18:57",
+      "purpose": "dedup_test_2",
+      "created_at": "2025-07-25T11:18:57"
+    },
+    {
+      "id": "46",
+      "physical_file_id": "2",
+      "original_name": "Res - 大學核心課程選課一年級學生須知.pdf",
+      "file_type": "pdf",
+      "file_size": "201650",
+      "mime_type": "application/pdf",
+      "user_id": "2",
+      "token": "arcOMgcylav5SzonRjPXuGgi8_101p-sbEqhTanF7aI",
+      "expires_at": "2025-07-25T22:28:42",
+      "purpose": "chat_document",
+      "created_at": "2025-07-25T11:28:41"
+    },
+    {
+      "id": "47",
+      "physical_file_id": "3",
+      "original_name": "test.txt",
+      "file_type": "txt",
+      "file_size": "263",
+      "mime_type": "text/plain",
+      "user_id": "2",
+      "token": "dsLflvv4dr2LRCslBPLT4lzksI_IlOt3VYfx2fPjy3k",
+      "expires_at": "2025-07-24T22:58:53",
+      "purpose": "chat_upload",
+      "created_at": "2025-07-25T11:58:53"
+    },
+    {
+      "id": "48",
+      "physical_file_id": "4",
+      "original_name": "temp_test.txt",
+      "file_type": "txt",
+      "file_size": "37",
+      "mime_type": "text/plain",
+      "user_id": "2",
+      "token": "ujPv9csCLHGF5DVM26LKEAXic3LcDjDIXmB464c0yxk",
+      "expires_at": "2025-07-27T03:03:27",
+      "purpose": "chat_upload",
+      "created_at": "2025-07-25T21:03:27"
+    }
+  ]
+}

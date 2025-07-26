@@ -21,6 +21,7 @@ class ChatResponse(BaseModel):
     ai_model: Literal["Star", "StarPlus", "StarCode"] = "Star"
     search_enabled: bool = False
     context_mode: Literal["Economy", "Standard", "Premium", "Max"] = "Standard"
+    rag_enabled: bool = True
     created_at: datetime
     updated_at: datetime
     course: Optional[CourseInfo] = None

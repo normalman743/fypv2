@@ -1,0 +1,121 @@
+{
+  "export_time": "2025-07-26T02:49:10.069070",
+  "total_tables": 23,
+  "tables": [
+    {
+      "table": "audit_logs",
+      "success": true,
+      "rows": 0
+    },
+    {
+      "table": "chats",
+      "success": true,
+      "rows": 4
+    },
+    {
+      "table": "courses",
+      "success": true,
+      "rows": 1
+    },
+    {
+      "table": "document_chunks",
+      "success": true,
+      "rows": 1
+    },
+    {
+      "table": "email_verifications",
+      "success": true,
+      "rows": 0
+    },
+    {
+      "table": "file_access_logs",
+      "success": true,
+      "rows": 1
+    },
+    {
+      "table": "file_group_members",
+      "success": true,
+      "rows": 0
+    },
+    {
+      "table": "file_groups",
+      "success": true,
+      "rows": 0
+    },
+    {
+      "table": "file_shares",
+      "success": true,
+      "rows": 0
+    },
+    {
+      "table": "files",
+      "success": true,
+      "rows": 1
+    },
+    {
+      "table": "folders",
+      "success": true,
+      "rows": 2
+    },
+    {
+      "table": "invite_codes",
+      "success": true,
+      "rows": 6
+    },
+    {
+      "table": "message_file_references",
+      "success": true,
+      "rows": 7
+    },
+    {
+      "table": "message_rag_sources",
+      "success": true,
+      "rows": 0
+    },
+    {
+      "table": "messages",
+      "success": true,
+      "rows": 60
+    },
+    {
+      "table": "permissions",
+      "success": true,
+      "rows": 0
+    },
+    {
+      "table": "physical_files",
+      "success": true,
+      "rows": 4
+    },
+    {
+      "table": "roles",
+      "success": true,
+      "rows": 0
+    },
+    {
+      "table": "semesters",
+      "success": true,
+      "rows": 1
+    },
+    {
+      "table": "subject_roles",
+      "success": true,
+      "rows": 0
+    },
+    {
+      "table": "system_config",
+      "success": true,
+      "rows": 0
+    },
+    {
+      "table": "temporary_files",
+      "success": true,
+      "rows": 5
+    },
+    {
+      "table": "users",
+      "success": true,
+      "rows": 6
+    }
+  ]
+}

@@ -1,19 +1,25 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import List, Optional
 from datetime import datetime
 from app.schemas.common import BaseResponse
 
 class InviteCodeResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: int
     code: str
-    description: str
-    is_used: bool
-    expires_at: datetime
+    description: Optional[str] = None
+    is_used: bool = False
+    used_by: Optional[int] = None
+    used_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
+    is_active: bool = True
+    created_by: int
     created_at: datetime
 
 class CreateInviteCodeRequest(BaseModel):
-    description: str
-    expires_at: datetime
+    description: Optional[str] = None
+    expires_at: Optional[datetime] = None
 
 class UpdateInviteCodeRequest(BaseModel):
     description: Optional[str] = None
