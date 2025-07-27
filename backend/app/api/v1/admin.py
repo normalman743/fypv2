@@ -23,7 +23,7 @@ from app.schemas.common import SuccessResponse
 from app.core.exceptions import NotFoundError, BadRequestError
 from app.services.unified_file_service import UnifiedFileService
 
-router = APIRouter(tags=["管理员"])
+router = APIRouter(tags=["管理员管理/Admin Management"])
 
 # 邀请码管理
 @router.post("/invite-codes", response_model=CreateInviteCodeResponse)

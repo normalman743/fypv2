@@ -14,7 +14,7 @@ from app.schemas.course import (
 from app.schemas.common import SuccessResponse
 from app.models.user import User
 
-router = APIRouter(prefix="/courses", tags=["courses"])
+router = APIRouter(prefix="/courses", tags=["课程管理/Course Management"])
 
 
 @router.get("", response_model=CourseListResponse)

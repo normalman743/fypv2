@@ -115,3 +115,207 @@ python -m pytest test_specific_module.py -v
 
 
 ### 注意 不要再main上开发 每次改bug 测试新功能使用new branch
+
+## Claude Code 使用规范
+
+### 代码质量要求
+1. **第一次就写对** - 避免写有bug的代码，宁愿先思考清楚再动手
+2. **使用成熟的库** - 优先使用经过验证的库，而不是自己写脚本
+3. **不要过度工程** - 简单问题用简单方案解决，不要引入不必要的复杂性
+
+### 测试开发流程
+1. **先修复现有bug** - 不要把bug固化到测试快照中
+2. **功能测试优先** - 确保API功能正确后，再做格式快照
+3. **复用现有代码** - 优先使用和改进 api_test_v3，而不是从头开始
+
+### 重构原则
+1. **避免代码重复** - 相同功能应该只有一份实现，通过导入复用
+2. **统一管理认证** - 登录相关函数应该集中在 test_auth_user.py
+3. **遵循API命名** - 测试函数名应该与API路径和操作对应
+
+### 安装软件原则
+1. **避免频繁安装** - 不要连续安装多个类似功能的库
+2. **先询问用户** - 安装新库前要说明用途并征得同意
+3. **使用现有工具** - 能用已有工具解决的不要引入新依赖
+
+### API 错误响应最佳实践
+
+#### 统一错误响应格式
+所有 API 错误响应都应使用 `ErrorResponse` 模型：
+```python
+{
+  "success": false,
+  "error": {
+    "code": "ERROR_CODE",
+    "message": "用户友好的错误信息",
+    "details": {  // 可选，用于详细错误信息
+      "field": "具体字段错误"
+    }
+  }
+}
+```
+
+#### 使用 APIResponses.create_with_examples()
+为每个 API 端点配置详细的错误响应示例：
+```python
+@router.post(
+    "/endpoint",
+    responses={
+        **APIResponses.create_with_examples(**{
+            400: [
+                {"code": "ERROR_1", "message": "错误1", "summary": "错误1描述"},
+                {"code": "ERROR_2", "message": "错误2", "summary": "错误2描述"}
+            ],
+            401: {"code": "UNAUTHORIZED", "message": "未认证"}
+        })
+    }
+)
+```
+
+#### Service 层异常声明
+每个 Service 类应声明 METHOD_EXCEPTIONS：
+```python
+class Service:
+    METHOD_EXCEPTIONS = {
+        'method_name': {ExceptionClass1, ExceptionClass2}
+    }
+```
+
+## 技术债和待改进事项
+
+### 1. API 响应格式标准化
+**当前问题**：
+- OpenAPI 文档中的错误响应格式不符合 FastAPI 最佳实践
+- 缺少统一的响应格式装饰器或中间件
+- 422 验证错误使用了自定义格式，但 OpenAPI 文档显示的是 FastAPI 默认格式
+
+**建议方案**：
+- 研究 FastAPI 官方推荐的响应文档配置方式
+- 使用 `responses` 参数时遵循 OpenAPI 3.0 规范
+- 考虑使用 FastAPI 的 `response_model` 和 `responses` 组合
+
+### 2. 代码架构层次问题
+**当前状态**：
+- ✅ **Controller层 (API Routes)**: auth.py 已重构完成，业务逻辑迁移到 AuthService
+- ✅ **Service层**: AuthService 完善，包含异常声明和统一错误处理
+- ⏳ **Repository层**: 待实现，数据库操作仍在 service 层
+- ✅ **异常处理**: 统一使用 BaseAPIException，OpenAPI 文档完整展示错误响应
+
+**已完成优化**：
+- ✅ `app/api/v1/auth.py` - 业务逻辑已迁移到 AuthService，路由精简至15行/端点
+- ✅ `app/core/api_decorator.py` - 实现 APIResponses.create_with_examples() 统一错误文档
+- ✅ `app/schemas/common.py` - ErrorResponse 使用 ErrorDetail 结构，支持详细错误信息
+- ✅ `app/services/auth_service.py` - 完整的 METHOD_EXCEPTIONS 声明
+
+**需要 Code Review 的关键文件**：
+- `app/api/v1/files.py` - 文件处理逻辑应该在 service 层
+- `app/services/*` - 需要统一其他 service 层的职责边界
+- `app/models/*` - 考虑添加 repository 层来封装数据访问
+
+### 3. Celery 异步任务队列
+**当前状态**：
+- 已安装 Celery 和 Redis 依赖
+- 存在 `app/tasks/` 目录但未实现
+- 文件处理等耗时操作仍在同步执行
+
+**待实现功能**：
+- 文件向量化处理
+- 邮件发送队列
+- 定时清理任务
+- RAG 索引更新
+
+### 4. Alembic 数据库迁移
+**当前状态**：
+- 已初始化 alembic（存在 alembic.ini）
+- 但实际使用 `Base.metadata.create_all()` 直接创建表
+- 没有版本化的数据库迁移记录
+
+**风险**：
+- 生产环境数据库升级困难
+- 无法回滚数据库变更
+- 团队协作时数据库同步问题
+
+**建议**：
+```bash
+# 生成初始迁移
+alembic revision --autogenerate -m "Initial migration"
+# 应用迁移
+alembic upgrade head
+```
+
+### 5. 其他技术债
+- **测试覆盖率**: api_test_v3 需要继续完善
+- **API 文档**: 部分 API 实现与文档不一致
+- **配置管理**: 环境变量过多，考虑分组管理
+- **日志系统**: 需要结构化日志和日志聚合
+- **监控告警**: 缺少 APM 和错误追踪
+- **安全加固**: 需要添加 API 限流、SQL 注入防护等
+- **性能优化**: 缺少缓存层、数据库查询优化
+
+## API 响应文档最佳实践
+
+### 问题背景
+FastAPI 默认只显示 200 成功响应和 422 验证错误，不会显示 Service 层可能抛出的业务异常（如 400, 401, 403, 409 等），导致 API 文档不完整。
+
+### 解决方案：Service API 装饰器
+
+#### 1. 在 Service 类中声明异常
+```python
+class AuthService:
+    # 声明每个方法可能抛出的异常
+    METHOD_EXCEPTIONS = {
+        'register': {BadRequestError, ConflictError, ForbiddenError},
+        'login': {UnauthorizedError},
+        'update_user': {BadRequestError, ConflictError, ForbiddenError},
+        'verify_email': {BadRequestError},
+        'resend_verification': {BadRequestError}
+    }
+```
+
+#### 2. 使用装饰器简化路由
+```python
+from app.core.api_decorator import service_api
+
+@router.post("/register")
+@service_api(AuthService, 'register', SuccessResponse, summary="用户注册")
+async def register(user_data: UserRegister, db: Session = Depends(get_db)):
+    service = AuthService(db)
+    result = service.register(user_data)
+    return SuccessResponse(...)
+```
+
+#### 3. 自动化的好处
+- **自动生成 OpenAPI 响应文档**：根据 Service 异常自动生成 400, 403, 409 等响应
+- **类型安全**：确保路由层捕获的异常与 Service 声明一致
+- **文档同步**：Service 层修改异常时，API 文档自动更新
+- **代码简化**：无需手动写 try-catch 和 responses 参数
+
+#### 4. 效果对比
+**之前**：
+```python
+@router.post("/register", response_model=SuccessResponse, responses={
+    400: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 409: {"model": ErrorResponse}
+})
+async def register(...):
+    try:
+        service = AuthService(db)
+        result = service.register(user_data)
+        return SuccessResponse(...)
+    except (BadRequestError, ConflictError, ForbiddenError) as e:
+        raise e
+```
+
+**现在**：
+```python
+@router.post("/register")
+@service_api(AuthService, 'register', SuccessResponse)
+async def register(...):
+    service = AuthService(db)
+    result = service.register(user_data)
+    return SuccessResponse(...)
+```
+
+#### 5. 实施规范
+- 所有 Service 类必须定义 `METHOD_EXCEPTIONS`
+- 新增 Service 方法时同步更新异常声明
+- 路由层统一使用 `@service_api` 装饰器

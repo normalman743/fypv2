@@ -1,6 +1,6 @@
 import secrets
 import string
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 import resend
 from sqlalchemy.orm import Session
@@ -12,12 +12,17 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+class EmailConfig:
+      VERIFICATION_CODE_LENGTH = 6
+      MAX_ATTEMPTS = 5
+      RATE_LIMIT_MINUTES = 1
+
 class EmailService:
     def __init__(self):
         if settings.resend_api_key:
             resend.api_key = settings.resend_api_key
         else:
-            logger.warning("Resend API key not configured")
+            raise ValueError("Resend API key is not configured. Please set it in the settings.")
     
     def generate_verification_code(self) -> str:
         """生成6位数验证码"""
@@ -26,7 +31,7 @@ class EmailService:
     def can_send_verification(self, db: Session, email: str) -> bool:
         """检查是否可以发送验证码（防止频繁发送）"""
         # 检查最近1分钟内是否已发送过
-        one_minute_ago = datetime.utcnow() - timedelta(minutes=1)
+        one_minute_ago = datetime.now(timezone.utc) - timedelta(minutes=1)
         recent_verification = db.query(EmailVerification).filter(
             EmailVerification.email == email,
             EmailVerification.created_at > one_minute_ago
@@ -44,7 +49,7 @@ class EmailService:
             
             # 生成验证码
             code = self.generate_verification_code()
-            expires_at = datetime.utcnow() + timedelta(minutes=settings.verification_code_expire_minutes)
+            expires_at = datetime.now(timezone.utc) + timedelta(minutes=settings.verification_code_expire_minutes)
             
             # 保存验证码到数据库
             verification = EmailVerification(
@@ -131,7 +136,7 @@ class EmailService:
         verification = db.query(EmailVerification).filter(
             EmailVerification.email == email,
             EmailVerification.verification_code == code,
-            EmailVerification.expires_at > datetime.utcnow(),
+            EmailVerification.expires_at > datetime.now(timezone.utc),
             EmailVerification.verified_at.is_(None)
         ).first()
         
@@ -153,7 +158,7 @@ class EmailService:
             return None
         
         # 标记为已验证
-        verification.verified_at = datetime.utcnow()
+        verification.verified_at = datetime.now(timezone.utc)
         verification.attempts += 1
         
         # 获取用户

@@ -15,7 +15,7 @@ from app.schemas.unified_file import (
 )
 from app.core.exceptions import NotFoundError, BadRequestError
 
-router = APIRouter(tags=["统一文件管理"])
+router = APIRouter(tags=["统一文件管理/Unified File Management"])
 
 
 @router.post("/files/upload", response_model=FileUploadResponse, operation_id="unified_upload_file")

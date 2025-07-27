@@ -157,24 +157,13 @@ async def http_exception_handler(request: Request, exc: HTTPException):
         ).model_dump()
     )
 
-# 健康检查端点
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy", "message": "校园LLM系统运行正常"}
-
-# 根端点
-@app.get("/")
-async def root():
-    return {
-        "message": "欢迎使用校园LLM系统",
-        "version": settings.app_version,
-        "docs": "/docs"
-    }
+# 系统级端点移动到 app/api/system.py
 
 # 导入路由
-from app.api.v1 import auth, semesters, courses, folders, files, chats, messages, admin, unified_files
+from app.api.v1 import system, auth, semesters, courses, folders, files, chats, messages, admin, unified_files
 
 # 注册路由
+app.include_router(system.router)  # 系统路由无前缀
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(semesters.router, prefix="/api/v1")
 app.include_router(courses.router, prefix="/api/v1")

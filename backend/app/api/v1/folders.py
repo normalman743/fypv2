@@ -13,7 +13,7 @@ from app.schemas.folder import (
 from app.schemas.common import SuccessResponse
 from app.models.user import User
 
-router = APIRouter(tags=["folders"])
+router = APIRouter(tags=["文件夹管理/Folder Management"])
 
 
 @router.get("/courses/{course_id}/folders", response_model=FolderListResponse)

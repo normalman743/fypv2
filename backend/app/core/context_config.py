@@ -23,13 +23,13 @@ CONTEXT_MODES = {
     },
     ContextMode.STANDARD: {
         "messages": 5,
-        "description": "一般模式",
+        "description": "标准模式",
         "description_en": "Standard Mode", 
         "cost_multiplier": 1.0
     },
     ContextMode.PREMIUM: {
         "messages": 10,
-        "description": "浪费模式",
+        "description": "高级模式",
         "description_en": "Premium Mode",
         "cost_multiplier": 1.0
     },

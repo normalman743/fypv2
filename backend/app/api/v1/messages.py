@@ -15,7 +15,7 @@ from app.schemas.message import (
 from app.schemas.common import SuccessResponse
 from app.models.user import User
 
-router = APIRouter(tags=["messages"])
+router = APIRouter(tags=["消息管理/Message Management"])
 
 
 @router.get("/chats/{chat_id}/messages", response_model=MessageListResponse)

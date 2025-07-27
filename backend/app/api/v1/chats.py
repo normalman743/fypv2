@@ -18,7 +18,7 @@ from app.schemas.chat import (
 from app.schemas.common import SuccessResponse
 from app.models.user import User
 
-router = APIRouter(prefix="/chats", tags=["chats"])
+router = APIRouter(prefix="/chats", tags=["聊天管理/Chat Management"])
 
 
 @router.get("", response_model=ChatListResponse)

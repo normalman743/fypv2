@@ -1,5 +1,4 @@
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_db, get_current_user, require_admin
@@ -10,14 +9,14 @@ from app.schemas.semester import (
     SemesterUpdate, 
     SemesterResponse, 
     SemesterListResponse,
-    SemesterCreateResponse,
-    SemesterUpdateResponse
+    SemesterOperationResponse
 )
 from app.schemas.course import CourseListResponse
 from app.schemas.common import SuccessResponse
 from app.models.user import User
+from app.core.exceptions import NotFoundError, ConflictError, BadRequestError
 
-router = APIRouter(prefix="/semesters", tags=["semesters"])
+router = APIRouter(prefix="/semesters", tags=["学期管理/Semesters"])
 
 
 @router.get("", response_model=SemesterListResponse)
@@ -38,28 +37,31 @@ async def get_semesters(
     )
 
 
-@router.post("", response_model=SemesterCreateResponse)
+@router.post("", response_model=SemesterOperationResponse)
 async def create_semester(
     semester_data: SemesterCreate,
     current_user: User = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
     """Create semester (admin only)"""
-    service = SemesterService(db)
-    semester = service.create_semester(semester_data)
-    
-    return SemesterCreateResponse(
-        success=True,
-        data={
-            "semester": {
-                "id": semester.id,
-                "created_at": semester.created_at
+    try:
+        service = SemesterService(db)
+        semester = service.create_semester(semester_data)
+        
+        return SemesterOperationResponse(
+            success=True,
+            data={
+                "semester": {
+                    "id": semester.id,
+                    "created_at": semester.created_at
+                }
             }
-        }
-    )
+        )
+    except (ConflictError, BadRequestError) as e:
+        raise e
 
 
-@router.put("/{semester_id}", response_model=SemesterUpdateResponse)
+@router.put("/{semester_id}", response_model=SemesterOperationResponse)
 async def update_semester(
     semester_id: int,
     semester_data: SemesterUpdate,
@@ -67,18 +69,21 @@ async def update_semester(
     db: Session = Depends(get_db)
 ):
     """Update semester (admin only)"""
-    service = SemesterService(db)
-    semester = service.update_semester(semester_id, semester_data)
-    
-    return SemesterUpdateResponse(
-        success=True,
-        data={
-            "semester": {
-                "id": semester.id,
-                "updated_at": semester.created_at  # Use created_at as updated_at placeholder
+    try:
+        service = SemesterService(db)
+        semester = service.update_semester(semester_id, semester_data)
+        
+        return SemesterOperationResponse(
+            success=True,
+            data={
+                "semester": {
+                    "id": semester.id,
+                    "updated_at": semester.created_at  # Use created_at as updated_at placeholder
+                }
             }
-        }
-    )
+        )
+    except (NotFoundError, ConflictError, BadRequestError) as e:
+        raise e
 
 
 @router.get("/{semester_id}", response_model=SemesterListResponse)
@@ -88,18 +93,18 @@ async def get_semester(
     db: Session = Depends(get_db)
 ):
     """Get semester details"""
-    service = SemesterService(db)
-    semester = service.get_semester(semester_id)
-    
-    if not semester:
-        raise HTTPException(status_code=404, detail="Semester not found")
-    
-    semester_data = SemesterResponse.model_validate(semester)
-    
-    return SemesterListResponse(
-        success=True,
-        data={"semester": semester_data}
-    )
+    try:
+        service = SemesterService(db)
+        semester = service.get_semester(semester_id)
+        
+        semester_data = SemesterResponse.model_validate(semester)
+        
+        return SemesterListResponse(
+            success=True,
+            data={"semester": semester_data}
+        )
+    except NotFoundError as e:
+        raise e
 
 
 @router.get("/{semester_id}/courses", response_model=CourseListResponse)
@@ -109,44 +114,24 @@ async def get_semester_courses(
     db: Session = Depends(get_db)
 ):
     """Get all courses for a semester"""
-    # First check if semester exists
-    semester_service = SemesterService(db)
-    semester = semester_service.get_semester(semester_id)
-    
-    if not semester:
-        raise HTTPException(status_code=404, detail="Semester not found")
-    
-    # Get courses for this semester (filtered by current user)
-    course_service = CourseService(db)
-    courses = course_service.get_courses(user_id=current_user.id, semester_id=semester_id)
-    
-    # Convert to response format with semester info and stats
-    course_list = []
-    for course in courses:
-        # Get course statistics
-        stats = course_service.get_course_stats(course.id, course.user_id)
+    try:
+        # Verify semester exists
+        semester_service = SemesterService(db)
+        semester = semester_service.get_semester(semester_id)
         
-        course_data = {
-            "id": course.id,
-            "name": course.name,
-            "code": course.code,
-            "description": course.description,
-            "semester_id": course.semester_id,
-            "user_id": course.user_id,
-            "created_at": course.created_at,
-            "semester": {
-                "id": course.semester.id,
-                "name": course.semester.name,
-                "code": course.semester.code
-            },
-            "stats": stats
-        }
-        course_list.append(course_data)
-    
-    return CourseListResponse(
-        success=True,
-        data={"courses": course_list}
-    )
+        # Get courses with stats (business logic moved to service)
+        course_service = CourseService(db)
+        courses_with_stats = course_service.get_courses_with_stats(
+            user_id=current_user.id, 
+            semester_id=semester_id
+        )
+        
+        return CourseListResponse(
+            success=True,
+            data={"courses": courses_with_stats}
+        )
+    except NotFoundError as e:
+        raise e
 
 
 @router.delete("/{semester_id}", response_model=SuccessResponse)
@@ -156,7 +141,10 @@ async def delete_semester(
     db: Session = Depends(get_db)
 ):
     """Delete semester (admin only)"""
-    service = SemesterService(db)
-    service.delete_semester(semester_id)
-    
-    return SuccessResponse(success=True)
+    try:
+        service = SemesterService(db)
+        service.delete_semester(semester_id)
+        
+        return SuccessResponse(success=True)
+    except (NotFoundError, ConflictError) as e:
+        raise e

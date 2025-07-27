@@ -138,3 +138,31 @@ class CourseService:
             "file_count": 0,
             "chat_count": 0
         }
+    
+    def get_courses_with_stats(self, user_id: int, semester_id: Optional[int] = None) -> List[dict]:
+        """Get courses with statistics and semester info"""
+        courses = self.get_courses(user_id=user_id, semester_id=semester_id)
+        
+        course_list = []
+        for course in courses:
+            # Get course statistics
+            stats = self.get_course_stats(course.id, course.user_id)
+            
+            course_data = {
+                "id": course.id,
+                "name": course.name,
+                "code": course.code,
+                "description": course.description,
+                "semester_id": course.semester_id,
+                "user_id": course.user_id,
+                "created_at": course.created_at,
+                "semester": {
+                    "id": course.semester.id,
+                    "name": course.semester.name,
+                    "code": course.semester.code
+                },
+                "stats": stats
+            }
+            course_list.append(course_data)
+        
+        return course_list

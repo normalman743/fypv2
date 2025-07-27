@@ -22,18 +22,17 @@ class SemesterService:
             Semester.is_active == True
         ).first()
     
-    def get_semester(self, semester_id: int) -> Optional[Semester]:
-        """Get semester by ID (alias for get_semester_by_id)"""
-        return self.get_semester_by_id(semester_id)
+    def get_semester(self, semester_id: int) -> Semester:
+        """Get semester by ID with error handling"""
+        semester = self.get_semester_by_id(semester_id)
+        if not semester:
+            raise NotFoundError("Semester not found", "SEMESTER_NOT_FOUND")
+        return semester
 
     def create_semester(self, semester_data: SemesterCreate) -> Semester:
         """Create new semester"""
-        # Check if semester code already exists
-        existing = self.db.query(Semester).filter(
-            Semester.code == semester_data.code
-        ).first()
-        if existing:
-            raise BadRequestError(f"Semester code '{semester_data.code}' already exists", "SEMESTER_CODE_EXISTS")
+        # Check code uniqueness
+        self._validate_code_uniqueness(semester_data.code)
 
         try:
             semester = Semester(**semester_data.model_dump())
@@ -41,7 +40,7 @@ class SemesterService:
             self.db.commit()
             self.db.refresh(semester)
             return semester
-        except IntegrityError:
+        except IntegrityError as e:
             self.db.rollback()
             raise ConflictError("Semester code already exists or data conflict")
 
@@ -53,12 +52,7 @@ class SemesterService:
 
         # Check code conflict if updating code
         if semester_data.code and semester_data.code != semester.code:
-            existing = self.db.query(Semester).filter(
-                Semester.code == semester_data.code,
-                Semester.id != semester_id
-            ).first()
-            if existing:
-                raise BadRequestError(f"Semester code '{semester_data.code}' already exists", "SEMESTER_CODE_EXISTS")
+            self._validate_code_uniqueness(semester_data.code, exclude_id=semester_id)
 
         try:
             # Only update provided fields
@@ -80,14 +74,26 @@ class SemesterService:
             raise NotFoundError("Semester not found", "SEMESTER_NOT_FOUND")
 
         # Check if there are associated courses
-        from app.models.course import Course
-        course_count = self.db.query(Course).filter(
-            Course.semester_id == semester_id
-        ).count()
-        
+        course_count = self._get_associated_courses_count(semester_id)
         if course_count > 0:
             raise ConflictError(f"Cannot delete semester, {course_count} courses are associated with this semester")
 
         semester.is_active = False
         self.db.commit()
         return True
+
+    # Private helper methods
+    def _validate_code_uniqueness(self, code: str, exclude_id: Optional[int] = None):
+        """Check if semester code is unique"""
+        query = self.db.query(Semester).filter(Semester.code == code)
+        if exclude_id:
+            query = query.filter(Semester.id != exclude_id)
+        
+        existing = query.first()
+        if existing:
+            raise BadRequestError(f"Semester code '{code}' already exists", "SEMESTER_CODE_EXISTS")
+
+    def _get_associated_courses_count(self, semester_id: int) -> int:
+        """Get count of courses associated with this semester"""
+        from app.models.course import Course
+        return self.db.query(Course).filter(Course.semester_id == semester_id).count()

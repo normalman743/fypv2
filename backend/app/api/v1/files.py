@@ -18,7 +18,7 @@ from app.schemas.file import (
 from app.schemas.common import SuccessResponse
 from app.models.user import User
 
-router = APIRouter(tags=["files"])
+router = APIRouter(tags=["文件管理/File Management"])
 
 
 @router.post("/files/temporary", response_model=UploadTemporaryFileResponse, operation_id="upload_temporary_file")
