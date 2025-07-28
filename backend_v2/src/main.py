@@ -55,14 +55,19 @@ def register_routers(app: FastAPI) -> None:
     from src.auth.router import router as auth_router
     app.include_router(auth_router, prefix="/api/v1", tags=["认证/Authentication"])
     
+    # Admin 模块路由
+    from src.admin.router import router as admin_router
+    app.include_router(admin_router, prefix="/api/v1", tags=["管理/Administration"])
+    
+    # Course 模块路由
+    from src.course.router import router as course_router
+    app.include_router(course_router, tags=["学期课程/Semester & Course"])
+    
     # TODO: 随着模块开发逐步添加路由
-    # from src.admin.router import router as admin_router
-    # from src.course.router import router as course_router
     # from src.chat.router import router as chat_router
     # from src.storage.router import router as storage_router
     # from src.ai.router import router as ai_router
     
-    # app.include_router(admin_router, prefix="/api/v1", tags=["管理"])
     # app.include_router(course_router, prefix="/api/v1", tags=["课程"])
     # app.include_router(chat_router, prefix="/api/v1", tags=["聊天"])
     # app.include_router(storage_router, prefix="/api/v1", tags=["存储"])

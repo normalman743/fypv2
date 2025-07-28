@@ -1,8 +1,15 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import TypeVar, Generic, Optional, Any
 
 # 泛型类型变量
 T = TypeVar('T')
+
+
+class BaseResponse(BaseModel, Generic[T]):
+    """统一响应格式基类"""
+    success: bool = Field(default=True, description="操作是否成功")
+    data: T = Field(..., description="响应数据")
+    message: Optional[str] = Field(None, description="操作消息")
 
 
 class SuccessResponse(BaseModel, Generic[T]):
@@ -36,6 +43,7 @@ class PaginatedResponse(BaseModel, Generic[T]):
 from .exceptions import ErrorResponse, ErrorDetail
 
 __all__ = [
+    "BaseResponse",
     "SuccessResponse",
     "MessageResponse", 
     "PaginatedResponse",
