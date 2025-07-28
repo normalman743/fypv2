@@ -2,15 +2,27 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
 from app.models.invite_code import InviteCode
 from app.models.user import User
+from app.models.audit_log import AuditLog
+from app.models.file import File
+from app.models.chat import Chat
 from app.schemas.invite_code import CreateInviteCodeRequest, UpdateInviteCodeRequest
 from app.core.exceptions import NotFoundError, BadRequestError
-from datetime import datetime
 import secrets
 import string
 from typing import List, Optional, Dict, Any
 
 
 class AdminService:
+    # 声明每个方法可能抛出的异常
+    METHOD_EXCEPTIONS = {
+        'create_invite_code': {BadRequestError},
+        'get_invite_codes': set(),
+        'update_invite_code': {NotFoundError, BadRequestError},
+        'delete_invite_code': {NotFoundError},
+        'get_system_config': set(),  # 只读，无异常
+        'get_audit_logs': {BadRequestError}
+    }
+    
     def __init__(self, db: Session):
         self.db = db
 
@@ -73,24 +85,51 @@ class AdminService:
         return True
 
     def get_system_config(self) -> Dict[str, Any]:
-        """获取系统配置"""
-        # 这里可以扩展为从数据库或配置文件读取
-        return {
-            "max_file_size": 10485760,  # 10MB
-            "allowed_file_types": ["pdf", "docx", "txt", "jpg", "png"],
-            "ai_model": "gpt-40-mini",
-            "rag_enabled": True,
-            "max_chat_history": 1000,
-            "max_files_per_chat": 10
+        """获取系统配置 - 只读，过滤敏感信息"""
+        from app.core.config import settings
+        
+        # 只返回对管理员有用且安全的配置
+        safe_config = {
+            # 应用信息
+            "app_name": settings.app_name,
+            "app_version": settings.app_version,
+            "environment": settings.environment,
+            
+            # 功能开关（只读显示）
+            "registration_enabled": settings.registration_enabled,
+            "email_verification_enabled": settings.email_verification_enabled,
+            "registration_invite_code_verification": settings.registration_invite_code_verification,
+            
+            # 文件配置
+            "max_file_size": settings.max_file_size,
+            "max_file_size_mb": settings.max_file_size // (1024 * 1024),  # 方便显示
+            "temporary_file_expiry_hours": settings.temporary_file_expiry_hours,
+            
+            # RAG 配置
+            "rag_chunk_size": settings.rag_chunk_size,
+            "rag_chunk_overlap": settings.rag_chunk_overlap,
+            
+            # 其他业务配置
+            "access_token_expire_minutes": settings.access_token_expire_minutes,
+            "allowed_email_domains": settings.allowed_email_domains_list,
+            
+            # 统计信息（只读）
+            "total_users": self.db.query(User).count(),
         }
+        
+        # 安全地添加统计信息（避免导入问题）
+        try:
+            safe_config["total_files"] = self.db.query(File).count()
+        except Exception:
+            safe_config["total_files"] = 0
+            
+        try:
+            safe_config["total_chats"] = self.db.query(Chat).count()
+        except Exception:
+            safe_config["total_chats"] = 0
+        
+        return safe_config
 
-    def update_system_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
-        """更新系统配置"""
-        # 这里可以扩展为保存到数据库或配置文件
-        # 目前只是返回更新后的配置
-        current_config = self.get_system_config()
-        current_config.update(config)
-        return current_config
 
     def get_audit_logs(self, 
                       user_id: Optional[int] = None,
@@ -98,75 +137,55 @@ class AdminService:
                       start_date: Optional[str] = None,
                       end_date: Optional[str] = None,
                       skip: int = 0,
-                      limit: int = 100) -> List[Dict[str, Any]]:
+                      limit: int = 100) -> Dict[str, Any]:
         """获取审计日志"""
-        # 这里可以扩展为从数据库读取真实的审计日志
-        # 目前返回模拟数据
-        mock_logs = [
-            {
-                "id": 1,
-                "user_id": 1,
-                "username": "admin",
-                "action": "login",
-                "details": "用户登录",
-                "ip_address": "127.0.0.1",
-                "created_at": "2025-01-15T10:30:00Z"
-            },
-            {
-                "id": 2,
-                "user_id": 2,
-                "username": "testuser",
-                "action": "create_chat",
-                "details": "创建聊天",
-                "ip_address": "127.0.0.1",
-                "created_at": "2025-01-15T11:00:00Z"
-            },
-            {
-                "id": 3,
-                "user_id": 1,
-                "username": "admin",
-                "action": "create_invite_code",
-                "details": "创建邀请码",
-                "ip_address": "127.0.0.1",
-                "created_at": "2025-01-15T12:00:00Z"
-            }
-        ]
+        from datetime import datetime
         
-        # 应用过滤条件
-        filtered_logs = mock_logs
+        query = self.db.query(AuditLog)
         
+        # 应用过滤器
         if user_id:
-            filtered_logs = [log for log in filtered_logs if log["user_id"] == user_id]
+            query = query.filter(AuditLog.user_id == user_id)
         
         if action:
-            filtered_logs = [log for log in filtered_logs if log["action"] == action]
+            query = query.filter(AuditLog.action == action)
         
         if start_date:
             try:
-                # Handle different date formats
-                if 'T' in start_date:
-                    start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
-                else:
-                    start_dt = datetime.strptime(start_date, "%Y-%m-%d")
-                
-                filtered_logs = [log for log in filtered_logs 
-                               if datetime.fromisoformat(log["created_at"].replace('Z', '+00:00')) >= start_dt]
+                start = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+                query = query.filter(AuditLog.created_at >= start)
             except ValueError:
-                # If date parsing fails, return empty list
-                return []
+                raise BadRequestError("开始日期格式错误", "INVALID_START_DATE")
         
         if end_date:
             try:
-                # Handle different date formats
-                if 'T' in end_date:
-                    end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
-                else:
-                    end_dt = datetime.strptime(end_date, "%Y-%m-%d")
-                
-                filtered_logs = [log for log in filtered_logs 
-                               if datetime.fromisoformat(log["created_at"].replace('Z', '+00:00')) <= end_dt]
+                end = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+                query = query.filter(AuditLog.created_at <= end)
             except ValueError:
-                # If date parsing fails, return empty list
-                return []
+                raise BadRequestError("结束日期格式错误", "INVALID_END_DATE")
         
-        return filtered_logs[skip:skip + limit] 
+        # 分页和排序
+        total = query.count()
+        logs = query.order_by(AuditLog.created_at.desc()).offset(skip).limit(limit).all()
+        
+        return {
+            "logs": [
+                {
+                    "id": log.id,
+                    "user_id": log.user_id,
+                    "username": log.user.username if log.user else "已删除用户",
+                    "action": log.action,
+                    "entity_type": log.entity_type,
+                    "entity_id": log.entity_id,
+                    "details": log.details,
+                    "ip_address": log.ip_address,
+                    "created_at": log.created_at.isoformat() + "Z"
+                } for log in logs
+            ],
+            "total": total,
+            "pagination": {
+                "skip": skip,
+                "limit": limit,
+                "has_more": skip + limit < total
+            }
+        } 

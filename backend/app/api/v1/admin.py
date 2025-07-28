@@ -4,7 +4,7 @@ from typing import List, Optional, Dict, Any
 import json
 import os
 
-from app.dependencies import get_db, get_current_user, require_admin
+from app.dependencies import get_db, require_admin
 from app.models.user import User
 from app.services.admin_service import AdminService
 from app.schemas.invite_code import (
@@ -22,34 +22,37 @@ from app.schemas.system import SystemConfigResponse, AuditLogsResponse
 from app.schemas.common import SuccessResponse
 from app.core.exceptions import NotFoundError, BadRequestError
 from app.services.unified_file_service import UnifiedFileService
+from app.core.api_decorator import service_api
 
 router = APIRouter(tags=["管理员管理/Admin Management"])
 
 # 邀请码管理
-@router.post("/invite-codes", response_model=CreateInviteCodeResponse)
+@router.post("/invite-codes", response_model=CreateInviteCodeResponse, summary="创建邀请码")
+@service_api(AdminService, 'create_invite_code')
 async def create_invite_code(
     request: CreateInviteCodeRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
     """创建邀请码 (管理员专用)"""
-    try:
-        admin_service = AdminService(db)
-        invite_code = admin_service.create_invite_code(request, created_by=current_user.id)
-        
-        return CreateInviteCodeResponse(
-            data=CreateInviteCodeData(
-                invite_code={
-                    "id": invite_code.id,
-                    "code": invite_code.code,
-                    "created_at": invite_code.created_at
-                }
-            )
+    admin_service = AdminService(db)
+    invite_code = admin_service.create_invite_code(request, created_by=current_user.id)
+    
+    return CreateInviteCodeResponse(
+        data=CreateInviteCodeData(
+            invite_code={
+                "id": invite_code.id,
+                "code": invite_code.code,
+                "created_at": invite_code.created_at,
+                "description": invite_code.description,
+                "expires_at": invite_code.expires_at,
+                "created_by": invite_code.created_by
+            }
         )
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    )
 
-@router.get("/invite-codes", response_model=InviteCodeListResponse)
+@router.get("/invite-codes", response_model=InviteCodeListResponse, summary="获取邀请码列表")
+@service_api(AdminService, 'get_invite_codes')
 async def get_invite_codes(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
@@ -57,28 +60,19 @@ async def get_invite_codes(
     current_user: User = Depends(require_admin)
 ):
     """获取邀请码列表 (管理员专用)"""
-    try:
-        admin_service = AdminService(db)
-        invite_codes = admin_service.get_invite_codes(skip=skip, limit=limit)
-        
-        invite_code_responses = [
-            InviteCodeResponse(
-                id=ic.id,
-                code=ic.code,
-                description=ic.description,
-                is_used=ic.is_used,
-                expires_at=ic.expires_at,
-                created_at=ic.created_at
-            ) for ic in invite_codes
-        ]
-        
-        return InviteCodeListResponse(
-            data=InviteCodeListData(invite_codes=invite_code_responses)
-        )
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    admin_service = AdminService(db)
+    invite_codes = admin_service.get_invite_codes(skip=skip, limit=limit)
+    
+    invite_code_responses = [
+        InviteCodeResponse.model_validate(ic) for ic in invite_codes
+    ]
+    
+    return InviteCodeListResponse(
+        data=InviteCodeListData(invite_codes=invite_code_responses)
+    )
 
-@router.put("/invite-codes/{invite_code_id}", response_model=UpdateInviteCodeResponse)
+@router.put("/invite-codes/{invite_code_id}", response_model=UpdateInviteCodeResponse, summary="更新邀请码")
+@service_api(AdminService, 'update_invite_code')
 async def update_invite_code(
     invite_code_id: int,
     request: UpdateInviteCodeRequest,
@@ -86,76 +80,50 @@ async def update_invite_code(
     current_user: User = Depends(require_admin)
 ):
     """更新邀请码 (管理员专用)"""
-    try:
-        admin_service = AdminService(db)
-        invite_code = admin_service.update_invite_code(invite_code_id, request)
-        
-        return UpdateInviteCodeResponse(
-            data=UpdateInviteCodeData(
-                invite_code={
-                    "id": invite_code.id,
-                    "updated_at": invite_code.created_at  # 使用created_at代替不存在的updated_at
-                }
-            )
+    admin_service = AdminService(db)
+    invite_code = admin_service.update_invite_code(invite_code_id, request)
+    
+    return UpdateInviteCodeResponse(
+        data=UpdateInviteCodeData(
+            invite_code={
+                "id": invite_code.id,
+                "updated_at": invite_code.created_at  # 使用created_at代替不存在的updated_at
+            }
         )
-    except NotFoundError as e:
-        raise e
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    )
 
-@router.delete("/invite-codes/{invite_code_id}", response_model=SuccessResponse)
+@router.delete("/invite-codes/{invite_code_id}", response_model=SuccessResponse, summary="删除邀请码")
+@service_api(AdminService, 'delete_invite_code')
 async def delete_invite_code(
     invite_code_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
     """删除邀请码 (管理员专用)"""
-    try:
-        admin_service = AdminService(db)
-        admin_service.delete_invite_code(invite_code_id)
-        
-        return SuccessResponse()
-    except NotFoundError as e:
-        raise e
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    admin_service = AdminService(db)
+    admin_service.delete_invite_code(invite_code_id)
+    
+    return SuccessResponse()
 
 # 系统配置
-@router.get("/system/config", response_model=SystemConfigResponse)
+@router.get("/system/config", response_model=SystemConfigResponse, summary="获取系统配置")
+@service_api(AdminService, 'get_system_config')
 async def get_system_config(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
     """获取系统配置 (管理员专用)"""
-    try:
-        admin_service = AdminService(db)
-        config = admin_service.get_system_config()
-        
-        return SystemConfigResponse(
-            data={"config": config}
-        )
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    admin_service = AdminService(db)
+    config = admin_service.get_system_config()
+    
+    return SystemConfigResponse(
+        data={"config": config}
+    )
 
-@router.put("/system/config", response_model=SystemConfigResponse)
-async def update_system_config(
-    config: Dict[str, Any],
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin)
-):
-    """更新系统配置 (管理员专用)"""
-    try:
-        admin_service = AdminService(db)
-        updated_config = admin_service.update_system_config(config)
-        
-        return SystemConfigResponse(
-            data={"config": updated_config}
-        )
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
 
 # 审计日志
-@router.get("/audit-logs", response_model=AuditLogsResponse)
+@router.get("/audit-logs", response_model=AuditLogsResponse, summary="获取审计日志")
+@service_api(AdminService, 'get_audit_logs')
 async def get_audit_logs(
     user_id: Optional[int] = Query(None),
     action: Optional[str] = Query(None),
@@ -167,24 +135,21 @@ async def get_audit_logs(
     current_user: User = Depends(require_admin)
 ):
     """获取审计日志 (管理员专用)"""
-    try:
-        admin_service = AdminService(db)
-        logs = admin_service.get_audit_logs(
-            user_id=user_id,
-            action=action,
-            start_date=start_date,
-            end_date=end_date,
-            skip=skip,
-            limit=limit
-        )
-        
-        return AuditLogsResponse(
-            data={"logs": logs}
-        )
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    admin_service = AdminService(db)
+    result = admin_service.get_audit_logs(
+        user_id=user_id,
+        action=action,
+        start_date=start_date,
+        end_date=end_date,
+        skip=skip,
+        limit=limit
+    )
+    
+    return AuditLogsResponse(
+        data=result
+    )
 
-@router.post("/global-files/upload", response_model=SuccessResponse, operation_id="upload_global_file")
+@router.post("/global-files/upload", response_model=SuccessResponse, summary="上传全局文件")
 async def upload_global_file(
     file: UploadFile = File(...),
     description: str = Form(None),
@@ -230,7 +195,7 @@ async def upload_global_file(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.post("/files/{file_id}/reprocess-rag", response_model=SuccessResponse)
+@router.post("/files/{file_id}/reprocess-rag", response_model=SuccessResponse, summary="重新处理文件RAG")
 async def reprocess_file_rag(
     file_id: int,
     use_async: bool = Query(True, description="是否使用异步处理"),
@@ -314,7 +279,7 @@ async def reprocess_file_rag(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.get("/global-files", response_model=SuccessResponse)
+@router.get("/global-files", response_model=SuccessResponse, summary="获取全局文件列表")
 async def get_global_files(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
@@ -370,7 +335,7 @@ async def get_global_files(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.delete("/global-files/{file_id}", response_model=SuccessResponse)
+@router.delete("/global-files/{file_id}", response_model=SuccessResponse, summary="删除全局文件")
 async def delete_global_file(
     file_id: int,
     db: Session = Depends(get_db),

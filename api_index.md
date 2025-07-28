@@ -10,7 +10,8 @@
 ```json
 {
   "success": true,
-  "data": {...}
+  "data": {...},
+  "message" : str
 }
 ```
 
@@ -18,10 +19,7 @@
 ```json
 {
   "success": false,
-  "error": {
-    "code": "ERROR_CODE",
-    "message": "错误描述"
-  }
+  "error": str
 }
 ```
 
@@ -43,9 +41,6 @@
 
 5. [系统管理 API](api_admin.md)
    - 用户管理、系统配置、统计信息
-
-## 数据库设计
-系统的完整数据库设计文档请参阅 [数据库结构文档](database.md)。
 
 ## 认证方式
 所有API（除了登录和注册）都需要在请求头中包含以下认证信息：

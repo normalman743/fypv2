@@ -18,10 +18,22 @@ class SuccessResponse(BaseModel, Generic[T]):
     data: T
 
 
-class MessageResponse(BaseModel):
-    """简单消息响应"""
-    success: bool = True
-    message: str
+class EmptyData(BaseModel):
+    """空数据模型 - 用于只返回消息的响应"""
+    pass
+
+
+class MessageResponse(BaseResponse[EmptyData]):
+    """标准消息响应 - message在根级别，data为空对象"""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [{
+                "success": True,
+                "data": {},
+                "message": "操作成功"
+            }]
+        }
+    )
 
 
 class PaginationMeta(BaseModel):

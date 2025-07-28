@@ -3,6 +3,7 @@ from pydantic import BaseModel, EmailStr, ConfigDict, Field, field_validator
 from typing import Optional, Literal
 from datetime import datetime
 import re
+from src.shared.schemas import BaseResponse
 
 # 从现有backend复制验证规则
 USERNAME_PATTERN = r'^[a-zA-Z0-9_]{3,20}$'
@@ -244,11 +245,6 @@ class MessageData(BaseModel):
     message: str = Field(..., description="操作消息")
 
 
-# ===== 导入共享响应格式 =====
-from src.shared.schemas import BaseResponse
-
-
-# ===== 具体响应模型 =====
 
 class LoginResponse(BaseResponse[LoginData]):
     """登录响应模型"""

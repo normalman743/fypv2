@@ -552,5 +552,31 @@ class UpdateCourseResponse(BaseResponse[Dict[str, Any]]):
     )
 
 
-# ===== 删除响应使用共享的MessageResponse =====
-# from src.shared.schemas import MessageResponse  # 在router中导入
+class DeleteSemesterResponse(BaseResponse[Dict[str, Any]]):
+    """删除学期响应"""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "success": True,
+                    "data": {},  # 删除操作不返回具体数据
+                    "message": "学期删除成功"  # message在根级别
+                }
+            ]
+        }
+    )
+
+
+class DeleteCourseResponse(BaseResponse[Dict[str, Any]]):
+    """删除课程响应"""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "success": True,
+                    "data": {},  # 删除操作不返回具体数据
+                    "message": "课程删除成功"  # message在根级别
+                }
+            ]
+        }
+    )

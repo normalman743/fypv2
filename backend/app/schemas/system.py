@@ -3,26 +3,11 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime
 from app.schemas.common import BaseResponse
 
-# 系统配置相关模型
-class SystemConfigItem(BaseModel):
-    """单个系统配置项模型 - 映射 system_config 表"""
-    model_config = ConfigDict(from_attributes=True)
-    
-    id: int
-    config_key: str
-    config_value: str
-    description: Optional[str] = None
-    is_public: bool = False
-    updated_by: Optional[int] = None
-    updated_at: datetime
-
-class SystemConfigData(BaseModel):
-    """批量配置数据模型"""
-    config: Dict[str, Any]
-
+# 系统配置相关模型（只读，从 .env 读取）
 class SystemConfigResponse(BaseResponse):
+    """系统配置响应模型 - 从 .env 读取的只读配置"""
     success: bool = True
-    data: Dict[str, Any]  # 直接使用Dict而不是包装
+    data: Dict[str, Any]  # 配置字典
 
 # 审计日志相关模型
 class AuditLogItem(BaseModel):

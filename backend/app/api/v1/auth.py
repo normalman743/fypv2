@@ -9,12 +9,7 @@ from app.schemas.user import (
 from app.schemas.common import ErrorResponse
 from app.core.security import get_current_user
 from app.services.auth_service import AuthService
-from app.core.exceptions import (
-    BadRequestError,
-    ConflictError, 
-    ForbiddenError,
-    UnauthorizedError
-)
+from app.core.exceptions import BadRequestError
 from app.models.user import User
 from app.core.api_decorator import service_api
 

@@ -71,16 +71,8 @@ class ErrorResponse(BaseModel):
                 {
                     "success": False,
                     "error": {
-                        "code": "USER_NOT_FOUND",
-                        "message": "用户未找到"
-                    }
-                },
-                {
-                    "success": False,
-                    "error": {
-                        "code": "INVALID_INPUT",
-                        "message": "输入参数无效",
-                        "details": {"username": "用户名格式错误"}
+                        "code": "error_code",
+                        "message": "错误消息"
                     }
                 }
             ]

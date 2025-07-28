@@ -179,15 +179,15 @@ folder_id: <文件夹ID>
 
 ---
 
-## 全局文件管理（暂未实现）
+## 全局文件管理
 
-**注意：** 以下全局文件API在当前版本中暂未实现，调用将返回404错误。
+
 
 ### GET /api/v1/global-files
-- 获取全局文件列表（暂未实现）
+
 
 ### POST /api/v1/global-files/upload
-- 上传全局文件（暂未实现）
+
 
 ### DELETE /api/v1/global-files/{id}
-- 删除全局文件（暂未实现）
+

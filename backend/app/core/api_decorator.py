@@ -149,20 +149,24 @@ def get_service_responses(service_class: Type, method_name: str) -> Dict[int, Di
     return APIResponses.create(*status_codes)
 
 
-def service_api(service_class: Type, method_name: str):
+def service_api(service_class: Type, method_name: str, response_model: Type = None, **router_kwargs):
     """
-    简化版 Service API 装饰器
+    增强版 Service API 装饰器
     
-    只处理异常捕获，不处理 OpenAPI 文档
-    OpenAPI 文档需要在路由装饰器中明确指定
+    自动处理：
+    1. 异常捕获和处理
+    2. OpenAPI 响应文档生成 
+    3. response_model 配置
     
     Args:
         service_class: Service 类
         method_name: Service 方法名
+        response_model: 响应模型类型
+        **router_kwargs: 其他路由参数（summary, description等）
         
     Example:
-        @router.post("/register", responses=get_service_responses(AuthService, 'register'))
-        @service_api(AuthService, 'register')
+        @router.post("/register")
+        @service_api(AuthService, 'register', RegisterResponse, summary="用户注册")
         async def register(...):
     """
     def decorator(func: Callable):

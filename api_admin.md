@@ -81,19 +81,3 @@
 }
 ```
 
----
-
-## 系统配置
-
-### GET /api/v1/system/config
-- 获取系统配置
-
-### PUT /api/v1/system/config
-- 更新系统配置
-
----
-
-## 审计日志
-
-### GET /api/v1/audit-logs
-- 获取操作日志

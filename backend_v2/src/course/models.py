@@ -75,10 +75,13 @@ class Course(Base):
     # 关系
     semester = relationship("Semester", back_populates="courses")
     user = relationship("User", back_populates="courses")
-    # 未来模块关系（预留）
-    # folders = relationship("Folder", back_populates="course")
-    # files = relationship("File", back_populates="course")
-    # chats = relationship("Chat", back_populates="course")
+    
+    # Storage模块关系（已存在）
+    folders = relationship("Folder", back_populates="course")
+    files = relationship("File", back_populates="course")
+    
+    # Chat模块关系（已存在）
+    chats = relationship("Chat", back_populates="course")
     
     # 表级约束和索引
     __table_args__ = (

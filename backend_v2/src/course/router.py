@@ -10,13 +10,13 @@ from .schemas import (
     # 响应模型
     SemesterListResponse, CreateSemesterResponse, GetSemesterResponse, UpdateSemesterResponse,
     SemesterCoursesResponse, CourseListResponse, CreateCourseResponse, GetCourseResponse, UpdateCourseResponse,
+    DeleteSemesterResponse, DeleteCourseResponse,
     # 数据模型
     SemesterData, CourseData
 )
 
 # 导入依赖
 from src.shared.dependencies import DbDep, UserDep, AdminUserDep
-from src.shared.schemas import MessageResponse
 
 # 导入装饰器
 from src.shared.api_decorator import create_service_route_config, service_api_handler
@@ -135,7 +135,7 @@ async def update_semester(
 
 
 @router.delete("/semesters/{semester_id}", **create_service_route_config(
-    SemesterService, 'delete_semester', MessageResponse,
+    SemesterService, 'delete_semester', DeleteSemesterResponse,
     summary="删除学期",
     description="软删除学期（管理员专用），如有关联课程则无法删除",
     operation_id="delete_semester"
@@ -150,9 +150,10 @@ async def delete_semester(
     service = SemesterService(db)
     result = service.delete_semester(semester_id, admin_user.id)
     
-    return MessageResponse(
+    return DeleteSemesterResponse(
         success=True,
-        message=result["message"]
+        data={},  # 删除操作不返回具体数据
+        message=result["message"]  # message在根级别
     )
 
 
@@ -292,7 +293,7 @@ async def update_course(
 
 
 @router.delete("/courses/{course_id}", **create_service_route_config(
-    CourseService, 'delete_course', MessageResponse,
+    CourseService, 'delete_course', DeleteCourseResponse,
     summary="删除课程",
     description="删除指定课程",
     operation_id="delete_course"
@@ -307,7 +308,8 @@ async def delete_course(
     service = CourseService(db)
     result = service.delete_course(course_id, user.id)
     
-    return MessageResponse(
+    return DeleteCourseResponse(
         success=True,
-        message=result["message"]
+        data={},  # 删除操作不返回具体数据
+        message=result["message"]  # message在根级别
     )
