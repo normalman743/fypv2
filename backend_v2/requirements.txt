@@ -1,0 +1,23 @@
+# FastAPI 核心依赖
+fastapi>=0.100.0
+uvicorn[standard]>=0.20.0
+
+# Pydantic 数据验证
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+
+# 数据库相关
+sqlalchemy>=2.0.0
+alembic>=1.10.0
+pymysql>=1.0.0
+
+# 认证相关
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.0
+email-validator>=2.0.0
+
+# 文件上传支持
+python-multipart>=0.0.5
+
+# 开发和测试依赖（用到时安装）
+# pytest, black, mypy, etc.
