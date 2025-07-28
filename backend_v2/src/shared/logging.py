@@ -32,3 +32,8 @@ def setup_logging() -> None:
     
     logger = logging.getLogger(__name__)
     logger.info(f"Logging configured - Debug: {settings.debug}")
+
+
+def get_logger(name: str) -> logging.Logger:
+    """获取指定名称的日志器"""
+    return logging.getLogger(name)

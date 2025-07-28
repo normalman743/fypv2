@@ -198,6 +198,11 @@ def service_api_handler(
                 raise
             except Exception as e:
                 # 未预期的异常转换为500错误
+                from .logging import get_logger
+                logger = get_logger(__name__)
+                logger.error(f"Unexpected exception in {route_func.__name__}: {e}")
+                import traceback
+                logger.error(f"Traceback: {traceback.format_exc()}")
                 from .exceptions import InternalServerError
                 raise InternalServerError(f"服务器内部错误: {str(e)}")
         

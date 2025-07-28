@@ -25,7 +25,7 @@ from src.storage.models import (
     FileAccessLog, FileGroup, FileGroupMember, TemporaryFile
 )
 from src.chat.models import Chat, Message, MessageFileReference, MessageRAGSource
-from src.admin.models import Permission, Role, RolePermission, SubjectRole, AuditLog
+from src.admin.models import AuditLog
 from src.auth.service import AuthService
 
 # 加载测试环境配置
@@ -33,8 +33,8 @@ test_env_path = Path(__file__).parent / ".env.test"
 if test_env_path.exists():
     load_dotenv(test_env_path)
 
-# 真实 MySQL 数据库配置
-TEST_DATABASE_URL = os.getenv("DATABASE_URL", "mysql+pymysql://root:Root%40123456@localhost:3306/campus_llm_db_v2")
+# 真实 MySQL 数据库配置 - 使用环境变量
+TEST_DATABASE_URL = os.getenv("DATABASE_URL")
 
 engine = create_engine(TEST_DATABASE_URL, echo=False)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -248,9 +248,9 @@ def mock_password_reset_email():
 
 # ========== 辅助测试函数 ==========
 
-def assert_success_response(response, expected_data_keys=None):
+def assert_success_response(response, expected_data_keys=None, expected_status=200):
     """标准成功响应断言"""
-    assert response.status_code == 200
+    assert response.status_code == expected_status
     data = response.json()
     assert data["success"] is True
     assert "data" in data

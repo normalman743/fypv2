@@ -2,16 +2,13 @@ from fastapi import Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from jose import JWTError, jwt
-from typing import Optional, Annotated, Dict, Any, TYPE_CHECKING
+from typing import Optional, Annotated, Dict, Any
 import logging
 
 from .database import get_db
 from .config import settings
 from .exceptions import UnauthorizedError, ForbiddenError
-
-# 避免循环导入，使用 TYPE_CHECKING
-if TYPE_CHECKING:
-    from src.auth.models import User
+from .types import UserProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +40,7 @@ def get_current_user_id(
 def get_current_user(
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
-) -> "User":
+) -> UserProtocol:
     """
     获取当前用户对象
     """
@@ -57,7 +54,7 @@ def get_current_user(
 def get_optional_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False)),
     db: Session = Depends(get_db)
-) -> Optional["User"]:
+) -> Optional[UserProtocol]:
     """
     可选的用户认证（允许匿名访问）
     用于某些公开 API 或需要区分认证/匿名用户的场景
@@ -75,8 +72,8 @@ def get_optional_current_user(
 
 
 def require_admin(
-    current_user: "User" = Depends(get_current_user)
-) -> "User":
+    current_user: UserProtocol = Depends(get_current_user)
+) -> UserProtocol:
     """
     要求管理员权限
     """
@@ -86,7 +83,7 @@ def require_admin(
 
 
 # 现代化的类型注解依赖（FastAPI 2024 推荐）
-UserDep = Annotated["User", Depends(get_current_user)]
-OptionalUserDep = Annotated[Optional["User"], Depends(get_optional_current_user)]
-AdminUserDep = Annotated["User", Depends(require_admin)]
+UserDep = Annotated[UserProtocol, Depends(get_current_user)]
+OptionalUserDep = Annotated[Optional[UserProtocol], Depends(get_optional_current_user)]
+AdminUserDep = Annotated[UserProtocol, Depends(require_admin)]
 DbDep = Annotated[Session, Depends(get_db)]

@@ -39,7 +39,7 @@ from src.storage.models import (
     FileAccessLog, FileGroup, FileGroupMember, TemporaryFile
 )
 from src.chat.models import Chat, Message, MessageFileReference, MessageRAGSource
-from src.admin.models import Permission, Role, RolePermission, SubjectRole, AuditLog
+from src.admin.models import AuditLog, Permission, Role, RolePermission, SubjectRole
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
