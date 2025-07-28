@@ -1,5 +1,5 @@
 """Course模块Pydantic模型 - 严格遵循FastAPI最佳实践"""
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
 from typing import Optional, Dict, Any
 from datetime import datetime
 
@@ -77,6 +77,13 @@ class UpdateSemesterRequest(BaseModel):
         if v is not None and not v.strip():
             raise ValueError('学期代码不能为空')
         return v.strip().upper() if v else None
+    
+    @model_validator(mode='after')
+    def validate_date_range(self):
+        """验证日期范围"""
+        if self.start_date and self.end_date and self.end_date <= self.start_date:
+            raise ValueError('结束时间必须晚于开始时间')
+        return self
 
 
 class CreateCourseRequest(BaseModel):

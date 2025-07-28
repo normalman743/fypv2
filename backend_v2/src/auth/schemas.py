@@ -244,16 +244,8 @@ class MessageData(BaseModel):
     message: str = Field(..., description="操作消息")
 
 
-# ===== 统一响应格式 =====
-
-from typing import TypeVar, Generic, Optional
-T = TypeVar('T')
-
-class BaseResponse(BaseModel, Generic[T]):
-    """统一响应格式基类"""
-    success: bool = Field(default=True, description="操作是否成功")
-    data: T = Field(..., description="响应数据")
-    message: Optional[str] = Field(None, description="操作消息")
+# ===== 导入共享响应格式 =====
+from src.shared.schemas import BaseResponse
 
 
 # ===== 具体响应模型 =====

@@ -152,7 +152,6 @@ async def delete_semester(
     
     return MessageResponse(
         success=True,
-        data={"message": result["message"]},
         message=result["message"]
     )
 
@@ -310,6 +309,5 @@ async def delete_course(
     
     return MessageResponse(
         success=True,
-        data={"message": result["message"]},
         message=result["message"]
     )
