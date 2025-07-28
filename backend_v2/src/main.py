@@ -53,7 +53,7 @@ def register_routers(app: FastAPI) -> None:
     """注册所有路由"""
     # Auth 模块路由
     from src.auth.router import router as auth_router
-    app.include_router(auth_router, prefix="/api/v1", tags=["认证"])
+    app.include_router(auth_router, prefix="/api/v1", tags=["认证/Authentication"])
     
     # TODO: 随着模块开发逐步添加路由
     # from src.admin.router import router as admin_router
