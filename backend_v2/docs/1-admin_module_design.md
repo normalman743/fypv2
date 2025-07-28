@@ -59,7 +59,7 @@ class InviteCode(Base):
     created_at = Column(DateTime, server_default=func.now())
 ```
 
-#### 2. AuditLog (新增)
+#### 2. AuditLog 
 ```python
 class AuditLog(Base):
     __tablename__ = "audit_logs"

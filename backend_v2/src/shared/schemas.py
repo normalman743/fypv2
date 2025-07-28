@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import TypeVar, Generic, Optional, Any
 
 # 泛型类型变量
