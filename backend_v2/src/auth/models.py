@@ -39,16 +39,16 @@ class User(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     
     # ===== 关系（保持与现有backend兼容） =====
-    # 这些关系将在对应模块开发时建立
-    # courses = relationship("Course", back_populates="user")
-    # files = relationship("File", back_populates="user")
-    # chats = relationship("Chat", back_populates="user")
-    # created_invite_codes = relationship("InviteCode", foreign_keys="InviteCode.created_by", back_populates="creator")
-    # used_invite_codes = relationship("InviteCode", foreign_keys="InviteCode.used_by", back_populates="user")
+    courses = relationship("Course", back_populates="user")
+    files = relationship("File", back_populates="user")
+    chats = relationship("Chat", back_populates="user")
+    created_invite_codes = relationship("InviteCode", foreign_keys="InviteCode.created_by", back_populates="creator")
+    used_invite_codes = relationship("InviteCode", foreign_keys="InviteCode.used_by", back_populates="user")
     
     # ===== 新增关系 =====
     email_verifications = relationship("EmailVerification", back_populates="user", cascade="all, delete-orphan")
     password_resets = relationship("PasswordReset", back_populates="user", cascade="all, delete-orphan")
+    last_opened_semester = relationship("Semester", foreign_keys=[last_opened_semester_id])
     
     def __repr__(self):
         return f"<User(id={self.id}, username='{self.username}', email='{self.email}')>"

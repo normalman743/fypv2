@@ -237,7 +237,6 @@ class LoginData(BaseModel):
 class RegisterData(BaseModel):
     """注册响应数据"""
     user: UserResponse = Field(..., description="用户信息")
-    message: str = Field(..., description="注册消息")
 
 
 class MessageData(BaseModel):
@@ -247,13 +246,14 @@ class MessageData(BaseModel):
 
 # ===== 统一响应格式 =====
 
-from typing import TypeVar, Generic
+from typing import TypeVar, Generic, Optional
 T = TypeVar('T')
 
 class BaseResponse(BaseModel, Generic[T]):
     """统一响应格式基类"""
     success: bool = Field(default=True, description="操作是否成功")
     data: T = Field(..., description="响应数据")
+    message: Optional[str] = Field(None, description="操作消息")
 
 
 # ===== 具体响应模型 =====
@@ -292,13 +292,14 @@ class RegisterResponse(BaseResponse[RegisterData]):
                     "user": {
                         "id": 1,
                         "username": "john_doe",
-                        "email": "john@example.com",
+                        "email": "john@584743.xyz",
                         "role": "user",
                         "balance": 1.0,
-                        "email_verified": False
-                    },
-                    "message": "注册成功！验证邮件已发送，如果没有收到，请检查垃圾邮件或稍后再试。"
-                }
+                        "email_verified": False,
+                        "created_at": "2024-01-01T00:00:00Z"
+                    }
+                },
+                "message": "注册成功！验证邮件已发送，如果没有收到，请检查垃圾邮件或稍后再试。"
             }]
         }
     )

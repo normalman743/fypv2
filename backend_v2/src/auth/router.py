@@ -1,4 +1,4 @@
-"""Auth模块的FastAPI路由定义"""
+"""Auth模块的FastAPI路由定义 - 基于FastAPI 2024最佳实践"""
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
@@ -6,12 +6,13 @@ from .schemas import (
     UserRegister, UserLogin, UserUpdate, PasswordChangeRequest,
     ForgotPasswordRequest, ResetPasswordRequest, EmailVerificationRequest,
     ResendVerificationRequest, LoginResponse, RegisterResponse, 
-    UserProfileResponse, MessageResponse, UserResponse
+    UserProfileResponse, MessageResponse, UserResponse, RegisterData, LoginData
 )
 from .service import AuthService
 from .models import User
 from src.shared.dependencies import DbDep, UserDep
 from src.shared.schemas import ErrorResponse
+from src.shared.api_decorator import create_service_route_config, service_api_handler
 
 # 创建路由器
 router = APIRouter(prefix="/auth", tags=["认证/Authentication"])
@@ -19,16 +20,15 @@ router = APIRouter(prefix="/auth", tags=["认证/Authentication"])
 
 # ===== 现有API接口（保持兼容） =====
 
-@router.post(
-    "/register",
-    response_model=RegisterResponse,
-    responses={
-        400: {"model": ErrorResponse, "description": "Bad Request - 请求参数错误"},
-        403: {"model": ErrorResponse, "description": "Forbidden - 注册功能已关闭"},
-        409: {"model": ErrorResponse, "description": "Conflict - 用户名或邮箱已存在"}
-    },
-    summary="用户注册"
-)
+@router.post("/register", **create_service_route_config(
+    AuthService, 'register', RegisterResponse, 
+    success_status=201,
+    summary="用户注册",
+    description="使用邀请码注册新用户账户，注册成功后会发送验证邮件到用户邮箱进行验证",
+    tags=["用户注册"],
+    operation_id="register_user"
+))
+@service_api_handler(AuthService, 'register')
 async def register(user_data: UserRegister, db: DbDep):
     """用户注册"""
     service = AuthService(db)
@@ -36,22 +36,19 @@ async def register(user_data: UserRegister, db: DbDep):
     
     return RegisterResponse(
         success=True,
-        data={
-            "user": UserResponse.model_validate(result["user"]),
-            "message": result["message"]
-        }
+        data=RegisterData(user=UserResponse.model_validate(result["user"])),
+        message=result["message"]
     )
 
 
-@router.post(
-    "/login",
-    response_model=LoginResponse,
-    responses={
-        401: {"model": ErrorResponse, "description": "Unauthorized - 用户名或密码错误"},
-        400: {"model": ErrorResponse, "description": "Bad Request - 账户被锁定"}
-    },
-    summary="用户登录"
-)
+@router.post("/login", **create_service_route_config(
+    AuthService, 'login', LoginResponse,
+    summary="用户登录",
+    description="使用用户名或邮箱登录系统，成功后返回JWT访问令牌",
+    tags=["用户认证"],
+    operation_id="login_user"
+))
+@service_api_handler(AuthService, 'login')
 async def login(user_data: UserLogin, db: DbDep):
     """用户登录"""
     service = AuthService(db)
@@ -59,42 +56,43 @@ async def login(user_data: UserLogin, db: DbDep):
     
     return LoginResponse(
         success=True,
-        data={
-            "access_token": result["access_token"],
-            "token_type": result["token_type"],
-            "expires_in": result["expires_in"],
-            "user": UserResponse.model_validate(result["user"])
-        }
+        data=LoginData(
+            access_token=result["access_token"],
+            token_type=result["token_type"],
+            expires_in=result["expires_in"],
+            user=UserResponse.model_validate(result["user"])
+        )
     )
 
 
-@router.get(
-    "/me",
-    response_model=UserProfileResponse,
-    responses={
-        401: {"model": ErrorResponse, "description": "Unauthorized - 未认证"}
-    },
-    summary="获取当前用户信息"
-)
-async def get_me(current_user: UserDep):
+@router.get("/me", **create_service_route_config(
+    AuthService, 'get_user_profile', UserProfileResponse,
+    summary="获取当前用户信息",
+    description="获取当前认证用户的详细信息",
+    tags=["用户信息"],
+    operation_id="get_current_user_profile"
+))
+@service_api_handler(AuthService, 'get_user_profile')
+async def get_me(current_user: UserDep, db: DbDep):
     """获取当前用户信息"""
+    service = AuthService(db)
+    result = service.get_user_profile(current_user.id)
+    
     return UserProfileResponse(
         success=True,
-        data=UserResponse.model_validate(current_user)
+        data=UserResponse.model_validate(result["user"]),
+        message=result.get("message")
     )
 
 
-@router.put(
-    "/me",
-    response_model=UserProfileResponse,
-    responses={
-        400: {"model": ErrorResponse, "description": "Bad Request - 请求参数错误"},
-        401: {"model": ErrorResponse, "description": "Unauthorized - 未认证"},
-        403: {"model": ErrorResponse, "description": "Forbidden - 无权限"},
-        409: {"model": ErrorResponse, "description": "Conflict - 用户名已存在"}
-    },
-    summary="更新用户信息"
-)
+@router.put("/me", **create_service_route_config(
+    AuthService, 'update_user', UserProfileResponse,
+    summary="更新用户信息",
+    description="更新当前认证用户的个人信息",
+    tags=["用户信息"],
+    operation_id="update_current_user"
+))
+@service_api_handler(AuthService, 'update_user')
 async def update_me(
     user_data: UserUpdate,
     current_user: UserDep,
@@ -102,85 +100,91 @@ async def update_me(
 ):
     """更新当前用户信息"""
     service = AuthService(db)
-    updated_user = service.update_user(current_user["id"], user_data)
+    result = service.update_user(current_user.id, user_data)
     
     return UserProfileResponse(
         success=True,
-        data=UserResponse.model_validate(updated_user)
+        data=UserResponse.model_validate(result["user"]),
+        message=result.get("message")
     )
 
 
-@router.post(
-    "/logout",
-    response_model=MessageResponse,
-    responses={
-        401: {"model": ErrorResponse, "description": "Unauthorized - 未认证"}
-    },
-    summary="用户登出"
-)
-async def logout(current_user: UserDep):
+@router.post("/logout", **create_service_route_config(
+    AuthService, 'logout', MessageResponse,
+    summary="用户登出",
+    description="用户登出系统，客户端应清除访问令牌",
+    tags=["用户认证"],
+    operation_id="logout_user"
+))
+@service_api_handler(AuthService, 'logout')
+async def logout(current_user: UserDep, db: DbDep):
     """用户登出"""
+    service = AuthService(db)
+    result = service.logout(current_user.id)
+    
     return MessageResponse(
         success=True,
-        data={"message": "已成功登出"}
+        data=result,
+        message=result.get("message")
     )
 
 
-@router.post(
-    "/verify-email",
-    response_model=UserProfileResponse,
-    responses={
-        400: {"model": ErrorResponse, "description": "Bad Request - 验证码无效或已过期"}
-    },
-    summary="验证邮箱"
-)
+@router.post("/verify-email", **create_service_route_config(
+    AuthService, 'verify_email', UserProfileResponse,
+    summary="验证邮箱",
+    description="使用验证码验证用户邮箱地址",
+    tags=["邮箱验证"],
+    operation_id="verify_user_email"
+))
+@service_api_handler(AuthService, 'verify_email')
 async def verify_email(
     request: EmailVerificationRequest,
     db: DbDep
 ):
     """验证邮箱"""
     service = AuthService(db)
-    user = service.verify_email(request.email, request.code)
+    result = service.verify_email(request.email, request.code)
     
     return UserProfileResponse(
         success=True,
-        data=UserResponse.model_validate(user)
+        data=UserResponse.model_validate(result["user"]),
+        message=result.get("message")
     )
 
 
-@router.post(
-    "/resend-verification",
-    response_model=MessageResponse,
-    responses={
-        400: {"model": ErrorResponse, "description": "Bad Request - 重发失败或功能未启用"}
-    },
-    summary="重发验证码"
-)
+@router.post("/resend-verification", **create_service_route_config(
+    AuthService, 'resend_verification', MessageResponse,
+    summary="重发验证码",
+    description="重新发送邮箱验证码",
+    tags=["邮箱验证"],
+    operation_id="resend_verification_code"
+))
+@service_api_handler(AuthService, 'resend_verification')
 async def resend_verification(
     request: ResendVerificationRequest,
     db: DbDep
 ):
     """重新发送验证码"""
     service = AuthService(db)
-    success = service.resend_verification(request.email)
+    result = service.resend_verification(request.email)
     
     return MessageResponse(
         success=True,
-        data={"message": f"验证码已发送至 {request.email}"}
+        data=result,
+        message=result.get("message")
     )
 
 
 # ===== 新增API接口 =====
 
-@router.put(
-    "/change-password",
-    response_model=MessageResponse,
-    responses={
-        400: {"model": ErrorResponse, "description": "Bad Request - 请求参数错误"},
-        401: {"model": ErrorResponse, "description": "Unauthorized - 当前密码错误或未认证"}
-    },
-    summary="修改密码"
-)
+@router.put("/change-password", **create_service_route_config(
+    AuthService, 'change_password', MessageResponse,
+    summary="修改密码",
+    description="修改当前用户密码，需要提供当前密码验证",
+    tags=["密码管理"],
+    operation_id="change_user_password"
+))
+@service_api_handler(AuthService, 'change_password')
 async def change_password(
     request: PasswordChangeRequest,
     current_user: UserDep,
@@ -188,22 +192,23 @@ async def change_password(
 ):
     """修改密码"""
     service = AuthService(db)
-    result = service.change_password(current_user["id"], request)
+    result = service.change_password(current_user.id, request)
     
     return MessageResponse(
         success=True,
-        data=result
+        data=result,
+        message=result.get("message")
     )
 
 
-@router.post(
-    "/forgot-password",
-    response_model=MessageResponse,
-    responses={
-        400: {"model": ErrorResponse, "description": "Bad Request - 请求过于频繁"}
-    },
-    summary="忘记密码"
-)
+@router.post("/forgot-password", **create_service_route_config(
+    AuthService, 'forgot_password', MessageResponse,
+    summary="忘记密码",
+    description="发送密码重置邮件到用户注册邮箱",
+    tags=["密码管理"],
+    operation_id="forgot_password"
+))
+@service_api_handler(AuthService, 'forgot_password')
 async def forgot_password(
     request: ForgotPasswordRequest,
     db: DbDep
@@ -214,19 +219,19 @@ async def forgot_password(
     
     return MessageResponse(
         success=True,
-        data=result
+        data=result,
+        message=result.get("message")
     )
 
 
-@router.post(
-    "/reset-password",
-    response_model=MessageResponse,
-    responses={
-        400: {"model": ErrorResponse, "description": "Bad Request - 重置令牌无效或已过期"},
-        401: {"model": ErrorResponse, "description": "Unauthorized - 令牌验证失败"}
-    },
-    summary="重置密码"
-)
+@router.post("/reset-password", **create_service_route_config(
+    AuthService, 'reset_password', MessageResponse,
+    summary="重置密码",
+    description="使用重置令牌重置用户密码",
+    tags=["密码管理"],
+    operation_id="reset_password"
+))
+@service_api_handler(AuthService, 'reset_password')
 async def reset_password(
     request: ResetPasswordRequest,
     db: DbDep
@@ -237,5 +242,6 @@ async def reset_password(
     
     return MessageResponse(
         success=True,
-        data=result
+        data=result,
+        message=result.get("message")
     )

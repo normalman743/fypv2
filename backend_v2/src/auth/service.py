@@ -26,7 +26,9 @@ class AuthService:
     METHOD_EXCEPTIONS = {
         'register': {BadRequestError, ConflictError, ForbiddenError},
         'login': {UnauthorizedError, BadRequestError},
+        'get_user_profile': {UnauthorizedError},  # 新增
         'update_user': {BadRequestError, ConflictError, ForbiddenError},
+        'logout': set(),  # 新增 - 无特定异常
         'verify_email': {BadRequestError},
         'resend_verification': {BadRequestError},
         # 新增方法的异常声明
@@ -70,7 +72,7 @@ class AuthService:
         # 1. 获取用户
         user = self._get_user_by_username_or_email(user_data.username)
         if not user:
-            raise UnauthorizedError("用户名或密码错误", "INVALID_CREDENTIALS")
+            raise UnauthorizedError("用户名或密码错误", error_code="INVALID_CREDENTIALS")
 
         # 2. 检查账户状态
         self._check_account_status(user)
@@ -78,7 +80,7 @@ class AuthService:
         # 3. 验证密码
         if not self._verify_password(user_data.password, user.password_hash):
             self._handle_failed_login(user)
-            raise UnauthorizedError("用户名或密码错误", "INVALID_CREDENTIALS")
+            raise UnauthorizedError("用户名或密码错误", error_code="INVALID_CREDENTIALS")
 
         # 4. 登录成功处理
         self._handle_successful_login(user)
@@ -93,11 +95,11 @@ class AuthService:
             "user": user
         }
 
-    def update_user(self, user_id: int, user_data: UserUpdate) -> User:
+    def update_user(self, user_id: int, user_data: UserUpdate) -> Dict[str, Any]:
         """更新用户信息"""
         user = self.db.query(User).filter(User.id == user_id).first()
         if not user:
-            raise BadRequestError("用户不存在", "USER_NOT_FOUND")
+            raise BadRequestError("用户不存在", error_code="USER_NOT_FOUND")
 
         # 检查用户名唯一性
         if user_data.username and user_data.username != user.username:
@@ -106,7 +108,7 @@ class AuthService:
                 User.id != user_id
             ).first()
             if existing:
-                raise ConflictError("用户名已存在", "USERNAME_EXISTS")
+                raise ConflictError("用户名已存在", error_code="USERNAME_EXISTS")
 
         # 更新字段
         update_data = user_data.model_dump(exclude_unset=True)
@@ -115,9 +117,36 @@ class AuthService:
 
         self.db.commit()
         self.db.refresh(user)
-        return user
+        
+        return {
+            "user": user,
+            "message": "用户信息更新成功"
+        }
 
-    def verify_email(self, email: str, code: str) -> User:
+    def get_user_profile(self, user_id: int) -> Dict[str, Any]:
+        """获取用户详细信息"""
+        user = self.db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise UnauthorizedError("用户不存在", error_code="USER_NOT_FOUND")
+        
+        return {
+            "user": user,
+            "message": None  # 获取操作通常不需要消息
+        }
+
+    def logout(self, user_id: int) -> Dict[str, Any]:
+        """用户登出 - 主要用于服务端记录，客户端需要清除Token"""
+        # 更新最后登录时间可以作为登出的记录
+        user = self.db.query(User).filter(User.id == user_id).first()
+        if user:
+            # 这里可以添加登出日志或其他业务逻辑
+            pass
+        
+        return {
+            "message": "已成功登出"
+        }
+
+    def verify_email(self, email: str, code: str) -> Dict[str, Any]:
         """验证邮箱"""
         verification = self.db.query(EmailVerification).filter(
             EmailVerification.email == email,
@@ -127,7 +156,7 @@ class AuthService:
         ).first()
 
         if not verification:
-            raise BadRequestError("验证码无效或已过期", "INVALID_VERIFICATION_CODE")
+            raise BadRequestError("验证码无效或已过期", error_code="INVALID_VERIFICATION_CODE")
 
         # 标记验证码为已使用
         verification.is_used = True
@@ -138,22 +167,30 @@ class AuthService:
 
         self.db.commit()
         self.db.refresh(user)
-        return user
+        
+        return {
+            "user": user,
+            "message": "邮箱验证成功"
+        }
 
-    def resend_verification(self, email: str) -> bool:
+    def resend_verification(self, email: str) -> Dict[str, Any]:
         """重新发送验证码"""
         user = self.db.query(User).filter(User.email == email).first()
         if not user:
-            raise BadRequestError("邮箱不存在", "EMAIL_NOT_FOUND")
+            raise BadRequestError("邮箱不存在", error_code="EMAIL_NOT_FOUND")
 
         if user.email_verified:
-            raise BadRequestError("邮箱已验证", "EMAIL_ALREADY_VERIFIED")
+            raise BadRequestError("邮箱已验证", error_code="EMAIL_ALREADY_VERIFIED")
 
         # 检查发送频率限制
         self._check_verification_rate_limit(email)
 
         # 发送新的验证码
-        return self._send_verification_email(user, "registration")
+        success = self._send_verification_email(user, "registration")
+        
+        return {
+            "message": f"验证码已发送至 {email}"
+        }
 
     # ===== 新增方法 =====
     
@@ -161,11 +198,11 @@ class AuthService:
         """修改密码"""
         user = self.db.query(User).filter(User.id == user_id).first()
         if not user:
-            raise BadRequestError("用户不存在", "USER_NOT_FOUND")
+            raise BadRequestError("用户不存在", error_code="USER_NOT_FOUND")
 
         # 验证旧密码
         if not self._verify_password(request.old_password, user.password_hash):
-            raise UnauthorizedError("当前密码错误", "INVALID_PASSWORD")
+            raise UnauthorizedError("当前密码错误", error_code="INVALID_PASSWORD")
 
         # 更新密码
         user.password_hash = self._get_password_hash(request.new_password)
@@ -211,7 +248,7 @@ class AuthService:
         ).first()
 
         if not reset_record:
-            raise BadRequestError("重置令牌无效或已过期", "INVALID_RESET_TOKEN")
+            raise BadRequestError("重置令牌无效或已过期", error_code="INVALID_RESET_TOKEN")
 
         # 更新密码
         user = reset_record.user
@@ -231,8 +268,8 @@ class AuthService:
     
     def _check_registration_enabled(self):
         """检查注册是否启用"""
-        if not getattr(settings, 'enable_registration', True):
-            raise ForbiddenError("注册功能已关闭", "REGISTRATION_DISABLED")
+        if not settings.enable_registration:
+            raise ForbiddenError("注册功能已关闭", error_code="REGISTRATION_DISABLED")
 
     def _validate_user_uniqueness(self, username: str, email: str):
         """验证用户唯一性"""
@@ -242,17 +279,17 @@ class AuthService:
         
         if existing_user:
             if existing_user.username == username:
-                raise ConflictError("用户名已存在", "USERNAME_EXISTS")
+                raise ConflictError("用户名已存在", error_code="USERNAME_EXISTS")
             else:
-                raise ConflictError("邮箱已注册", "EMAIL_EXISTS")
+                raise ConflictError("邮箱已注册", error_code="EMAIL_EXISTS")
 
     def _validate_email_domain(self, email: str):
         """验证邮箱域名"""
-        allowed_domains = getattr(settings, 'allowed_email_domains', None)
+        allowed_domains = settings.allowed_email_domains_list
         if allowed_domains:
             domain = email.split('@')[1].lower()
             if domain not in allowed_domains:
-                raise BadRequestError(f"不支持的邮箱域名，请使用：{', '.join(allowed_domains)}", "INVALID_EMAIL_DOMAIN")
+                raise BadRequestError(f"不支持的邮箱域名，请使用：{', '.join(allowed_domains)}", error_code="INVALID_EMAIL_DOMAIN")
 
     def _validate_and_consume_invite_code(self, code: str) -> InviteCode:
         """验证并消费邀请码"""
@@ -263,10 +300,10 @@ class AuthService:
         ).first()
 
         if not invite_code:
-            raise BadRequestError("邀请码无效或已使用", "INVALID_INVITE_CODE")
+            raise BadRequestError("邀请码无效或已使用", error_code="INVALID_INVITE_CODE")
 
         if invite_code.expires_at and invite_code.expires_at < datetime.utcnow():
-            raise BadRequestError("邀请码已过期", "INVITE_CODE_EXPIRED")
+            raise BadRequestError("邀请码已过期", error_code="INVITE_CODE_EXPIRED")
 
         return invite_code
 
@@ -293,11 +330,11 @@ class AuthService:
 
         except IntegrityError:
             self.db.rollback()
-            raise ConflictError("用户名或邮箱已存在", "USER_ALREADY_EXISTS")
+            raise ConflictError("用户名或邮箱已存在", error_code="USER_ALREADY_EXISTS")
 
     def _send_verification_email_if_enabled(self, user: User):
         """如果启用了邮箱验证，发送验证邮件"""
-        if getattr(settings, 'enable_email_verification', True):
+        if settings.enable_email_verification:
             self._send_verification_email(user, "registration")
 
     def _send_verification_email(self, user: User, verification_type: str) -> bool:
@@ -316,17 +353,25 @@ class AuthService:
         self.db.add(verification)
         self.db.commit()
 
-        # TODO: 实际发送邮件逻辑
-        # 这里应该调用邮件服务发送验证码
-        print(f"验证码：{verification_code} (邮箱：{user.email})")
+        # 邮件发送逻辑 - 测试环境打印，生产环境应使用实际邮件服务
+        if settings.environment == "development":
+            print(f"验证码：{verification_code} (邮箱：{user.email})")
+        else:
+            # 生产环境应该调用实际的邮件服务
+            # 例如: EmailService.send_verification_email(user.email, verification_code)
+            pass
         
         return True
 
     def _send_password_reset_email(self, user: User, reset_token: str):
         """发送密码重置邮件"""
-        # TODO: 实际发送邮件逻辑
-        # 这里应该调用邮件服务发送重置链接
-        print(f"重置令牌：{reset_token} (邮箱：{user.email})")
+        # 邮件发送逻辑 - 测试环境打印，生产环境应使用实际邮件服务
+        if settings.environment == "development":
+            print(f"重置令牌：{reset_token} (邮箱：{user.email})")
+        else:
+            # 生产环境应该调用实际的邮件服务
+            # 例如: EmailService.send_password_reset_email(user.email, reset_token)
+            pass
 
     def _get_user_by_username_or_email(self, identifier: str) -> Optional[User]:
         """通过用户名或邮箱获取用户"""
@@ -337,19 +382,18 @@ class AuthService:
     def _check_account_status(self, user: User):
         """检查账户状态"""
         if not user.is_active:
-            raise UnauthorizedError("账户已被禁用", "ACCOUNT_DISABLED")
+            raise UnauthorizedError("账户已被禁用", error_code="ACCOUNT_DISABLED")
         
         if user.locked_until and user.locked_until > datetime.utcnow():
-            raise UnauthorizedError("账户暂时锁定，请稍后再试", "ACCOUNT_LOCKED")
+            raise UnauthorizedError("账户暂时锁定，请稍后再试", error_code="ACCOUNT_LOCKED")
 
     def _handle_failed_login(self, user: User):
         """处理登录失败"""
         user.failed_login_attempts += 1
         
-        # 5次失败后锁定账户1小时
-        max_attempts = getattr(settings, 'max_login_attempts', 5)
-        if user.failed_login_attempts >= max_attempts:
-            user.locked_until = datetime.utcnow() + timedelta(hours=1)
+        # 达到最大失败次数后锁定账户
+        if user.failed_login_attempts >= settings.max_login_attempts:
+            user.locked_until = datetime.utcnow() + timedelta(hours=settings.account_lock_duration_hours)
         
         self.db.commit()
 
@@ -369,7 +413,7 @@ class AuthService:
         ).count()
         
         if recent_count >= 1:
-            raise BadRequestError("发送过于频繁，请稍后再试", "RATE_LIMIT_EXCEEDED")
+            raise BadRequestError("发送过于频繁，请稍后再试", error_code="RATE_LIMIT_EXCEEDED")
 
     def _check_password_reset_rate_limit(self, user_id: int):
         """检查密码重置发送频率限制"""
@@ -380,29 +424,24 @@ class AuthService:
         ).count()
         
         if recent_count >= 3:
-            raise BadRequestError("密码重置请求过于频繁，请稍后再试", "RATE_LIMIT_EXCEEDED")
+            raise BadRequestError("密码重置请求过于频繁，请稍后再试", error_code="RATE_LIMIT_EXCEEDED")
 
     # ===== 密码和令牌相关方法 =====
     
     def _get_password_hash(self, password: str) -> str:
         """获取密码哈希"""
-        # TODO: 实现密码哈希逻辑
-        # 这里应该使用 bcrypt 或其他安全的哈希算法
         from passlib.context import CryptContext
         pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
         return pwd_context.hash(password)
 
     def _verify_password(self, plain_password: str, hashed_password: str) -> bool:
         """验证密码"""
-        # TODO: 实现密码验证逻辑
         from passlib.context import CryptContext
         pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
         return pwd_context.verify(plain_password, hashed_password)
 
     def _create_access_token(self, data: dict) -> str:
         """创建访问令牌"""
-        # TODO: 实现JWT令牌创建逻辑
-        # 这里应该使用 python-jose 创建JWT令牌
         from jose import jwt
         expire = datetime.utcnow() + timedelta(minutes=settings.access_token_expire_minutes)
         to_encode = data.copy()

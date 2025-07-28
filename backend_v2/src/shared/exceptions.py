@@ -44,38 +44,44 @@ class BaseAPIException(HTTPException):
 # 常用异常类
 class BadRequestError(BaseAPIException):
     """400 错误请求"""
-    def __init__(self, message: str = "请求参数错误", details: Optional[Dict[str, Any]] = None):
-        super().__init__("BAD_REQUEST", message, 400, details)
+    def __init__(self, message: str = "请求参数错误", error_code: str = "BAD_REQUEST", details: Optional[Dict[str, Any]] = None):
+        super().__init__(error_code, message, 400, details)
+        self.error_code = error_code
 
 
 class UnauthorizedError(BaseAPIException):
     """401 未认证"""
-    def __init__(self, message: str = "未认证或认证已过期", details: Optional[Dict[str, Any]] = None):
-        super().__init__("UNAUTHORIZED", message, 401, details)
+    def __init__(self, message: str = "未认证或认证已过期", error_code: str = "UNAUTHORIZED", details: Optional[Dict[str, Any]] = None):
+        super().__init__(error_code, message, 401, details)
+        self.error_code = error_code
 
 
 class ForbiddenError(BaseAPIException):
     """403 禁止访问"""
-    def __init__(self, message: str = "权限不足", details: Optional[Dict[str, Any]] = None):
-        super().__init__("FORBIDDEN", message, 403, details)
+    def __init__(self, message: str = "权限不足", error_code: str = "FORBIDDEN", details: Optional[Dict[str, Any]] = None):
+        super().__init__(error_code, message, 403, details)
+        self.error_code = error_code
 
 
 class NotFoundError(BaseAPIException):
     """404 资源不存在"""
-    def __init__(self, message: str = "资源不存在", details: Optional[Dict[str, Any]] = None):
-        super().__init__("NOT_FOUND", message, 404, details)
+    def __init__(self, message: str = "资源不存在", error_code: str = "NOT_FOUND", details: Optional[Dict[str, Any]] = None):
+        super().__init__(error_code, message, 404, details)
+        self.error_code = error_code
 
 
 class ConflictError(BaseAPIException):
     """409 冲突"""
-    def __init__(self, message: str = "资源冲突", details: Optional[Dict[str, Any]] = None):
-        super().__init__("CONFLICT", message, 409, details)
+    def __init__(self, message: str = "资源冲突", error_code: str = "CONFLICT", details: Optional[Dict[str, Any]] = None):
+        super().__init__(error_code, message, 409, details)
+        self.error_code = error_code
 
 
 class InternalServerError(BaseAPIException):
     """500 服务器内部错误"""
-    def __init__(self, message: str = "服务器内部错误", details: Optional[Dict[str, Any]] = None):
-        super().__init__("INTERNAL_SERVER_ERROR", message, 500, details)
+    def __init__(self, message: str = "服务器内部错误", error_code: str = "INTERNAL_SERVER_ERROR", details: Optional[Dict[str, Any]] = None):
+        super().__init__(error_code, message, 500, details)
+        self.error_code = error_code
 
 
 def setup_exception_handlers(app) -> None:

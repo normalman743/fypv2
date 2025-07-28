@@ -19,8 +19,9 @@ from src.shared.database import Base
 # access to the values within the .ini file in use.
 config = context.config
 
-# 从环境变量获取数据库 URL
-config.set_main_option("sqlalchemy.url", settings.database_url)
+# 从环境变量获取数据库 URL，转义 % 字符
+database_url = settings.database_url.replace('%', '%%')
+config.set_main_option("sqlalchemy.url", database_url)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
@@ -32,10 +33,13 @@ target_metadata = Base.metadata
 
 # 导入所有模型以确保它们被 Alembic 识别
 from src.auth.models import User, EmailVerification, PasswordReset, InviteCode
-# TODO: 随着其他模块开发，继续导入
-# from src.admin.models import ...
-# from src.course.models import Semester, Course
-# 等等...
+from src.course.models import Semester, Course
+from src.storage.models import (
+    PhysicalFile, Folder, File, DocumentChunk, FileShare, 
+    FileAccessLog, FileGroup, FileGroupMember, TemporaryFile
+)
+from src.chat.models import Chat, Message, MessageFileReference, MessageRAGSource
+from src.admin.models import Permission, Role, RolePermission, SubjectRole, AuditLog
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:

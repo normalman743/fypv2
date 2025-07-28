@@ -40,8 +40,8 @@ class Settings(BaseSettings):
     account_lock_duration_hours: int = Field(1, env="ACCOUNT_LOCK_DURATION_HOURS")
     
     # 邮箱配置
-    allowed_email_domains: List[str] = Field(
-        default_factory=lambda: ["example.com", "test.com"],
+    allowed_email_domains: str = Field(
+        "example.com,test.com",
         env="ALLOWED_EMAIL_DOMAINS"
     )
     
@@ -75,6 +75,13 @@ class Settings(BaseSettings):
         if self.environment == "production" and "*" in self.cors_origins:
             raise ValueError("生产环境不能使用 CORS_ORIGINS='*'")
         return [origin.strip() for origin in self.cors_origins.split(",")]
+    
+    @property
+    def allowed_email_domains_list(self) -> List[str]:
+        """获取允许的邮箱域名列表"""
+        if not self.allowed_email_domains:
+            return []
+        return [domain.strip() for domain in self.allowed_email_domains.split(",") if domain.strip()]
     
     model_config = {
         "env_file": ".env",

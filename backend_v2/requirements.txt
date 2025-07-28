@@ -19,5 +19,12 @@ email-validator>=2.0.0
 # 文件上传支持
 python-multipart>=0.0.5
 
+# 测试依赖
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+pytest-mock>=3.10.0
+pytest-cov>=4.0.0
+httpx>=0.24.0
+
 # 开发和测试依赖（用到时安装）
-# pytest, black, mypy, etc.
+# black, mypy, etc.
