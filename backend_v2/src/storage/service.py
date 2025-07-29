@@ -324,12 +324,12 @@ class FileService(BaseService):
                 ).first()
                 
                 if not course:
-                    raise AccessDeniedServiceException("无权限访问该文件", "ACCESS_DENIED")
+                    raise AccessDeniedServiceException("无权限访问该文件", ErrorCodes.ACCESS_DENIED)
             
             elif file_record.scope == 'temporary':
                 # 临时文件只能被创建者访问
                 if file_record.user_id != user_id:
-                    raise AccessDeniedServiceException("无权限访问该文件", "ACCESS_DENIED")
+                    raise AccessDeniedServiceException("无权限访问该文件", ErrorCodes.ACCESS_DENIED)
             
             # 从存储中读取文件内容
             file_storage = get_file_storage()

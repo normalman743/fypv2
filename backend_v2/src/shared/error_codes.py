@@ -75,6 +75,25 @@ class ErrorCodes:
     DELETE_ERROR = "DELETE_ERROR"                      # 删除错误
     QUERY_ERROR = "QUERY_ERROR"                        # 查询错误
     
+    # === 新增错误码 ===
+    MODEL_NOT_FOUND = "MODEL_NOT_FOUND"                # AI模型不存在
+    CONFIG_NOT_FOUND = "CONFIG_NOT_FOUND"              # 配置不存在
+    GENERATION_ERROR = "GENERATION_ERROR"              # 生成错误
+    CREATE_ERROR = "CREATE_ERROR"                      # 创建错误
+    UPDATE_ERROR = "UPDATE_ERROR"                      # 更新错误
+    COMMIT_ERROR = "COMMIT_ERROR"                      # 提交错误
+    SEND_ERROR = "SEND_ERROR"                          # 发送错误
+    EDIT_ERROR = "EDIT_ERROR"                          # 编辑错误
+    RATE_CHECK_ERROR = "RATE_CHECK_ERROR"              # 频率检查错误
+    DEPENDENCY_ERROR = "DEPENDENCY_ERROR"              # 依赖错误
+    UNSUPPORTED_FILE_TYPE = "UNSUPPORTED_FILE_TYPE"    # 不支持的文件类型
+    PROCESSING_ERROR = "PROCESSING_ERROR"              # 处理错误
+    RETRIEVAL_ERROR = "RETRIEVAL_ERROR"                # 检索错误
+    DELETION_ERROR = "DELETION_ERROR"                  # 删除错误
+    STATS_ERROR = "STATS_ERROR"                        # 统计错误
+    NETWORK_ERROR = "NETWORK_ERROR"                    # 网络错误
+    BULK_SEND_ERROR = "BULK_SEND_ERROR"                # 批量发送错误
+    
     # === 系统相关 ===
     RATE_LIMIT_EXCEEDED = "RATE_LIMIT_EXCEEDED"        # 请求频率超限
     INVALID_RESET_TOKEN = "INVALID_RESET_TOKEN"        # 重置令牌无效

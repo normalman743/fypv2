@@ -14,6 +14,7 @@ if TYPE_CHECKING:
         Chroma = Any
 from datetime import datetime
 from sqlalchemy.orm import Session
+from .error_codes import ErrorCodes
 
 # LangChain imports
 try:
@@ -144,7 +145,7 @@ class VectorizationService(BaseService):
             self.db = None
         
         if not LANGCHAIN_AVAILABLE:
-            raise VectorizationServiceException("LangChain未安装，无法使用向量化服务", "DEPENDENCY_ERROR")
+            raise VectorizationServiceException("LangChain未安装，无法使用向量化服务", ErrorCodes.DEPENDENCY_ERROR)
         
         self.data_dir = data_dir or settings.vector_data_dir
         self.db_session = db_session
@@ -194,7 +195,7 @@ class VectorizationService(BaseService):
             # 1. 验证文件类型
             file_ext = os.path.splitext(file_obj.original_name)[1].lower()
             if not self._is_supported_document(file_obj.original_name):
-                raise VectorizationServiceException(f"不支持的文件类型: {file_ext}", "UNSUPPORTED_FILE_TYPE")
+                raise VectorizationServiceException(f"不支持的文件类型: {file_ext}", ErrorCodes.UNSUPPORTED_FILE_TYPE)
             
             # 2. 选择加载器
             if file_ext in self.specialized_loaders:
@@ -255,7 +256,7 @@ class VectorizationService(BaseService):
         except VectorizationServiceException:
             raise
         except Exception as e:
-            raise VectorizationServiceException(f"文件处理失败: {str(e)}", "PROCESSING_ERROR")
+            raise VectorizationServiceException(f"文件处理失败: {str(e)}", ErrorCodes.PROCESSING_ERROR)
     
     def retrieve_context(self, query: str, chat_type: str = "general", 
                         course_id: Optional[int] = None, limit: int = 5) -> List[RAGSource]:
@@ -315,7 +316,7 @@ class VectorizationService(BaseService):
             return rag_sources
             
         except Exception as e:
-            raise VectorizationServiceException(f"上下文检索失败: {str(e)}", "RETRIEVAL_ERROR")
+            raise VectorizationServiceException(f"上下文检索失败: {str(e)}", ErrorCodes.RETRIEVAL_ERROR)
     
     def remove_file_chunks(self, file_id: int) -> None:
         """删除指定文件的所有chunks"""
@@ -357,7 +358,7 @@ class VectorizationService(BaseService):
         except Exception as e:
             if self.db_session:
                 self.db_session.rollback()
-            raise VectorizationServiceException(f"删除文件chunks失败: {str(e)}", "DELETION_ERROR")
+            raise VectorizationServiceException(f"删除文件chunks失败: {str(e)}", ErrorCodes.DELETION_ERROR)
     
     def get_stats(self) -> Dict[str, Any]:
         """获取向量化统计信息"""
@@ -377,7 +378,7 @@ class VectorizationService(BaseService):
             return stats
             
         except Exception as e:
-            raise VectorizationServiceException(f"获取统计信息失败: {str(e)}", "STATS_ERROR")
+            raise VectorizationServiceException(f"获取统计信息失败: {str(e)}", ErrorCodes.STATS_ERROR)
     
     def _is_supported_document(self, filename: str) -> bool:
         """检查是否为支持的文档类型"""

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from .config import settings
 from .exceptions import BaseServiceException
+from .error_codes import ErrorCodes
 
 
 class EmailServiceException(BaseServiceException):
@@ -167,7 +168,7 @@ class EmailService:
             return True
             
         except Exception as e:
-            raise EmailServiceException(f"检查邮件发送频率失败: {str(e)}", "RATE_CHECK_ERROR")
+            raise EmailServiceException(f"检查邮件发送频率失败: {str(e)}", ErrorCodes.RATE_CHECK_ERROR)
     
     def send_verification_email(self, email: str, username: str, verification_code: str) -> bool:
         """发送验证邮件"""
@@ -185,7 +186,7 @@ class EmailService:
             )
             
         except Exception as e:
-            raise EmailServiceException(f"发送验证邮件失败: {str(e)}", "SEND_ERROR")
+            raise EmailServiceException(f"发送验证邮件失败: {str(e)}", ErrorCodes.SEND_ERROR)
     
     def send_password_reset_email(self, email: str, username: str, reset_token: str) -> bool:
         """发送密码重置邮件"""
@@ -199,7 +200,7 @@ class EmailService:
             )
             
         except Exception as e:
-            raise EmailServiceException(f"发送密码重置邮件失败: {str(e)}", "SEND_ERROR")
+            raise EmailServiceException(f"发送密码重置邮件失败: {str(e)}", ErrorCodes.SEND_ERROR)
     
     def send_notification_email(self, email: str, subject: str, content: str, 
                               is_html: bool = False) -> bool:
@@ -211,7 +212,7 @@ class EmailService:
                 return self._send_email(to_email=email, subject=subject, text_content=content)
                 
         except Exception as e:
-            raise EmailServiceException(f"发送通知邮件失败: {str(e)}", "SEND_ERROR")
+            raise EmailServiceException(f"发送通知邮件失败: {str(e)}", ErrorCodes.SEND_ERROR)
     
     async def _send_email_async(self, to_email: str, subject: str, 
                                html_content: str = None, text_content: str = None) -> bool:

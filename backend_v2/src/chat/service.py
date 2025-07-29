@@ -57,7 +57,7 @@ class ChatService(BaseService):
             return chats
             
         except Exception as e:
-            raise BadRequestServiceException(f"获取聊天列表失败: {str(e)}", "DATABASE_ERROR")
+            raise BadRequestServiceException(f"获取聊天列表失败: {str(e)}", ErrorCodes.DATABASE_ERROR)
     
     def create_chat(self, chat_data: CreateChatRequest, user_id: int) -> Dict[str, Any]:
         """创建聊天并发送首条消息"""
@@ -140,7 +140,7 @@ class ChatService(BaseService):
             self.db.add(ai_message)
             
             if not self.safe_commit("创建聊天"):
-                raise BadRequestServiceException("创建聊天失败", "COMMIT_ERROR")
+                raise BadRequestServiceException("创建聊天失败", ErrorCodes.COMMIT_ERROR)
             
             # 刷新获取完整数据
             self.safe_refresh(chat, "创建聊天")
@@ -173,7 +173,7 @@ class ChatService(BaseService):
             raise
         except Exception as e:
             self.handle_database_error("创建聊天", e)
-            raise BadRequestServiceException(f"创建聊天失败: {str(e)}", "CREATE_ERROR")
+            raise BadRequestServiceException(f"创建聊天失败: {str(e)}", ErrorCodes.CREATE_ERROR)
     
     def update_chat(self, chat_id: int, chat_data: UpdateChatRequest, user_id: int) -> Chat:
         """更新聊天信息"""
@@ -198,7 +198,7 @@ class ChatService(BaseService):
                 chat.rag_enabled = chat_data.rag_enabled
             
             if not self.safe_commit("更新聊天"):
-                raise BadRequestServiceException("更新聊天失败", "COMMIT_ERROR")
+                raise BadRequestServiceException("更新聊天失败", ErrorCodes.COMMIT_ERROR)
             self.safe_refresh(chat, "更新聊天")
             
             return chat
@@ -208,7 +208,7 @@ class ChatService(BaseService):
             raise
         except Exception as e:
             self.handle_database_error("更新聊天", e)
-            raise BadRequestServiceException(f"更新聊天失败: {str(e)}", "UPDATE_ERROR")
+            raise BadRequestServiceException(f"更新聊天失败: {str(e)}", ErrorCodes.UPDATE_ERROR)
     
     def delete_chat(self, chat_id: int, user_id: int) -> None:
         """删除聊天"""
@@ -225,14 +225,14 @@ class ChatService(BaseService):
             # 删除聊天（级联删除消息）
             self.db.delete(chat)
             if not self.safe_commit("删除聊天"):
-                raise BadRequestServiceException("删除聊天失败", "COMMIT_ERROR")
+                raise BadRequestServiceException("删除聊天失败", ErrorCodes.COMMIT_ERROR)
             
         except BadRequestServiceException:
             self.handle_database_error("删除聊天", BadRequestServiceException("业务错误"))
             raise
         except Exception as e:
             self.handle_database_error("删除聊天", e)
-            raise BadRequestServiceException(f"删除聊天失败: {str(e)}", "DELETE_ERROR")
+            raise BadRequestServiceException(f"删除聊天失败: {str(e)}", ErrorCodes.DELETE_ERROR)
     
     def get_chat_stats(self, chat_id: int) -> dict:
         """获取聊天统计信息"""
@@ -244,7 +244,7 @@ class ChatService(BaseService):
             }
             
         except Exception as e:
-            raise BadRequestServiceException(f"获取聊天统计失败: {str(e)}", "DATABASE_ERROR")
+            raise BadRequestServiceException(f"获取聊天统计失败: {str(e)}", ErrorCodes.DATABASE_ERROR)
     
     def _generate_chat_title(self, first_message: str) -> str:
         """根据首条消息生成聊天标题"""
@@ -294,7 +294,7 @@ class MessageService(BaseService):
         except BadRequestServiceException:
             raise
         except Exception as e:
-            raise BadRequestServiceException(f"获取消息列表失败: {str(e)}", "DATABASE_ERROR")
+            raise BadRequestServiceException(f"获取消息列表失败: {str(e)}", ErrorCodes.DATABASE_ERROR)
     
     def send_message(self, chat_id: int, message_data: SendMessageRequest, user_id: int) -> Dict[str, Any]:
         """发送消息并获取AI回复"""
@@ -363,7 +363,7 @@ class MessageService(BaseService):
             chat.updated_at = datetime.utcnow()
             
             if not self.safe_commit("发送消息"):
-                raise BadRequestServiceException("发送消息失败", "COMMIT_ERROR")
+                raise BadRequestServiceException("发送消息失败", ErrorCodes.COMMIT_ERROR)
             
             # 刷新获取完整数据
             self.safe_refresh(user_message, "发送消息")
@@ -389,7 +389,7 @@ class MessageService(BaseService):
             raise
         except Exception as e:
             self.handle_database_error("发送消息", e)
-            raise BadRequestServiceException(f"发送消息失败: {str(e)}", "SEND_ERROR")
+            raise BadRequestServiceException(f"发送消息失败: {str(e)}", ErrorCodes.SEND_ERROR)
     
     def edit_message(self, message_id: int, message_data: EditMessageRequest, user_id: int) -> Message:
         """编辑消息"""
@@ -412,7 +412,7 @@ class MessageService(BaseService):
             message.edited_at = datetime.utcnow()
             
             if not self.safe_commit("编辑消息"):
-                raise BadRequestServiceException("编辑消息失败", "COMMIT_ERROR")
+                raise BadRequestServiceException("编辑消息失败", ErrorCodes.COMMIT_ERROR)
             self.safe_refresh(message, "编辑消息")
             
             return message
@@ -422,7 +422,7 @@ class MessageService(BaseService):
             raise
         except Exception as e:
             self.handle_database_error("编辑消息", e)
-            raise BadRequestServiceException(f"编辑消息失败: {str(e)}", "EDIT_ERROR")
+            raise BadRequestServiceException(f"编辑消息失败: {str(e)}", ErrorCodes.EDIT_ERROR)
     
     def delete_message(self, message_id: int, user_id: int) -> None:
         """删除消息"""
@@ -441,11 +441,11 @@ class MessageService(BaseService):
             # 删除消息
             self.db.delete(message)
             if not self.safe_commit("删除消息"):
-                raise BadRequestServiceException("删除消息失败", "COMMIT_ERROR")
+                raise BadRequestServiceException("删除消息失败", ErrorCodes.COMMIT_ERROR)
             
         except BadRequestServiceException:
             self.handle_database_error("删除消息", BadRequestServiceException("业务错误"))
             raise
         except Exception as e:
             self.handle_database_error("删除消息", e)
-            raise BadRequestServiceException(f"删除消息失败: {str(e)}", "DELETE_ERROR")
+            raise BadRequestServiceException(f"删除消息失败: {str(e)}", ErrorCodes.DELETE_ERROR)

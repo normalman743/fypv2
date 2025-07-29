@@ -1457,7 +1457,6 @@ METHOD_EXCEPTIONS = {
 ##### 1. **数据库事务管理不一致**
 **位置**: 多个Service文件  
 **问题**: 事务保护模式不统一，部分操作缺少rollback保护
-
 **问题示例**:
 ```python
 # ❌ auth/service.py:123 - 缺少异常保护
@@ -1473,7 +1472,6 @@ except Exception as e:
     self.db.rollback()
     raise ValidationServiceException(f"操作失败: {str(e)}")
 ```
-
 **修复方案**: 实现统一事务管理模式
 ```python
 def safe_transaction_operation(self, operation_name: str):
@@ -1486,10 +1484,11 @@ def safe_transaction_operation(self, operation_name: str):
         self.logger.error(f"{operation_name} failed: {e}")
         raise ValidationServiceException(f"{operation_name}失败")
 ```
+修复成果： 目前分别使用try和safe完成了 后期可能会使用safe_transaction_operation
+
 
 ##### 2. **查询优化问题 - N+1查询风险**
 **位置**: `/Users/mannormal/Downloads/fyp/backend_v2/src/storage/service.py:119-124`
-
 **问题**: 潜在N+1查询问题
 ```python
 # ❌ 当前实现 - 可能触发N+1
@@ -1498,7 +1497,6 @@ folder = self.db.query(Folder)\
     .filter(or_(Course.user_id == user_id, Course.user.has(role="admin")))\
     .first()
 ```
-
 **修复方案**: 使用joinedload预加载
 ```python
 # ✅ 优化后
@@ -1509,18 +1507,23 @@ folder = self.db.query(Folder)\
     .filter(or_(Course.user_id == user_id, Course.user.has(role="admin")))\
     .first()
 ```
+**修复计划**：不修复，我们是小型项目
 
-##### 3. **硬编码错误码残留**
-**位置**: `/Users/mannormal/Downloads/fyp/backend_v2/src/storage/service.py:323`
 
-**问题**: 仍有硬编码错误码
-```python
-# ❌ 硬编码
-raise AccessDeniedServiceException("无权限访问", "ACCESS_DENIED")
+##### 3. **硬编码错误码残留** ✅ **已修复**
+**位置**: 多个模块存在硬编码错误码
 
-# ✅ 应该使用
-raise AccessDeniedServiceException("无权限访问", ErrorCodes.ACCESS_DENIED)
-```
+**修复内容**:
+- **Storage模块**: 2个 `ACCESS_DENIED` 硬编码替换为 `ErrorCodes.ACCESS_DENIED`
+- **Admin模块**: `ADMIN_REQUIRED` 硬编码替换为 `ErrorCodes.ADMIN_REQUIRED`
+- **Chat模块**: 15个硬编码错误码全部替换为ErrorCodes常量
+- **AI模块**: 5个硬编码错误码全部替换为ErrorCodes常量
+- **Email模块**: 4个硬编码错误码全部替换为ErrorCodes常量
+- **Vectorization模块**: 6个硬编码错误码全部替换为ErrorCodes常量
+
+**新增17个ErrorCodes常量**: MODEL_NOT_FOUND, GENERATION_ERROR, SEND_ERROR, PROCESSING_ERROR等
+
+**成果**: 实现了错误码的完全统一管理，提高了代码可维护性和一致性。
 
 #### 🔥 High级别问题
 
@@ -1572,56 +1575,3 @@ async def safe_commit_async(self, operation: str = "unknown") -> bool:
 class BaseResponse(BaseModel, Generic[T]):
     data: T = Field(..., description="响应数据")  # 过于通用
 ```
-
-### 🛡️ 安全评估
-
-#### ✅ 安全优势
-- 正确的密码哈希使用bcrypt
-- JWT令牌实现
-- 敏感操作的频率限制
-- ORM防止SQL注入
-
-#### ⚠️ 安全关注点
-- 信息披露模式不一致
-- 部分文件操作缺少权限检查
-- 某些上传操作缺少输入清理
-
-### 📈 性能考量
-
-#### ✅ 性能优势
-- 良好的数据库索引使用
-- 分页实现正确
-- 文件去重策略
-
-#### ⚠️ 性能改进点
-- 查询优化 (N+1问题)
-- 连接池配置
-- 频繁访问数据的缓存策略
-
-### 🔧 推荐修复优先级
-
-#### 立即修复 (Critical - 2小时工作量)
-1. **事务管理标准化** - 为所有Service添加一致的事务保护 ✅
-2. **查询优化** - 修复N+1查询问题，正确使用joinedload
-3. **硬编码错误码清理** - 替换为ErrorCodes常量
-
-#### 短期改进 (High - 4小时工作量)  
-1. **异步/同步模式统一** - 决定并实施一致的模式
-2. **日志标准化** - 替换所有print()为proper logging
-3. **Service方法验证** - 确保METHOD_EXCEPTIONS声明完整
-
-#### 中期优化 (Medium - 6小时工作量)
-1. **增强类型安全** - 改进通用响应模式的特定类型
-2. **数据库会话管理简化** - 简化async/sync处理
-3. **文件存储抽象完善** - 完成文件操作抽象
-
-**Code Reviewer 签名**: Claude Code Reviewer Agent  
-**审查完成时间**: 2025-07-29
-
----
-
-## 📋 数据库事务管理模式不统一
-
-**发现**: Chat Service使用`self.safe_commit("操作名")`，其他Service使用直接`try/except`模式  
-**计划**: 统一为有完整调试信息的safe_commit模式，修改BaseService.safe_commit()及所有Service文件  
-**影响**: 可优化项，无功能差异

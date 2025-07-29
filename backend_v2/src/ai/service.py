@@ -70,12 +70,12 @@ class AIService(BaseService):
             # 1. 获取AI模型配置
             ai_model = self._get_ai_model(request.ai_model)
             if not ai_model:
-                raise BadRequestServiceException(f"AI模型 {request.ai_model} 不存在或未激活", "MODEL_NOT_FOUND")
+                raise BadRequestServiceException(f"AI模型 {request.ai_model} 不存在或未激活", ErrorCodes.MODEL_NOT_FOUND)
             
             # 2. 获取对话配置
             config = self._get_conversation_config(request.context_mode)
             if not config:
-                raise BadRequestServiceException(f"对话配置 {request.context_mode} 不存在", "CONFIG_NOT_FOUND")
+                raise BadRequestServiceException(f"对话配置 {request.context_mode} 不存在", ErrorCodes.CONFIG_NOT_FOUND)
             
             # 3. RAG检索（如果启用）
             rag_sources = []
@@ -121,7 +121,7 @@ class AIService(BaseService):
         except BadRequestServiceException:
             raise
         except Exception as e:
-            raise BadRequestServiceException(f"生成AI响应失败: {str(e)}", "GENERATION_ERROR")
+            raise BadRequestServiceException(f"生成AI响应失败: {str(e)}", ErrorCodes.GENERATION_ERROR)
     
     def generate_response(self, request: AIRequest, conversation_history: Optional[List[Dict[str, str]]] = None) -> AIResponse:
         """生成AI响应（同步版本，兼容旧代码）"""
@@ -151,7 +151,7 @@ class AIService(BaseService):
             models = self.db.query(AIModel).filter(AIModel.is_active == True).all()
             return models
         except Exception as e:
-            raise BadRequestServiceException(f"获取AI模型列表失败: {str(e)}", "DATABASE_ERROR")
+            raise BadRequestServiceException(f"获取AI模型列表失败: {str(e)}", ErrorCodes.DATABASE_ERROR)
     
     def get_conversation_configs(self) -> List[AIConversationConfig]:
         """获取对话配置列表"""
@@ -161,7 +161,7 @@ class AIService(BaseService):
             ).all()
             return configs
         except Exception as e:
-            raise BadRequestServiceException(f"获取对话配置失败: {str(e)}", "DATABASE_ERROR")
+            raise BadRequestServiceException(f"获取对话配置失败: {str(e)}", ErrorCodes.DATABASE_ERROR)
     
     def _get_ai_model(self, model_name: str) -> Optional[AIModel]:
         """获取AI模型配置"""
