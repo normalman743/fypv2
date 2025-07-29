@@ -126,7 +126,7 @@ def logout(current_user: UserDep, db: DbDep):
 
 
 @router.post("/verify-email", **create_service_route_config(
-    AuthService, 'verify_email', UserProfileResponse,
+    AuthService, 'verify_email', GetUserProfileResponse,
     summary="验证邮箱",
     description="使用验证码验证用户邮箱地址",
     operation_id="verify_user_email",
@@ -140,7 +140,7 @@ async def verify_email(
     service = AuthService(db)
     result = service.verify_email(request.email, request.code)
     
-    return UserProfileResponse(
+    return GetUserProfileResponse(
         success=True,
         data=UserResponse.model_validate(result["user"]),
         message=result.get("message")

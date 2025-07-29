@@ -5,7 +5,7 @@ from .schemas import (
     UserRegister, UserLogin, UserUpdate, UserResponse,
     PasswordChangeRequest, ForgotPasswordRequest, ResetPasswordRequest,
     EmailVerificationRequest, ResendVerificationRequest,
-    LoginResponse, RegisterResponse, UserProfileResponse, MessageResponse
+    LoginResponse, RegisterResponse, GetUserProfileResponse, UpdateUserProfileResponse, MessageResponse
 )
 from .service import AuthService
 from .router import router
@@ -29,7 +29,8 @@ __all__ = [
     "ResendVerificationRequest",
     "LoginResponse",
     "RegisterResponse", 
-    "UserProfileResponse",
+    "GetUserProfileResponse",
+    "UpdateUserProfileResponse",
     "MessageResponse",
     
     # Service

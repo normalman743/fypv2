@@ -4,10 +4,9 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import Optional, List
 
-from src.shared.dependencies import get_db, get_current_user
-from src.shared.exceptions import handle_service_exceptions
+from src.shared.dependencies import DbDep, UserDep
+from src.shared.api_decorator import create_service_route_config, service_api_handler
 from src.shared.schemas import BaseResponse, MessageResponse
-from src.auth.models import User
 from .service import FolderService, FileService, TemporaryFileService
 from .schemas import (
     CreateFolderRequest, UpdateFolderRequest, FolderListResponse, CreateFolderResponse,
@@ -23,12 +22,17 @@ file_router = APIRouter(tags=["文件管理/File Management"])
 
 # ===== 文件夹管理路由 =====
 
-@folder_router.get("/courses/{course_id}/folders", response_model=FolderListResponse)
-@handle_service_exceptions
-async def get_course_folders(
-    course_id: int = Path(..., description="Course ID"),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+@folder_router.get("/courses/{course_id}/folders", **create_service_route_config(
+    FolderService, 'get_course_folders', FolderListResponse,
+    summary="获取课程文件夹列表",
+    description="获取指定课程的所有文件夹，包括统计信息",
+    operation_id="get_course_folders"
+))
+@service_api_handler(FolderService, 'get_course_folders')
+def get_course_folders(
+    current_user: UserDep,
+    db: DbDep,
+    course_id: int = Path(..., description="Course ID")
 ):
     """获取课程的所有文件夹"""
     service = FolderService(db)
@@ -55,13 +59,19 @@ async def get_course_folders(
     )
 
 
-@folder_router.post("/courses/{course_id}/folders", response_model=CreateFolderResponse)
-@handle_service_exceptions
-async def create_folder(
-    course_id: int = Path(..., description="Course ID"),
-    folder_data: CreateFolderRequest = ...,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+@folder_router.post("/courses/{course_id}/folders", **create_service_route_config(
+    FolderService, 'create_folder', CreateFolderResponse,
+    success_status=201,
+    summary="创建文件夹",
+    description="在指定课程中创建新的文件夹",
+    operation_id="create_folder"
+))
+@service_api_handler(FolderService, 'create_folder')
+def create_folder(
+    folder_data: CreateFolderRequest,
+    current_user: UserDep,
+    db: DbDep,
+    course_id: int = Path(..., description="Course ID")
 ):
     """创建文件夹"""
     service = FolderService(db)
@@ -78,13 +88,18 @@ async def create_folder(
     )
 
 
-@folder_router.put("/folders/{folder_id}", response_model=CreateFolderResponse)
-@handle_service_exceptions
-async def update_folder(
-    folder_id: int = Path(..., description="Folder ID"),
-    folder_data: UpdateFolderRequest = ...,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+@folder_router.put("/folders/{folder_id}", **create_service_route_config(
+    FolderService, 'update_folder', CreateFolderResponse,
+    summary="更新文件夹",
+    description="更新文件夹的名称和类型",
+    operation_id="update_folder"
+))
+@service_api_handler(FolderService, 'update_folder')
+def update_folder(
+    folder_data: UpdateFolderRequest,
+    current_user: UserDep,
+    db: DbDep,
+    folder_id: int = Path(..., description="Folder ID")
 ):
     """更新文件夹"""
     service = FolderService(db)
@@ -101,12 +116,17 @@ async def update_folder(
     )
 
 
-@folder_router.delete("/folders/{folder_id}", response_model=MessageResponse)
-@handle_service_exceptions
-async def delete_folder(
-    folder_id: int = Path(..., description="Folder ID"),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+@folder_router.delete("/folders/{folder_id}", **create_service_route_config(
+    FolderService, 'delete_folder', MessageResponse,
+    summary="删除文件夹",
+    description="删除空的文件夹（非默认文件夹）",
+    operation_id="delete_folder"
+))
+@service_api_handler(FolderService, 'delete_folder')
+def delete_folder(
+    current_user: UserDep,
+    db: DbDep,
+    folder_id: int = Path(..., description="Folder ID")
 ):
     """删除文件夹"""
     service = FolderService(db)
@@ -121,12 +141,17 @@ async def delete_folder(
 
 # ===== 文件管理路由 =====
 
-@file_router.get("/folders/{folder_id}/files", response_model=FileListResponse)
-@handle_service_exceptions
-async def get_folder_files(
-    folder_id: int = Path(..., description="Folder ID"),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+@file_router.get("/folders/{folder_id}/files", **create_service_route_config(
+    FileService, 'get_folder_files', FileListResponse,
+    summary="获取文件夹文件列表",
+    description="获取指定文件夹中的所有文件",
+    operation_id="get_folder_files"
+))
+@service_api_handler(FileService, 'get_folder_files')
+def get_folder_files(
+    current_user: UserDep,
+    db: DbDep,
+    folder_id: int = Path(..., description="Folder ID")
 ):
     """获取文件夹中的所有文件"""
     service = FileService(db)
@@ -144,15 +169,21 @@ async def get_folder_files(
     )
 
 
-@file_router.post("/files/upload", response_model=UploadFileResponse)
-@handle_service_exceptions
-async def upload_file(
+@file_router.post("/files/upload", **create_service_route_config(
+    FileService, 'upload_file', UploadFileResponse,
+    success_status=201,
+    summary="上传文件",
+    description="上传文件到指定文件夹，支持SHA256去重",
+    operation_id="upload_file"
+))
+@service_api_handler(FileService, 'upload_file')
+def upload_file(
+    current_user: UserDep,
+    db: DbDep,
     file: UploadFile = File(...),
     course_id: int = Form(...),
     folder_id: int = Form(...),
-    description: Optional[str] = Form(None),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    description: Optional[str] = Form(None)
 ):
     """上传文件到指定文件夹"""
     service = FileService(db)
@@ -166,12 +197,17 @@ async def upload_file(
     )
 
 
-@file_router.get("/files/{file_id}/download")
-@handle_service_exceptions
-async def download_file(
-    file_id: int = Path(..., description="File ID"),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+@file_router.get("/files/{file_id}/download", **create_service_route_config(
+    FileService, 'download_file', None,
+    summary="下载文件",
+    description="下载指定文件，返回文件流",
+    operation_id="download_file"
+))
+@service_api_handler(FileService, 'download_file')
+def download_file(
+    current_user: UserDep,
+    db: DbDep,
+    file_id: int = Path(..., description="File ID")
 ):
     """下载文件"""
     service = FileService(db)
@@ -185,12 +221,17 @@ async def download_file(
     )
 
 
-@file_router.delete("/files/{file_id}", response_model=MessageResponse)
-@handle_service_exceptions
-async def delete_file(
-    file_id: int = Path(..., description="File ID"),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+@file_router.delete("/files/{file_id}", **create_service_route_config(
+    FileService, 'delete_file', MessageResponse,
+    summary="删除文件",
+    description="删除指定文件（仅创建者或管理员）",
+    operation_id="delete_file"
+))
+@service_api_handler(FileService, 'delete_file')
+def delete_file(
+    current_user: UserDep,
+    db: DbDep,
+    file_id: int = Path(..., description="File ID")
 ):
     """删除文件"""
     service = FileService(db)
@@ -205,14 +246,20 @@ async def delete_file(
 
 # ===== 临时文件管理路由 =====
 
-@file_router.post("/tempfiles/upload", response_model=UploadTemporaryFileResponse)
-@handle_service_exceptions
-async def upload_temporary_file(
+@file_router.post("/tempfiles/upload", **create_service_route_config(
+    TemporaryFileService, 'upload_temporary_file', UploadTemporaryFileResponse,
+    success_status=201,
+    summary="上传临时文件",
+    description="上传临时文件，支持设置过期时间",
+    operation_id="upload_temporary_file"
+))
+@service_api_handler(TemporaryFileService, 'upload_temporary_file')
+def upload_temporary_file(
+    current_user: UserDep,
+    db: DbDep,
     file: UploadFile = File(...),
     expiry_hours: int = Form(24, description="过期时间（小时）"),
-    purpose: Optional[str] = Form(None, description="用途说明"),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    purpose: Optional[str] = Form(None, description="用途说明")
 ):
     """上传临时文件"""
     service = TemporaryFileService(db)
@@ -226,12 +273,17 @@ async def upload_temporary_file(
     )
 
 
-@file_router.get("/tempfiles/{file_id}/download")
-@handle_service_exceptions
-async def download_temporary_file(
-    file_id: int = Path(..., description="临时文件ID"),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+@file_router.get("/tempfiles/{file_id}/download", **create_service_route_config(
+    TemporaryFileService, 'download_temporary_file', None,
+    summary="下载临时文件",
+    description="下载临时文件，检查过期状态",
+    operation_id="download_temporary_file"
+))
+@service_api_handler(TemporaryFileService, 'download_temporary_file')
+def download_temporary_file(
+    current_user: UserDep,
+    db: DbDep,
+    file_id: int = Path(..., description="临时文件ID")
 ):
     """下载临时文件"""
     service = TemporaryFileService(db)
@@ -244,12 +296,17 @@ async def download_temporary_file(
     )
 
 
-@file_router.delete("/tempfiles/{file_id}", response_model=MessageResponse)
-@handle_service_exceptions
-async def delete_temporary_file(
-    file_id: int = Path(..., description="临时文件ID"),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+@file_router.delete("/tempfiles/{file_id}", **create_service_route_config(
+    TemporaryFileService, 'delete_temporary_file', MessageResponse,
+    summary="删除临时文件",
+    description="删除指定的临时文件",
+    operation_id="delete_temporary_file"
+))
+@service_api_handler(TemporaryFileService, 'delete_temporary_file')
+def delete_temporary_file(
+    current_user: UserDep,
+    db: DbDep,
+    file_id: int = Path(..., description="临时文件ID")
 ):
     """删除临时文件"""
     service = TemporaryFileService(db)
@@ -264,13 +321,17 @@ async def delete_temporary_file(
 
 # ===== 全局文件管理路由（管理员专用） =====
 
-@file_router.post("/globalfiles/upload", response_model=UploadFileResponse)
-@handle_service_exceptions
-async def upload_global_file(
+@file_router.post("/globalfiles/upload",
+    response_model=UploadFileResponse,
+    summary="上传全局文件",
+    description="上传全局文件（管理员专用），功能暂未实现",
+    operation_id="upload_global_file"
+)
+def upload_global_file(
+    current_user: UserDep,
+    db: DbDep,
     file: UploadFile = File(...),
-    description: Optional[str] = Form(None),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    description: Optional[str] = Form(None)
 ):
     """上传全局文件（管理员专用）"""
     if current_user.role != "admin":
@@ -281,13 +342,17 @@ async def upload_global_file(
     raise HTTPException(status_code=501, detail="功能暂未实现")
 
 
-@file_router.get("/globalfiles", response_model=FileListResponse)
-@handle_service_exceptions
-async def get_global_files(
+@file_router.get("/globalfiles",
+    response_model=FileListResponse,
+    summary="获取全局文件列表",
+    description="获取全局文件列表（管理员专用），功能暂未实现",
+    operation_id="get_global_files"
+)
+def get_global_files(
+    current_user: UserDep,
+    db: DbDep,
     skip: int = Query(0, ge=0, description="跳过记录数"),
-    limit: int = Query(100, ge=1, le=1000, description="每页记录数"),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    limit: int = Query(100, ge=1, le=1000, description="每页记录数")
 ):
     """获取全局文件列表（管理员专用）"""
     if current_user.role != "admin":
@@ -297,12 +362,16 @@ async def get_global_files(
     raise HTTPException(status_code=501, detail="功能暂未实现")
 
 
-@file_router.delete("/globalfiles/{file_id}", response_model=MessageResponse)
-@handle_service_exceptions
-async def delete_global_file(
-    file_id: int = Path(..., description="文件ID"),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+@file_router.delete("/globalfiles/{file_id}",
+    response_model=MessageResponse,
+    summary="删除全局文件",
+    description="删除全局文件（管理员专用），功能暂未实现",
+    operation_id="delete_global_file"
+)
+def delete_global_file(
+    current_user: UserDep,
+    db: DbDep,
+    file_id: int = Path(..., description="文件ID")
 ):
     """删除全局文件（管理员专用）"""
     if current_user.role != "admin":

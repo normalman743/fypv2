@@ -7,7 +7,11 @@ import os
 import hashlib
 from pathlib import Path
 
-from src.shared.exceptions import BaseServiceException
+from src.shared.exceptions import (
+    BaseServiceException, NotFoundServiceException, 
+    ConflictServiceException, ValidationServiceException, AccessDeniedServiceException
+)
+from src.shared.base_service import BaseService
 from .models import PhysicalFile, Folder, File, DocumentChunk, FileShare, FileAccessLog, FileGroup, FileGroupMember, TemporaryFile
 from .schemas import CreateFolderRequest, UpdateFolderRequest, CreateFileShareRequest
 
@@ -17,20 +21,20 @@ class StorageServiceException(BaseServiceException):
     pass
 
 
-class FolderService:
+class FolderService(BaseService):
     """文件夹管理服务"""
     
     # 定义方法可能抛出的异常
     METHOD_EXCEPTIONS = {
-        "get_course_folders": [StorageServiceException],
-        "create_folder": [StorageServiceException],
-        "update_folder": [StorageServiceException],
-        "delete_folder": [StorageServiceException],
-        "get_folder_stats": [StorageServiceException],
+        "get_course_folders": {NotFoundServiceException, AccessDeniedServiceException},
+        "create_folder": {NotFoundServiceException, AccessDeniedServiceException, ConflictServiceException},  
+        "update_folder": {NotFoundServiceException, AccessDeniedServiceException, ConflictServiceException},
+        "delete_folder": {NotFoundServiceException, AccessDeniedServiceException, ConflictServiceException},
+        "get_folder_stats": set(),
     }
     
     def __init__(self, db: Session):
-        self.db = db
+        super().__init__(db)
     
     def get_course_folders(self, course_id: int, user_id: int) -> List[Folder]:
         """获取课程的所有文件夹"""
@@ -42,16 +46,16 @@ class FolderService:
             # 先获取当前用户
             user = self.db.query(User).filter(User.id == user_id).first()
             if not user:
-                raise StorageServiceException("用户不存在", "USER_NOT_FOUND")
+                raise NotFoundServiceException("用户不存在", "USER_NOT_FOUND")
             
             # 然后检查课程权限
             course = self.db.query(Course).filter(Course.id == course_id).first()
             if not course:
-                raise StorageServiceException("课程不存在", "COURSE_NOT_FOUND")
+                raise NotFoundServiceException("课程不存在", "COURSE_NOT_FOUND")
             
             # 验证权限：课程拥有者或管理员
             if course.user_id != user_id and user.role != "admin":
-                raise StorageServiceException("无权限访问该课程", "ACCESS_DENIED")
+                raise AccessDeniedServiceException("无权限访问该课程", "ACCESS_DENIED")
             
             # 获取文件夹列表
             folders = self.db.query(Folder)\
@@ -61,7 +65,7 @@ class FolderService:
                 
             return folders
             
-        except StorageServiceException:
+        except (NotFoundServiceException, AccessDeniedServiceException):
             raise
         except Exception as e:
             raise StorageServiceException(f"获取文件夹列表失败: {str(e)}", "DATABASE_ERROR")
@@ -77,7 +81,7 @@ class FolderService:
             ).first()
             
             if not course:
-                raise StorageServiceException("课程不存在或无权限访问", "COURSE_NOT_FOUND")
+                raise NotFoundServiceException("课程不存在或无权限访问", "COURSE_NOT_FOUND")
             
             # 检查同名文件夹
             existing_folder = self.db.query(Folder).filter(
@@ -86,7 +90,7 @@ class FolderService:
             ).first()
             
             if existing_folder:
-                raise StorageServiceException("文件夹名称已存在", "FOLDER_NAME_EXISTS")
+                raise ConflictServiceException("文件夹名称已存在", "FOLDER_NAME_EXISTS")
             
             # 创建文件夹
             folder = Folder(
@@ -101,11 +105,11 @@ class FolderService:
             
             return folder
             
-        except StorageServiceException:
-            self.db.rollback()
+        except (NotFoundServiceException, ConflictServiceException):
+            self.handle_database_error("创建文件夹", StorageServiceException("业务错误"))
             raise
         except Exception as e:
-            self.db.rollback()
+            self.handle_database_error("创建文件夹", e)
             raise StorageServiceException(f"创建文件夹失败: {str(e)}", "DATABASE_ERROR")
     
     def update_folder(self, folder_id: int, folder_data: UpdateFolderRequest, user_id: int) -> Folder:
@@ -198,20 +202,20 @@ class FolderService:
             raise StorageServiceException(f"获取文件夹统计失败: {str(e)}", "DATABASE_ERROR")
 
 
-class FileService:
+class FileService(BaseService):
     """文件管理服务"""
     
     METHOD_EXCEPTIONS = {
-        "get_folder_files": [StorageServiceException],
-        "upload_file": [StorageServiceException],
-        "download_file": [StorageServiceException],
-        "delete_file": [StorageServiceException],
-        "get_or_create_physical_file": [StorageServiceException],
-        "calculate_file_hash": [],
+        "get_folder_files": {NotFoundServiceException, AccessDeniedServiceException},
+        "upload_file": {NotFoundServiceException, AccessDeniedServiceException, ValidationServiceException},
+        "download_file": {NotFoundServiceException, AccessDeniedServiceException},
+        "delete_file": {NotFoundServiceException, AccessDeniedServiceException},
+        "get_or_create_physical_file": {StorageServiceException},
+        "calculate_file_hash": set(),
     }
     
     def __init__(self, db: Session):
-        self.db = db
+        super().__init__(db)
     
     def get_folder_files(self, folder_id: int, user_id: int) -> List[File]:
         """获取文件夹中的所有文件"""
@@ -408,18 +412,18 @@ class FileService:
         return hashlib.sha256(file_content).hexdigest()
 
 
-class TemporaryFileService:
+class TemporaryFileService(BaseService):
     """临时文件管理服务"""
     
     METHOD_EXCEPTIONS = {
-        "upload_temporary_file": [StorageServiceException],
-        "download_temporary_file": [StorageServiceException],
-        "delete_temporary_file": [StorageServiceException],
-        "cleanup_expired_files": [StorageServiceException],
+        "upload_temporary_file": {ValidationServiceException},
+        "download_temporary_file": {NotFoundServiceException, ValidationServiceException},
+        "delete_temporary_file": {NotFoundServiceException},
+        "cleanup_expired_files": set(),
     }
     
     def __init__(self, db: Session):
-        self.db = db
+        super().__init__(db)
     
     def upload_temporary_file(self, file_data, user_id: int, expiry_hours: int = 24, purpose: Optional[str] = None) -> TemporaryFile:
         """上传临时文件"""
