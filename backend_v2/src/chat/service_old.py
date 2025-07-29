@@ -1,4 +1,4 @@
-"""Chat模块Service层业务逻辑 - 重构版本"""
+"""Chat模块Service层业务逻辑"""
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_, or_, desc, func
@@ -6,10 +6,10 @@ from datetime import datetime
 from decimal import Decimal
 
 from src.shared.exceptions import BaseServiceException
-from src.shared.base_service import BaseService
-from src.shared.ai_manager import get_ai_manager
 from .models import Chat, Message, MessageFileReference, MessageRAGSource
 from .schemas import CreateChatRequest, UpdateChatRequest, SendMessageRequest, EditMessageRequest
+from src.ai.service import AIService
+from src.ai.schemas import AIRequest
 
 
 class ChatServiceException(BaseServiceException):
@@ -17,21 +17,21 @@ class ChatServiceException(BaseServiceException):
     pass
 
 
-class ChatService(BaseService):
+class ChatService:
     """聊天管理服务"""
     
     # 定义方法可能抛出的异常
     METHOD_EXCEPTIONS = {
-        "get_user_chats": {ChatServiceException},
-        "create_chat": {ChatServiceException},
-        "update_chat": {ChatServiceException},
-        "delete_chat": {ChatServiceException},
-        "get_chat_stats": {ChatServiceException},
+        "get_user_chats": [ChatServiceException],
+        "create_chat": [ChatServiceException],
+        "update_chat": [ChatServiceException],
+        "delete_chat": [ChatServiceException],
+        "get_chat_stats": [ChatServiceException],
     }
     
     def __init__(self, db: Session):
-        super().__init__(db)
-        self.ai_manager = get_ai_manager(db)
+        self.db = db
+        self.ai_service = AIService(db)
     
     def get_user_chats(self, user_id: int, chat_type: Optional[str] = None) -> List[Chat]:
         """获取用户的聊天列表"""
@@ -103,15 +103,15 @@ class ChatService(BaseService):
                     self.db.add(file_ref)
             
             # 生成AI回复
-            ai_response = self.ai_manager.generate_initial_response(
-                message=chat_data.first_message,
-                ai_model=chat_data.ai_model,
-                rag_enabled=chat_data.rag_enabled,
-                context_mode=chat_data.context_mode,
-                chat_type=chat_data.chat_type,
-                course_id=chat_data.course_id,
-                file_ids=chat_data.file_ids,
-                custom_prompt=chat_data.custom_prompt
+            ai_response = self._generate_ai_response_with_service(
+                chat_data.first_message,
+                chat_data.ai_model,
+                chat_data.rag_enabled,
+                chat_data.context_mode,
+                chat_data.chat_type,
+                chat_data.course_id,
+                chat_data.file_ids,
+                chat_data.custom_prompt
             )
             
             # 创建AI消息
@@ -132,14 +132,12 @@ class ChatService(BaseService):
             )
             
             self.db.add(ai_message)
-            
-            if not self.safe_commit("创建聊天"):
-                raise ChatServiceException("创建聊天失败", "COMMIT_ERROR")
+            self.db.commit()
             
             # 刷新获取完整数据
-            self.safe_refresh(chat, "创建聊天")
-            self.safe_refresh(user_message, "创建聊天")
-            self.safe_refresh(ai_message, "创建聊天")
+            self.db.refresh(chat)
+            self.db.refresh(user_message)
+            self.db.refresh(ai_message)
             
             return {
                 "chat": {
@@ -163,10 +161,10 @@ class ChatService(BaseService):
             }
             
         except ChatServiceException:
-            self.handle_database_error("创建聊天", ChatServiceException("业务错误"))
+            self.db.rollback()
             raise
         except Exception as e:
-            self.handle_database_error("创建聊天", e)
+            self.db.rollback()
             raise ChatServiceException(f"创建聊天失败: {str(e)}", "CREATE_ERROR")
     
     def update_chat(self, chat_id: int, chat_data: UpdateChatRequest, user_id: int) -> Chat:
@@ -191,17 +189,16 @@ class ChatService(BaseService):
             if chat_data.rag_enabled is not None:
                 chat.rag_enabled = chat_data.rag_enabled
             
-            if not self.safe_commit("更新聊天"):
-                raise ChatServiceException("更新聊天失败", "COMMIT_ERROR")
-            self.safe_refresh(chat, "更新聊天")
+            self.db.commit()
+            self.db.refresh(chat)
             
             return chat
             
         except ChatServiceException:
-            self.handle_database_error("更新聊天", ChatServiceException("业务错误"))
+            self.db.rollback()
             raise
         except Exception as e:
-            self.handle_database_error("更新聊天", e)
+            self.db.rollback()
             raise ChatServiceException(f"更新聊天失败: {str(e)}", "UPDATE_ERROR")
     
     def delete_chat(self, chat_id: int, user_id: int) -> None:
@@ -218,14 +215,13 @@ class ChatService(BaseService):
             
             # 删除聊天（级联删除消息）
             self.db.delete(chat)
-            if not self.safe_commit("删除聊天"):
-                raise ChatServiceException("删除聊天失败", "COMMIT_ERROR")
+            self.db.commit()
             
         except ChatServiceException:
-            self.handle_database_error("删除聊天", ChatServiceException("业务错误"))
+            self.db.rollback()
             raise
         except Exception as e:
-            self.handle_database_error("删除聊天", e)
+            self.db.rollback()
             raise ChatServiceException(f"删除聊天失败: {str(e)}", "DELETE_ERROR")
     
     def get_chat_stats(self, chat_id: int) -> dict:
@@ -247,21 +243,80 @@ class ChatService(BaseService):
         if len(first_message) > 20:
             title += "..."
         return title
+    
+    def _generate_ai_response_with_service(self, message: str, ai_model: str, rag_enabled: bool, 
+                                          context_mode: str, chat_type: str, course_id: Optional[int],
+                                          file_ids: Optional[List[int]] = None, custom_prompt: Optional[str] = None,
+                                          chat_id: Optional[int] = None) -> Dict[str, Any]:
+        """使用AI服务生成回复"""
+        try:
+            # 构建AI请求
+            ai_request = AIRequest(
+                message=message,
+                ai_model=ai_model,
+                context_mode=context_mode,
+                rag_enabled=rag_enabled,
+                chat_type=chat_type,
+                course_id=course_id,
+                file_ids=file_ids,
+                custom_prompt=custom_prompt
+            )
+            
+            # 获取对话历史（如果有chat_id）
+            conversation_history = None
+            if chat_id:
+                conversation_history = self._get_conversation_history(chat_id)
+            
+            # 调用AI服务
+            ai_response = self.ai_service.generate_response(ai_request, conversation_history)
+            
+            # 转换为字典格式
+            return {
+                "content": ai_response.content,
+                "tokens_used": ai_response.tokens_used,
+                "input_tokens": ai_response.input_tokens,
+                "output_tokens": ai_response.output_tokens,
+                "cost": ai_response.cost,
+                "response_time_ms": ai_response.response_time_ms,
+                "rag_sources": [{
+                    "source_file": source.source_file,
+                    "chunk_id": source.chunk_id,
+                    "content": source.content,
+                    "score": source.score,
+                    "file_id": source.file_id,
+                    "course_id": source.course_id
+                } for source in (ai_response.rag_sources or [])],
+                "context_size": ai_response.context_size
+            }
+            
+        except Exception as e:
+            # 降级到简单回复
+            print(f"⚠️ AI服务调用失败，使用降级回复: {e}")
+            return {
+                "content": f"抱歉，AI服务暂时不可用。您的消息已收到：{message[:50]}...",
+                "tokens_used": 0,
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "cost": Decimal("0"),
+                "response_time_ms": 0,
+                "rag_sources": [],
+                "context_size": 0
+            }
 
 
-class MessageService(BaseService):
+class MessageService:
     """消息管理服务"""
     
     METHOD_EXCEPTIONS = {
-        "get_chat_messages": {ChatServiceException},
-        "send_message": {ChatServiceException},
-        "edit_message": {ChatServiceException},
-        "delete_message": {ChatServiceException},
+        "get_chat_messages": [ChatServiceException],
+        "send_message": [ChatServiceException],
+        "edit_message": [ChatServiceException],
+        "delete_message": [ChatServiceException],
     }
     
     def __init__(self, db: Session):
-        super().__init__(db)
-        self.ai_manager = get_ai_manager(db)
+        self.db = db
+        self.ai_service = AIService(db)
     
     def get_chat_messages(self, chat_id: int, user_id: int, limit: int = 50, offset: int = 0) -> List[Message]:
         """获取聊天消息列表"""
@@ -322,16 +377,16 @@ class MessageService(BaseService):
                     self.db.add(file_ref)
             
             # 生成AI回复
-            ai_response = self.ai_manager.generate_followup_response(
-                chat_id=chat_id,
-                message=message_data.content,
-                ai_model=chat.ai_model,
-                rag_enabled=chat.rag_enabled,
-                context_mode=chat.context_mode,
-                chat_type=chat.chat_type,
-                course_id=chat.course_id,
-                file_ids=message_data.file_ids,
-                custom_prompt=chat.custom_prompt
+            ai_response = self._generate_ai_response_with_service(
+                message_data.content,
+                chat.ai_model,
+                chat.rag_enabled,
+                chat.context_mode,
+                chat.chat_type,
+                chat.course_id,
+                message_data.file_ids,
+                chat.custom_prompt,
+                chat_id
             )
             
             # 创建AI消息
@@ -356,12 +411,11 @@ class MessageService(BaseService):
             # 更新聊天的最后更新时间
             chat.updated_at = datetime.utcnow()
             
-            if not self.safe_commit("发送消息"):
-                raise ChatServiceException("发送消息失败", "COMMIT_ERROR")
+            self.db.commit()
             
             # 刷新获取完整数据
-            self.safe_refresh(user_message, "发送消息")
-            self.safe_refresh(ai_message, "发送消息")
+            self.db.refresh(user_message)
+            self.db.refresh(ai_message)
             
             return {
                 "user_message": {
@@ -379,10 +433,10 @@ class MessageService(BaseService):
             }
             
         except ChatServiceException:
-            self.handle_database_error("发送消息", ChatServiceException("业务错误"))
+            self.db.rollback()
             raise
         except Exception as e:
-            self.handle_database_error("发送消息", e)
+            self.db.rollback()
             raise ChatServiceException(f"发送消息失败: {str(e)}", "SEND_ERROR")
     
     def edit_message(self, message_id: int, message_data: EditMessageRequest, user_id: int) -> Message:
@@ -405,17 +459,16 @@ class MessageService(BaseService):
             message.is_edited = True
             message.edited_at = datetime.utcnow()
             
-            if not self.safe_commit("编辑消息"):
-                raise ChatServiceException("编辑消息失败", "COMMIT_ERROR")
-            self.safe_refresh(message, "编辑消息")
+            self.db.commit()
+            self.db.refresh(message)
             
             return message
             
         except ChatServiceException:
-            self.handle_database_error("编辑消息", ChatServiceException("业务错误"))
+            self.db.rollback()
             raise
         except Exception as e:
-            self.handle_database_error("编辑消息", e)
+            self.db.rollback()
             raise ChatServiceException(f"编辑消息失败: {str(e)}", "EDIT_ERROR")
     
     def delete_message(self, message_id: int, user_id: int) -> None:
@@ -434,12 +487,93 @@ class MessageService(BaseService):
             
             # 删除消息
             self.db.delete(message)
-            if not self.safe_commit("删除消息"):
-                raise ChatServiceException("删除消息失败", "COMMIT_ERROR")
+            self.db.commit()
             
         except ChatServiceException:
-            self.handle_database_error("删除消息", ChatServiceException("业务错误"))
+            self.db.rollback()
             raise
         except Exception as e:
-            self.handle_database_error("删除消息", e)
+            self.db.rollback()
             raise ChatServiceException(f"删除消息失败: {str(e)}", "DELETE_ERROR")
+    
+    def _generate_ai_response_with_service(self, message: str, ai_model: str, rag_enabled: bool, 
+                                          context_mode: str, chat_type: str, course_id: Optional[int],
+                                          file_ids: Optional[List[int]] = None, custom_prompt: Optional[str] = None,
+                                          chat_id: Optional[int] = None) -> Dict[str, Any]:
+        """使用AI服务生成回复"""
+        try:
+            # 构建AI请求
+            ai_request = AIRequest(
+                message=message,
+                ai_model=ai_model,
+                context_mode=context_mode,
+                rag_enabled=rag_enabled,
+                chat_type=chat_type,
+                course_id=course_id,
+                file_ids=file_ids,
+                custom_prompt=custom_prompt
+            )
+            
+            # 获取对话历史（如果有chat_id）
+            conversation_history = None
+            if chat_id:
+                conversation_history = self._get_conversation_history(chat_id)
+            
+            # 调用AI服务
+            ai_response = self.ai_service.generate_response(ai_request, conversation_history)
+            
+            # 转换为字典格式
+            return {
+                "content": ai_response.content,
+                "tokens_used": ai_response.tokens_used,
+                "input_tokens": ai_response.input_tokens,
+                "output_tokens": ai_response.output_tokens,
+                "cost": ai_response.cost,
+                "response_time_ms": ai_response.response_time_ms,
+                "rag_sources": [{
+                    "source_file": source.source_file,
+                    "chunk_id": source.chunk_id,
+                    "content": source.content,
+                    "score": source.score,
+                    "file_id": source.file_id,
+                    "course_id": source.course_id
+                } for source in (ai_response.rag_sources or [])],
+                "context_size": ai_response.context_size
+            }
+            
+        except Exception as e:
+            # 降级到简单回复
+            print(f"⚠️ AI服务调用失败，使用降级回复: {e}")
+            return {
+                "content": f"抱歉，AI服务暂时不可用。您的消息已收到：{message[:50]}...",
+                "tokens_used": 0,
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "cost": Decimal("0"),
+                "response_time_ms": 0,
+                "rag_sources": [],
+                "context_size": 0
+            }
+    
+    def _get_conversation_history(self, chat_id: int, limit: int = 10) -> List[Dict[str, str]]:
+        """获取对话历史"""
+        try:
+            messages = self.db.query(Message)\
+                .filter(Message.chat_id == chat_id)\
+                .order_by(Message.created_at.desc())\
+                .limit(limit)\
+                .all()
+            
+            # 按时间正序排列并转换格式
+            history = []
+            for message in reversed(messages):
+                history.append({
+                    "role": message.role,
+                    "content": message.content
+                })
+            
+            return history
+            
+        except Exception as e:
+            print(f"⚠️ 获取对话历史失败: {e}")
+            return []
