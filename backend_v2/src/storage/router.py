@@ -1,13 +1,14 @@
 """Storage模块API路由"""
-from fastapi import APIRouter, Depends, Path, Query, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, Depends, Path, Query, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import Optional, List
 
-from src.shared.dependencies import DbDep, UserDep
+from src.shared.dependencies import DbDep, UserDep, AdminUserDep
+from src.shared.exceptions import InternalServerError
 from src.shared.api_decorator import create_service_route_config, service_api_handler
 from src.shared.schemas import BaseResponse, MessageResponse
-from .service import FolderService, FileService, TemporaryFileService
+from .service import FolderService, FileService, TemporaryFileService, GlobalFileService
 from .schemas import (
     CreateFolderRequest, UpdateFolderRequest, FolderListResponse, CreateFolderResponse,
     FileListResponse, UploadFileResponse, UploadTemporaryFileResponse,
@@ -110,7 +111,7 @@ def update_folder(
         data={
             "folder": {
                 "id": folder.id,
-                "updated_at": folder.created_at  # TODO: 添加updated_at字段到模型
+                "updated_at": folder.updated_at
             }
         }
     )
@@ -324,61 +325,73 @@ def delete_temporary_file(
 @file_router.post("/globalfiles/upload",
     response_model=UploadFileResponse,
     summary="上传全局文件",
-    description="上传全局文件（管理员专用），功能暂未实现",
+    description="上传全局文件（管理员专用）",
     operation_id="upload_global_file"
 )
 def upload_global_file(
-    current_user: UserDep,
+    admin_user: AdminUserDep,
     db: DbDep,
     file: UploadFile = File(...),
     description: Optional[str] = Form(None)
 ):
     """上传全局文件（管理员专用）"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="需要管理员权限")
-    
-    # TODO: 实现全局文件上传逻辑
-    # 这里应该调用专门的全局文件服务
-    raise HTTPException(status_code=501, detail="功能暂未实现")
+    service = GlobalFileService(db)
+    file_record = service.upload_global_file(file, admin_user.id, description)
+
+    file_response = FileResponse.model_validate(file_record)
+    return UploadFileResponse(
+        success=True,
+        data={"file": file_response}
+    )
 
 
 @file_router.get("/globalfiles",
     response_model=FileListResponse,
     summary="获取全局文件列表",
-    description="获取全局文件列表（管理员专用），功能暂未实现",
+    description="获取全局文件列表（管理员专用）",
     operation_id="get_global_files"
 )
 def get_global_files(
-    current_user: UserDep,
+    admin_user: AdminUserDep,
     db: DbDep,
     skip: int = Query(0, ge=0, description="跳过记录数"),
     limit: int = Query(100, ge=1, le=1000, description="每页记录数")
 ):
     """获取全局文件列表（管理员专用）"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="需要管理员权限")
-    
-    # TODO: 实现全局文件列表查询逻辑
-    raise HTTPException(status_code=501, detail="功能暂未实现")
+    service = GlobalFileService(db)
+    files = service.get_global_files(admin_user.id, skip, limit)
+
+    # 转换为响应格式
+    file_list = []
+    for file in files:
+        file_data = FileResponse.model_validate(file)
+        file_list.append(file_data)
+
+    return FileListResponse(
+        success=True,
+        data={"files": file_list}
+    )
 
 
 @file_router.delete("/globalfiles/{file_id}",
     response_model=MessageResponse,
     summary="删除全局文件",
-    description="删除全局文件（管理员专用），功能暂未实现",
+    description="删除全局文件（管理员专用）",
     operation_id="delete_global_file"
 )
 def delete_global_file(
-    current_user: UserDep,
+    admin_user: AdminUserDep,
     db: DbDep,
     file_id: int = Path(..., description="文件ID")
 ):
     """删除全局文件（管理员专用）"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="需要管理员权限")
-    
-    # TODO: 实现全局文件删除逻辑
-    raise HTTPException(status_code=501, detail="功能暂未实现")
+    service = GlobalFileService(db)
+    service.delete_global_file(file_id, admin_user.id)
+
+    return MessageResponse(
+        success=True,
+        message="全局文件删除成功"
+    )
 
 
 # 合并路由器 (使用统一命名规范)

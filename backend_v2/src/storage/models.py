@@ -29,6 +29,7 @@ class Folder(Base):
     course_id = Column(Integer, ForeignKey("courses.id"), nullable=False, index=True)
     is_default = Column(Boolean, default=False)
     created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
     course = relationship("Course", back_populates="folders")
     files = relationship("File", back_populates="folder")

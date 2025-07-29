@@ -22,16 +22,18 @@ from src.shared.dependencies import DbDep, UserDep, AdminUserDep
 from src.shared.api_decorator import create_service_route_config, service_api_handler
 
 # 创建路由器
-router = APIRouter(prefix="/api/v1")
+router = APIRouter()
 
-
+semesters_router = APIRouter(tags=["学期管理/Semester Management"])
+courses_router = APIRouter(tags=["课程管理/Course Management"])
 # ===== 学期管理 (管理员权限) =====
 
-@router.get("/semesters", **create_service_route_config(
+@semesters_router.get("/semesters", **create_service_route_config(
     SemesterService, 'get_semesters', SemesterListResponse,
     summary="获取学期列表",
     description="获取所有活跃学期列表，按开始时间倒序排列",
-    operation_id="get_semesters"
+    operation_id="get_sesmesters"
+
 ))
 @service_api_handler(SemesterService, 'get_semesters')
 async def get_semesters(
@@ -51,7 +53,7 @@ async def get_semesters(
     )
 
 
-@router.post("/semesters", **create_service_route_config(
+@semesters_router.post("/semesters", **create_service_route_config(
     SemesterService, 'create_semester', CreateSemesterResponse,
     success_status=201,
     summary="创建学期",
@@ -80,7 +82,7 @@ async def create_semester(
     )
 
 
-@router.get("/semesters/{semester_id}", **create_service_route_config(
+@semesters_router.get("/semesters/{semester_id}", **create_service_route_config(
     SemesterService, 'get_semester', GetSemesterResponse,
     summary="获取学期详情",
     description="获取指定学期的详细信息",
@@ -105,7 +107,7 @@ async def get_semester(
     )
 
 
-@router.put("/semesters/{semester_id}", **create_service_route_config(
+@semesters_router.put("/semesters/{semester_id}", **create_service_route_config(
     SemesterService, 'update_semester', UpdateSemesterResponse,
     summary="更新学期",
     description="更新学期信息（管理员专用）",
@@ -134,7 +136,7 @@ async def update_semester(
     )
 
 
-@router.delete("/semesters/{semester_id}", **create_service_route_config(
+@semesters_router.delete("/semesters/{semester_id}", **create_service_route_config(
     SemesterService, 'delete_semester', DeleteSemesterResponse,
     summary="删除学期",
     description="软删除学期（管理员专用），如有关联课程则无法删除",
@@ -157,7 +159,7 @@ async def delete_semester(
     )
 
 
-@router.get("/semesters/{semester_id}/courses", **create_service_route_config(
+@semesters_router.get("/semesters/{semester_id}/courses", **create_service_route_config(
     SemesterService, 'get_semester_courses', SemesterCoursesResponse,
     summary="获取学期课程",
     description="获取指定学期下的所有课程",
@@ -184,7 +186,7 @@ async def get_semester_courses(
 
 # ===== 课程管理 (用户权限) =====
 
-@router.get("/courses", **create_service_route_config(
+@courses_router.get("/courses", **create_service_route_config(
     CourseService, 'get_courses', CourseListResponse,
     summary="获取课程列表",
     description="获取用户的课程列表，可按学期过滤",
@@ -209,7 +211,7 @@ async def get_courses(
     )
 
 
-@router.post("/courses", **create_service_route_config(
+@courses_router.post("/courses", **create_service_route_config(
     CourseService, 'create_course', CreateCourseResponse,
     success_status=201,
     summary="创建课程",
@@ -238,7 +240,7 @@ async def create_course(
     )
 
 
-@router.get("/courses/{course_id}", **create_service_route_config(
+@courses_router.get("/courses/{course_id}", **create_service_route_config(
     CourseService, 'get_course', GetCourseResponse,
     summary="获取课程详情",
     description="获取指定课程的详细信息",
@@ -263,7 +265,7 @@ async def get_course(
     )
 
 
-@router.put("/courses/{course_id}", **create_service_route_config(
+@courses_router.put("/courses/{course_id}", **create_service_route_config(
     CourseService, 'update_course', UpdateCourseResponse,
     summary="更新课程",
     description="更新课程信息",
@@ -292,7 +294,7 @@ async def update_course(
     )
 
 
-@router.delete("/courses/{course_id}", **create_service_route_config(
+@courses_router.delete("/courses/{course_id}", **create_service_route_config(
     CourseService, 'delete_course', DeleteCourseResponse,
     summary="删除课程",
     description="删除指定课程",
@@ -313,3 +315,13 @@ async def delete_course(
         data={},  # 删除操作不返回具体数据
         message=result["message"]  # message在根级别
     )
+
+
+
+# 合并路由器 (使用统一命名规范)
+router = APIRouter()
+router.include_router(semesters_router, tags=["学期管理/Semester Management"])
+router.include_router(courses_router, tags=["课程管理/Course Management"])
+
+# 保持向后兼容性
+storage_router = router

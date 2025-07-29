@@ -7,13 +7,16 @@ import logging
 
 from .database import get_db
 from .config import settings
-from .exceptions import UnauthorizedServiceException, AccessDeniedServiceException
+from .exceptions import (
+    UnauthorizedServiceException, AccessDeniedServiceException,
+    UnauthorizedError, ForbiddenError
+)
 from .types import UserProtocol
 
 logger = logging.getLogger(__name__)
 
 # JWT Bearer token scheme
-security = HTTPBearer()
+security = HTTPBearer()  # auto_error=True (默认值) - 让FastAPI自动处理401
 
 # 重新导出数据库依赖
 get_db = get_db
@@ -24,7 +27,8 @@ def get_current_user_id(
 ) -> int:
     """
     从 JWT token 中提取当前用户 ID
-    这个函数会在 auth 模块完成后更新
+    FastAPI的HTTPBearer会自动处理缺少token的情况（返回401）
+    这里只需要处理token解析逻辑
     """
     try:
         token = credentials.credentials
@@ -33,22 +37,22 @@ def get_current_user_id(
         
         # 类型安全检查：确保user_id是有效的整数
         if user_id is None:
-            raise UnauthorizedServiceException("JWT令牌中缺少用户ID", "MISSING_USER_ID")
+            raise UnauthorizedError("JWT令牌中缺少用户ID", "INVALID_TOKEN_PAYLOAD")
         
         if not isinstance(user_id, int):
             try:
                 user_id = int(user_id)
             except (ValueError, TypeError):
-                raise UnauthorizedServiceException("JWT令牌中的用户ID格式无效", "INVALID_USER_ID_FORMAT")
+                raise UnauthorizedError("JWT令牌中的用户ID格式无效", "INVALID_USER_ID_FORMAT")
         
         if user_id <= 0:
-            raise UnauthorizedServiceException("JWT令牌中的用户ID无效", "INVALID_USER_ID")
+            raise UnauthorizedError("JWT令牌中的用户ID无效", "INVALID_USER_ID")
             
         return user_id
         
     except JWTError as e:
         logger.warning(f"JWT解析失败: {e}")
-        raise UnauthorizedServiceException("无效的认证令牌", "INVALID_TOKEN")
+        raise UnauthorizedError("无效的认证令牌", "INVALID_TOKEN")
 
 
 def get_current_user(
@@ -61,7 +65,7 @@ def get_current_user(
     from src.auth.models import User
     user = db.query(User).filter(User.id == user_id).first()
     if user is None:
-        raise UnauthorizedServiceException("用户不存在", "USER_NOT_FOUND")
+        raise UnauthorizedError("用户不存在或认证已过期", "USER_NOT_FOUND")
     return user
 
 
@@ -110,7 +114,7 @@ def require_admin(
     要求管理员权限
     """
     if current_user.role != "admin":
-        raise AccessDeniedServiceException("需要管理员权限")
+        raise ForbiddenError("需要管理员权限", "ADMIN_REQUIRED")
     return current_user
 
 

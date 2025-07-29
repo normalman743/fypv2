@@ -569,21 +569,227 @@ class TemporaryFileService(BaseService):
         """清理过期的临时文件"""
         try:
             # 查找过期文件
-            expired_files = self.db.query(TemporaryFile).filter(
+            expired_files = self.db.query(TemporaryFile).options(
+                joinedload(TemporaryFile.physical_file)  # 预加载物理文件关系
+            ).filter(
                 TemporaryFile.expires_at < datetime.utcnow()
             ).all()
             
             count = len(expired_files)
+            file_storage = get_file_storage()
             
             # 删除过期文件
             for temp_file in expired_files:
+                physical_file = temp_file.physical_file
+                
+                # 删除临时文件记录
                 self.db.delete(temp_file)
-                # TODO: 删除实际文件
+                
+                # 更新物理文件引用计数
+                if physical_file:
+                    physical_file.reference_count -= 1
+                    
+                    # 如果没有其他引用，删除物理文件
+                    if physical_file.reference_count <= 0:
+                        try:
+                            # 删除磁盘上的实际文件
+                            file_storage.delete_file(physical_file.storage_path)
+                            # 删除物理文件记录
+                            self.db.delete(physical_file)
+                        except Exception as e:
+                            from src.shared.logging import get_logger
+                            logger = get_logger(__name__)
+                            logger.warning(f"Failed to delete physical file {physical_file.storage_path}: {e}")
+                            # 继续执行，不阻断整个清理过程
             
             self.db.commit()
+            
+            # 清理空目录
+            file_storage.cleanup_empty_directories()
             
             return count
             
         except Exception as e:
             self.db.rollback()
             raise StorageServiceException(f"清理过期文件失败: {str(e)}", "DATABASE_ERROR")
+
+
+class GlobalFileService(BaseService):
+    """全局文件管理服务（管理员专用）"""
+    
+    METHOD_EXCEPTIONS = {
+        "upload_global_file": {ValidationServiceException, StorageServiceException},
+        "get_global_files": {AccessDeniedServiceException},
+        "delete_global_file": {NotFoundServiceException, AccessDeniedServiceException},
+    }
+    
+    def __init__(self, db: Session):
+        super().__init__(db)
+        self.file_storage = get_file_storage()
+    
+    def upload_global_file(
+        self, 
+        file: UploadFile, 
+        admin_user_id: int,
+        description: Optional[str] = None
+    ) -> File:
+        """上传全局文件（管理员专用）"""
+        try:
+            # 验证管理员权限
+            from src.auth.models import User
+            admin = self.db.query(User).filter(
+                User.id == admin_user_id,
+                User.role == "admin"
+            ).first()
+            if not admin:
+                raise AccessDeniedServiceException("需要管理员权限", "ADMIN_REQUIRED")
+
+            # 保存文件并获取哈希值
+            storage_path, file_content, file_hash = self.file_storage.save_upload_file(file)
+
+            # 检查是否已存在相同哈希的物理文件
+            physical_file = self.db.query(PhysicalFile).filter(
+                PhysicalFile.file_hash == file_hash
+            ).first()
+
+            if not physical_file:
+                physical_file = PhysicalFile(
+                    file_hash=file_hash,
+                    file_size=len(file_content),
+                    mime_type=file.content_type or "application/octet-stream",
+                    storage_path=storage_path,
+                    reference_count=1
+                )
+                self.db.add(physical_file)
+                self.db.flush()
+            else:
+                physical_file.reference_count += 1
+
+            # 创建全局文件记录
+            global_file = File(
+                physical_file_id=physical_file.id,
+                original_name=file.filename,
+                file_type=self._determine_file_type(file.filename, file.content_type),
+                description=description,
+                scope='global',  # 关键：标记为全局文件
+                visibility='public',
+                course_id=None,
+                folder_id=None,
+                user_id=admin_user_id,
+                file_size=len(file_content),
+                mime_type=file.content_type,
+                file_hash=file_hash,
+                is_processed=False,
+                processing_status="pending"
+            )
+
+            self.db.add(global_file)
+            self.db.commit()
+            self.db.refresh(global_file)
+
+            return global_file
+
+        except (AccessDeniedServiceException, ValidationServiceException):
+            raise
+        except Exception as e:
+            self.db.rollback()
+            raise StorageServiceException(f"上传全局文件失败: {str(e)}", "UPLOAD_ERROR")
+
+    def get_global_files(
+        self, 
+        admin_user_id: int,
+        skip: int = 0, 
+        limit: int = 100
+    ) -> List[File]:
+        """获取全局文件列表（管理员专用）"""
+        try:
+            # 验证管理员权限
+            from src.auth.models import User
+            admin = self.db.query(User).filter(
+                User.id == admin_user_id,
+                User.role == "admin"
+            ).first()
+            if not admin:
+                raise AccessDeniedServiceException("需要管理员权限", "ADMIN_REQUIRED")
+
+            # 查询全局文件
+            files = self.db.query(File)\
+                .options(joinedload(File.physical_file))\
+                .filter(File.scope == 'global')\
+                .order_by(desc(File.created_at))\
+                .offset(skip)\
+                .limit(limit)\
+                .all()
+
+            return files
+
+        except AccessDeniedServiceException:
+            raise
+        except Exception as e:
+            raise StorageServiceException(f"获取全局文件列表失败: {str(e)}", "QUERY_ERROR")
+
+    def delete_global_file(self, file_id: int, admin_user_id: int) -> bool:
+        """删除全局文件（管理员专用）"""
+        try:
+            # 验证管理员权限
+            from src.auth.models import User
+            admin = self.db.query(User).filter(
+                User.id == admin_user_id,
+                User.role == "admin"
+            ).first()
+            if not admin:
+                raise AccessDeniedServiceException("需要管理员权限", "ADMIN_REQUIRED")
+
+            # 查找全局文件
+            file_record = self.db.query(File).options(
+                joinedload(File.physical_file)
+            ).filter(
+                File.id == file_id,
+                File.scope == 'global'  # 确保是全局文件
+            ).first()
+
+            if not file_record:
+                raise NotFoundServiceException("全局文件不存在", "GLOBAL_FILE_NOT_FOUND")
+
+            physical_file = file_record.physical_file
+
+            # 删除文件记录
+            self.db.delete(file_record)
+
+            # 更新物理文件引用计数
+            if physical_file:
+                physical_file.reference_count -= 1
+
+                # 如果没有其他引用，删除物理文件
+                if physical_file.reference_count <= 0:
+                    try:
+                        self.file_storage.delete_file(physical_file.storage_path)
+                        self.db.delete(physical_file)
+                    except Exception as e:
+                        from src.shared.logging import get_logger
+                        logger = get_logger(__name__)
+                        logger.warning(f"Failed to delete physical file: {e}")
+
+            self.db.commit()
+            return True
+
+        except (NotFoundServiceException, AccessDeniedServiceException):
+            raise
+        except Exception as e:
+            self.db.rollback()
+            raise StorageServiceException(f"删除全局文件失败: {str(e)}", "DELETE_ERROR")
+
+    def _determine_file_type(self, filename: str, content_type: str) -> str:
+        """推断文件类型"""
+        if not filename:
+            return "unknown"
+
+        filename_lower = filename.lower()
+        if filename_lower.endswith('.pdf'):
+            return "pdf"
+        elif filename_lower.endswith(('.doc', '.docx')):
+            return "document"
+        elif filename_lower.endswith(('.jpg', '.jpeg', '.png', '.gif')):
+            return "image"
+        else:
+            return "document"

@@ -65,16 +65,18 @@ def register_routers(app: FastAPI) -> None:
     
     # Course 模块路由
     from src.course.router import router as course_router
-    api_v1.include_router(course_router, tags=["学期课程/Semester & Course"])
+    api_v1.include_router(course_router)
     
     # Storage 模块路由
     from src.storage.router import router as storage_router
-    api_v1.include_router(storage_router, tags=["存储管理/Storage"])
-    
+    api_v1.include_router(storage_router)
+    #这个不需要
+
     # Chat 模块路由
     from src.chat.router import router as chat_router
-    api_v1.include_router(chat_router, tags=["聊天管理/Chat"])
-    
+    api_v1.include_router(chat_router)
+    #这个也不需要
+
     # AI 模块路由
     from src.ai.router import router as ai_router
     api_v1.include_router(ai_router, tags=["AI智能助手/AI"])
