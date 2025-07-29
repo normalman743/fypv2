@@ -77,11 +77,29 @@ def get_optional_current_user(
         return None
     
     try:
-        user_id = get_current_user_id(credentials)
+        # 直接处理JWT解析而不调用get_current_user_id（避免类型不匹配）
+        token = credentials.credentials
+        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+        user_id = payload.get("sub")
+        
+        # 类型安全检查（与get_current_user_id一致）
+        if user_id is None:
+            return None
+        
+        if not isinstance(user_id, int):
+            try:
+                user_id = int(user_id)
+            except (ValueError, TypeError):
+                return None
+        
+        if user_id <= 0:
+            return None
+            
+        # 查询用户
         from src.auth.models import User
         user = db.query(User).filter(User.id == user_id).first()
         return user  # 如果用户不存在返回None，不抛出异常
-    except (UnauthorizedServiceException, Exception):
+    except (JWTError, UnauthorizedServiceException, Exception):
         return None
 
 
