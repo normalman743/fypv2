@@ -23,7 +23,7 @@ from .schemas import (
 # 导入异常
 from src.shared.exceptions import (
     BadRequestServiceException, NotFoundServiceException, 
-    ConflictServiceException, AccessDeniedServiceException
+    ConflictServiceException, AccessDeniedServiceException, ValidationServiceException
 )
 from src.shared.error_codes import ErrorCodes
 

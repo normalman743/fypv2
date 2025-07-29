@@ -100,8 +100,12 @@ class FolderService(BaseService):
             )
             
             self.db.add(folder)
-            self.db.commit()
-            self.db.refresh(folder)
+            try:
+                self.db.commit()
+                self.db.refresh(folder)
+            except Exception as e:
+                self.db.rollback()
+                raise ValidationServiceException(f"创建文件夹失败: {str(e)}", ErrorCodes.DATABASE_ERROR)
             
             return folder
             
@@ -341,7 +345,11 @@ class FileService(BaseService):
                 access_type=access_type
             )
             self.db.add(access_log)
-            self.db.commit()
+            try:
+                self.db.commit()
+            except Exception as e:
+                self.db.rollback()
+                raise ValidationServiceException(f"记录文件访问日志失败: {str(e)}", ErrorCodes.DATABASE_ERROR)
             
             return file_record, file_content
             

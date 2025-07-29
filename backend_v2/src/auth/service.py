@@ -120,8 +120,12 @@ class AuthService(BaseService):
         for field, value in update_data.items():
             setattr(user, field, value)
 
-        self.db.commit()
-        self.db.refresh(user)
+        try:
+            self.db.commit()
+            self.db.refresh(user)
+        except Exception as e:
+            self.db.rollback()
+            raise ValidationServiceException(f"用户信息更新失败: {str(e)}", ErrorCodes.DATABASE_ERROR)
         
         return {
             "user": user,
@@ -170,8 +174,12 @@ class AuthService(BaseService):
         user = verification.user
         user.email_verified = True
 
-        self.db.commit()
-        self.db.refresh(user)
+        try:
+            self.db.commit()
+            self.db.refresh(user)
+        except Exception as e:
+            self.db.rollback()
+            raise ValidationServiceException(f"邮箱验证失败: {str(e)}", ErrorCodes.DATABASE_ERROR)
         
         return {
             "user": user,
@@ -213,7 +221,11 @@ class AuthService(BaseService):
         user.password_hash = self._get_password_hash(request.new_password)
         user.password_changed_at = datetime.utcnow()
         
-        self.db.commit()
+        try:
+            self.db.commit()
+        except Exception as e:
+            self.db.rollback()
+            raise ValidationServiceException(f"密码修改失败: {str(e)}", ErrorCodes.DATABASE_ERROR)
         
         return {"message": "密码修改成功"}
 
@@ -237,7 +249,11 @@ class AuthService(BaseService):
             expires_at=expires_at
         )
         self.db.add(password_reset)
-        self.db.commit()
+        try:
+            self.db.commit()
+        except Exception as e:
+            self.db.rollback()
+            raise ValidationServiceException(f"密码重置令牌创建失败: {str(e)}", ErrorCodes.DATABASE_ERROR)
 
         # 发送重置邮件
         success = self._send_password_reset_email_with_service(user, reset_token)
@@ -265,7 +281,11 @@ class AuthService(BaseService):
         # 标记重置令牌为已使用
         reset_record.is_used = True
 
-        self.db.commit()
+        try:
+            self.db.commit()
+        except Exception as e:
+            self.db.rollback()
+            raise ValidationServiceException(f"密码重置失败: {str(e)}", ErrorCodes.DATABASE_ERROR)
 
         return {"message": "密码重置成功"}
 
@@ -329,9 +349,13 @@ class AuthService(BaseService):
             invite_code.used_by = user.id
             invite_code.used_at = datetime.utcnow()
 
-            self.db.commit()
-            self.db.refresh(user)
-            return user
+            try:
+                self.db.commit()
+                self.db.refresh(user)
+                return user
+            except Exception as e:
+                self.db.rollback()
+                raise ValidationServiceException(f"用户创建失败: {str(e)}", ErrorCodes.DATABASE_ERROR)
 
         except IntegrityError:
             self.db.rollback()
@@ -364,7 +388,11 @@ class AuthService(BaseService):
                 expires_at=datetime.utcnow() + timedelta(minutes=settings.verification_code_expire_minutes)
             )
             self.db.add(verification)
-            self.db.commit()
+            try:
+                self.db.commit()
+            except Exception as e:
+                self.db.rollback()
+                raise ValidationServiceException(f"验证码创建失败: {str(e)}", ErrorCodes.DATABASE_ERROR)
             
             # 发送邮件
             return self.email_service.send_verification_email(
@@ -412,14 +440,22 @@ class AuthService(BaseService):
         if user.failed_login_attempts >= settings.max_login_attempts:
             user.locked_until = datetime.utcnow() + timedelta(hours=settings.account_lock_duration_hours)
         
-        self.db.commit()
+        try:
+            self.db.commit()
+        except Exception as e:
+            self.db.rollback()
+            raise ValidationServiceException(f"登录失败记录更新失败: {str(e)}", ErrorCodes.DATABASE_ERROR)
 
     def _handle_successful_login(self, user: User):
         """处理登录成功"""
         user.last_login_at = datetime.utcnow()
         user.failed_login_attempts = 0
         user.locked_until = None
-        self.db.commit()
+        try:
+            self.db.commit()
+        except Exception as e:
+            self.db.rollback()
+            raise ValidationServiceException(f"登录成功记录更新失败: {str(e)}", ErrorCodes.DATABASE_ERROR)
 
     def _check_verification_rate_limit(self, email: str):
         """检查验证码发送频率限制"""

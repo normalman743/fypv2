@@ -80,8 +80,12 @@ class AdminService(BaseService):
             )
             
             self.db.add(invite_code)
-            self.db.commit()
-            self.db.refresh(invite_code)
+            try:
+                self.db.commit()
+                self.db.refresh(invite_code)
+            except Exception as e:
+                self.db.rollback()
+                raise ValidationServiceException(f"邀请码创建失败: {str(e)}", ErrorCodes.DATABASE_ERROR)
             
             # 4. 记录审计日志
             self.create_audit_log(
@@ -182,8 +186,12 @@ class AdminService(BaseService):
         for field, value in update_data.items():
             setattr(invite_code, field, value)
         
-        self.db.commit()
-        self.db.refresh(invite_code)
+        try:
+            self.db.commit()
+            self.db.refresh(invite_code)
+        except Exception as e:
+            self.db.rollback()
+            raise ValidationServiceException(f"邀请码更新失败: {str(e)}", ErrorCodes.DATABASE_ERROR)
         
         # 6. 记录审计日志
         try:
@@ -242,7 +250,11 @@ class AdminService(BaseService):
         
         # 4. 删除邀请码
         self.db.delete(invite_code)
-        self.db.commit()
+        try:
+            self.db.commit()
+        except Exception as e:
+            self.db.rollback()
+            raise ValidationServiceException(f"邀请码删除失败: {str(e)}", ErrorCodes.DATABASE_ERROR)
         
         # 5. 记录审计日志
         self.create_audit_log(
@@ -398,8 +410,12 @@ class AdminService(BaseService):
         )
         
         self.db.add(audit_log)
-        self.db.commit()
-        self.db.refresh(audit_log)
+        try:
+            self.db.commit()
+            self.db.refresh(audit_log)
+        except Exception as e:
+            self.db.rollback()
+            raise ValidationServiceException(f"审计日志创建失败: {str(e)}", ErrorCodes.DATABASE_ERROR)
         
         return audit_log
 
