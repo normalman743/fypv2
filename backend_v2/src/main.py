@@ -51,29 +51,36 @@ def create_app() -> FastAPI:
 
 def register_routers(app: FastAPI) -> None:
     """注册所有路由"""
+    # 创建统一的API v1路由器
+    from fastapi import APIRouter
+    api_v1 = APIRouter(prefix="/api/v1")
+    
     # Auth 模块路由
     from src.auth.router import router as auth_router
-    app.include_router(auth_router, prefix="/api/v1", tags=["认证/Authentication"])
+    api_v1.include_router(auth_router, tags=["认证/Authentication"])
     
     # Admin 模块路由
     from src.admin.router import router as admin_router
-    app.include_router(admin_router, prefix="/api/v1", tags=["管理/Administration"])
+    api_v1.include_router(admin_router, tags=["管理/Administration"])
     
     # Course 模块路由
     from src.course.router import router as course_router
-    app.include_router(course_router, tags=["学期课程/Semester & Course"])
+    api_v1.include_router(course_router, tags=["学期课程/Semester & Course"])
     
     # Storage 模块路由
-    from src.storage.router import storage_router
-    app.include_router(storage_router)
+    from src.storage.router import router as storage_router
+    api_v1.include_router(storage_router, tags=["存储管理/Storage"])
     
     # Chat 模块路由
-    from src.chat.router import chat_management_router
-    app.include_router(chat_management_router)
+    from src.chat.router import router as chat_router
+    api_v1.include_router(chat_router, tags=["聊天管理/Chat"])
+    
+    # 将统一的API v1路由器注册到应用
+    app.include_router(api_v1)
     
     # TODO: AI 模块路由待开发
     # from src.ai.router import router as ai_router
-    # app.include_router(ai_router, prefix="/api/v1", tags=["AI"])
+    # api_v1.include_router(ai_router, tags=["AI"])
 
 
 # 创建应用实例

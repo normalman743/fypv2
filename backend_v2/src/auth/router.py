@@ -6,7 +6,8 @@ from .schemas import (
     UserRegister, UserLogin, UserUpdate, PasswordChangeRequest,
     ForgotPasswordRequest, ResetPasswordRequest, EmailVerificationRequest,
     ResendVerificationRequest, LoginResponse, RegisterResponse, 
-    UserProfileResponse, MessageResponse, UserResponse, RegisterData, LoginData
+    GetUserProfileResponse, UpdateUserProfileResponse, MessageResponse, 
+    UserResponse, RegisterData, LoginData
 )
 from .service import AuthService
 from .models import User
@@ -28,7 +29,7 @@ router = APIRouter(prefix="/auth")
     operation_id="register_user"
 ))
 @service_api_handler(AuthService, 'register')
-async def register(user_data: UserRegister, db: DbDep):
+def register(user_data: UserRegister, db: DbDep):
     """用户注册"""
     service = AuthService(db)
     result = service.register(user_data)
@@ -47,7 +48,7 @@ async def register(user_data: UserRegister, db: DbDep):
     operation_id="login_user"
 ))
 @service_api_handler(AuthService, 'login')
-async def login(user_data: UserLogin, db: DbDep):
+def login(user_data: UserLogin, db: DbDep):
     """用户登录"""
     service = AuthService(db)
     result = service.login(user_data)
@@ -64,18 +65,18 @@ async def login(user_data: UserLogin, db: DbDep):
 
 
 @router.get("/me", **create_service_route_config(
-    AuthService, 'get_user_profile', UserProfileResponse,
+    AuthService, 'get_user_profile', GetUserProfileResponse,
     summary="获取当前用户信息",
     description="获取当前认证用户的详细信息",
     operation_id="get_current_user_profile"
 ))
 @service_api_handler(AuthService, 'get_user_profile')
-async def get_me(current_user: UserDep, db: DbDep):
+def get_me(current_user: UserDep, db: DbDep):
     """获取当前用户信息"""
     service = AuthService(db)
     result = service.get_user_profile(current_user.id)
     
-    return UserProfileResponse(
+    return GetUserProfileResponse(
         success=True,
         data=UserResponse.model_validate(result["user"]),
         message=result.get("message")
@@ -83,13 +84,13 @@ async def get_me(current_user: UserDep, db: DbDep):
 
 
 @router.put("/me", **create_service_route_config(
-    AuthService, 'update_user', UserProfileResponse,
+    AuthService, 'update_user', UpdateUserProfileResponse,
     summary="更新用户信息",
     description="更新当前认证用户的个人信息",
     operation_id="update_current_user"
 ))
 @service_api_handler(AuthService, 'update_user')
-async def update_me(
+def update_me(
     user_data: UserUpdate,
     current_user: UserDep,
     db: DbDep
@@ -98,7 +99,7 @@ async def update_me(
     service = AuthService(db)
     result = service.update_user(current_user.id, user_data)
     
-    return UserProfileResponse(
+    return UpdateUserProfileResponse(
         success=True,
         data=UserResponse.model_validate(result["user"]),
         message=result.get("message")
@@ -112,7 +113,7 @@ async def update_me(
     operation_id="logout_user"
 ))
 @service_api_handler(AuthService, 'logout')
-async def logout(current_user: UserDep, db: DbDep):
+def logout(current_user: UserDep, db: DbDep):
     """用户登出"""
     service = AuthService(db)
     result = service.logout(current_user.id)
@@ -129,7 +130,6 @@ async def logout(current_user: UserDep, db: DbDep):
     summary="验证邮箱",
     description="使用验证码验证用户邮箱地址",
     operation_id="verify_user_email",
-    include_in_schema=False  # 不在自动生成的文档中显示
 ))
 @service_api_handler(AuthService, 'verify_email')
 async def verify_email(
@@ -152,7 +152,6 @@ async def verify_email(
     summary="重发验证码",
     description="重新发送邮箱验证码",
     operation_id="resend_verification_code",
-    include_in_schema=False  # 不在自动生成的文档中显示
 ))
 @service_api_handler(AuthService, 'resend_verification')
 async def resend_verification(
@@ -177,7 +176,6 @@ async def resend_verification(
     summary="修改密码",
     description="修改当前用户密码，需要提供当前密码验证",
     operation_id="change_user_password",
-    include_in_schema=False  # 不在自动生成的文档中显示
 ))
 @service_api_handler(AuthService, 'change_password')
 async def change_password(
@@ -201,7 +199,6 @@ async def change_password(
     summary="忘记密码",
     description="发送密码重置邮件到用户注册邮箱",
     operation_id="forgot_password",
-    include_in_schema=False  # 不在自动生成的文档中显示
 ))
 @service_api_handler(AuthService, 'forgot_password')
 async def forgot_password(
@@ -224,7 +221,6 @@ async def forgot_password(
     summary="重置密码",
     description="使用重置令牌重置用户密码",
     operation_id="reset_password",
-    include_in_schema=False  # 不在自动生成的文档中显示
 ))
 @service_api_handler(AuthService, 'reset_password')
 async def reset_password(

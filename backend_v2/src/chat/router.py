@@ -16,9 +16,9 @@ from .schemas import (
 )
 
 
-# 创建路由器
-chat_router = APIRouter(prefix="/api/v1", tags=["聊天管理/Chat Management"])
-message_router = APIRouter(prefix="/api/v1", tags=["消息管理/Message Management"])
+# 创建路由器 (移除prefix，由main.py统一管理)
+chat_router = APIRouter(tags=["聊天管理/Chat Management"])
+message_router = APIRouter(tags=["消息管理/Message Management"])
 
 
 # ===== 聊天管理路由 =====
@@ -268,7 +268,10 @@ async def delete_message(
     )
 
 
-# 合并路由器
-chat_management_router = APIRouter()
-chat_management_router.include_router(chat_router)
-chat_management_router.include_router(message_router)
+# 合并路由器 (使用统一命名规范)
+router = APIRouter()
+router.include_router(chat_router)
+router.include_router(message_router)
+
+# 保持向后兼容性
+chat_management_router = router

@@ -88,67 +88,107 @@ class InternalServerError(BaseAPIException):
 # Service层异常基类
 class BaseServiceException(Exception):
     """Service层基础异常类"""
-    def __init__(self, message: str, error_code: str = "SERVICE_ERROR", details: Optional[Dict[str, Any]] = None):
+    status_code: int = 500
+    error_code: str = "SERVICE_ERROR"
+    
+    def __init__(self, message: str, error_code: Optional[str] = None, details: Optional[Dict[str, Any]] = None):
         self.message = message
-        self.error_code = error_code
+        self.error_code = error_code or self.__class__.error_code
         self.details = details
         super().__init__(message)
 
 
+# 具体的Service异常类（基于类型注解自动映射状态码）
+class NotFoundServiceException(BaseServiceException):
+    """Service层资源不存在异常"""
+    status_code: int = 404
+    error_code: str = "NOT_FOUND"
+
+
+class AccessDeniedServiceException(BaseServiceException):
+    """Service层访问被拒绝异常"""
+    status_code: int = 403
+    error_code: str = "ACCESS_DENIED"
+
+
+class UnauthorizedServiceException(BaseServiceException):
+    """Service层未认证异常"""
+    status_code: int = 401
+    error_code: str = "UNAUTHORIZED"
+
+
+class ConflictServiceException(BaseServiceException):
+    """Service层资源冲突异常"""
+    status_code: int = 409
+    error_code: str = "CONFLICT"
+
+
+class ValidationServiceException(BaseServiceException):
+    """Service层验证错误异常"""
+    status_code: int = 422
+    error_code: str = "VALIDATION_ERROR"
+
+
+class BadRequestServiceException(BaseServiceException):
+    """Service层请求错误异常"""
+    status_code: int = 400
+    error_code: str = "BAD_REQUEST"
+
+
 # Service异常处理装饰器
 def handle_service_exceptions(func: Callable) -> Callable:
-    """处理Service层异常的装饰器"""
-    @functools.wraps(func)
-    async def wrapper(*args, **kwargs):
-        try:
-            return await func(*args, **kwargs)
-        except BaseServiceException as e:
-            # 根据错误代码映射到相应的HTTP状态码
-            status_code_map = {
-                "NOT_FOUND": 404,
-                "COURSE_NOT_FOUND": 404,
-                "FOLDER_NOT_FOUND": 404,
-                "FILE_NOT_FOUND": 404,
-                "CHAT_NOT_FOUND": 404,
-                "MESSAGE_NOT_FOUND": 404,
-                "TEMP_FILE_NOT_FOUND": 404,
-                "ACCESS_DENIED": 403,
-                "FORBIDDEN": 403,
-                "UNAUTHORIZED": 401,
-                "CONFLICT": 409,
-                "FOLDER_NAME_EXISTS": 409,
-                "FOLDER_NOT_EMPTY": 409,
-                "CANNOT_DELETE_DEFAULT_FOLDER": 409,
-                "TEMP_FILE_EXPIRED": 410,
-                "BAD_REQUEST": 400,
-                "VALIDATION_ERROR": 422,
-                "UPLOAD_ERROR": 400,
-                "STORAGE_ERROR": 500,
-                "DATABASE_ERROR": 500,
-                "CREATE_ERROR": 500,
-                "UPDATE_ERROR": 500,
-                "DELETE_ERROR": 500,
-                "SEND_ERROR": 500,
-                "EDIT_ERROR": 500,
-                "SERVICE_ERROR": 500,
-            }
-            
-            status_code = status_code_map.get(e.error_code, 500)
-            
-            raise BaseAPIException(
-                code=e.error_code,
-                message=e.message,
-                status_code=status_code,
-                details=e.details
-            )
-        except Exception as e:
-            logger.exception(f"Unexpected error in {func.__name__}: {e}")
-            raise InternalServerError(
-                message="服务器内部错误",
-                error_code="INTERNAL_SERVER_ERROR"
-            )
+    """处理Service层异常的装饰器（自动检测同步/异步）"""
+    import asyncio
+    import inspect
     
-    return wrapper
+    if inspect.iscoroutinefunction(func):
+        # 异步版本
+        @functools.wraps(func)
+        async def async_wrapper(*args, **kwargs):
+            try:
+                return await func(*args, **kwargs)
+            except BaseServiceException as e:
+                # 基于类型注解自动映射状态码（遵循开闭原则）
+                status_code = getattr(e, 'status_code', 500)
+                
+                raise BaseAPIException(
+                    code=e.error_code,
+                    message=e.message,
+                    status_code=status_code,
+                    details=e.details
+                )
+            except Exception as e:
+                logger.exception(f"Unexpected error in {func.__name__}: {e}")
+                raise InternalServerError(
+                    message="服务器内部错误",
+                    error_code="INTERNAL_SERVER_ERROR"
+                )
+        
+        return async_wrapper
+    else:
+        # 同步版本
+        @functools.wraps(func)
+        def sync_wrapper(*args, **kwargs):
+            try:
+                return func(*args, **kwargs)
+            except BaseServiceException as e:
+                # 基于类型注解自动映射状态码（遵循开闭原则）
+                status_code = getattr(e, 'status_code', 500)
+                
+                raise BaseAPIException(
+                    code=e.error_code,
+                    message=e.message,
+                    status_code=status_code,
+                    details=e.details
+                )
+            except Exception as e:
+                logger.exception(f"Unexpected error in {func.__name__}: {e}")
+                raise InternalServerError(
+                    message="服务器内部错误",
+                    error_code="INTERNAL_SERVER_ERROR"
+                )
+        
+        return sync_wrapper
 
 
 def setup_exception_handlers(app) -> None:

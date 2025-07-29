@@ -293,9 +293,46 @@ class RegisterResponse(BaseResponse[RegisterData]):
     )
 
 
-class UserProfileResponse(BaseResponse[UserResponse]):
-    """用户信息响应模型"""
-    pass
+class GetUserProfileResponse(BaseResponse[UserResponse]):
+    """获取用户信息响应模型"""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "success": True,
+                "data": {
+                    "id": 1,
+                    "username": "john_doe", 
+                    "email": "john@example.com",
+                    "display_name": "John Doe",
+                    "avatar_url": None,
+                    "is_verified": True,
+                    "created_at": "2024-01-01T00:00:00Z"
+                },
+                "message": "用户信息获取成功"
+            }
+        }
+    )
+
+
+class UpdateUserProfileResponse(BaseResponse[UserResponse]):
+    """更新用户信息响应模型"""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "success": True,
+                "data": {
+                    "id": 1,
+                    "username": "john_doe",
+                    "email": "john@example.com", 
+                    "display_name": "John Doe Updated",
+                    "avatar_url": "https://example.com/avatar.jpg",
+                    "is_verified": True,
+                    "created_at": "2024-01-01T00:00:00Z"
+                },
+                "message": "用户信息更新成功"
+            }
+        }
+    )
 
 
 class MessageResponse(BaseResponse[MessageData]):

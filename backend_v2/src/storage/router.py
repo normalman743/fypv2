@@ -16,9 +16,9 @@ from .schemas import (
 )
 
 
-# 创建路由器
-folder_router = APIRouter(prefix="/api/v1", tags=["文件夹管理/Folder Management"])
-file_router = APIRouter(prefix="/api/v1", tags=["文件管理/File Management"])
+# 创建路由器 (移除prefix，由main.py统一管理)
+folder_router = APIRouter(tags=["文件夹管理/Folder Management"])
+file_router = APIRouter(tags=["文件管理/File Management"])
 
 
 # ===== 文件夹管理路由 =====
@@ -312,7 +312,10 @@ async def delete_global_file(
     raise HTTPException(status_code=501, detail="功能暂未实现")
 
 
-# 合并路由器
-storage_router = APIRouter()
-storage_router.include_router(folder_router)
-storage_router.include_router(file_router)
+# 合并路由器 (使用统一命名规范)
+router = APIRouter()
+router.include_router(folder_router)
+router.include_router(file_router)
+
+# 保持向后兼容性
+storage_router = router

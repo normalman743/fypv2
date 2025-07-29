@@ -14,32 +14,34 @@ from .schemas import (
     ResendVerificationRequest
 )
 from src.shared.exceptions import (
-    BadRequestError, ConflictError, ForbiddenError, UnauthorizedError
+    BadRequestError, ConflictError, ForbiddenError, UnauthorizedError,
+    NotFoundServiceException, ConflictServiceException, 
+    ValidationServiceException, UnauthorizedServiceException
 )
 from src.shared.config import settings
 from src.shared.email import get_email_service
+from src.shared.base_service import BaseService
 
 
-class AuthService:
-    """认证服务类 - 基于现有backend/app/services/auth_service.py扩展"""
+class AuthService(BaseService):
+    """认证服务类 - 继承BaseService，改进数据库会话管理"""
     
-    # 声明每个方法可能抛出的异常
+    # 声明每个方法可能抛出的异常（使用新的Service异常类）
     METHOD_EXCEPTIONS = {
-        'register': {BadRequestError, ConflictError, ForbiddenError},
-        'login': {UnauthorizedError, BadRequestError},
-        'get_user_profile': {UnauthorizedError},  # 新增
-        'update_user': {BadRequestError, ConflictError, ForbiddenError},
-        'logout': set(),  # 新增 - 无特定异常
-        'verify_email': {BadRequestError},
-        'resend_verification': {BadRequestError},
-        # 新增方法的异常声明
-        'change_password': {BadRequestError, UnauthorizedError},
-        'forgot_password': {BadRequestError},
-        'reset_password': {BadRequestError, UnauthorizedError},
+        'register': {ConflictServiceException, ValidationServiceException},
+        'login': {UnauthorizedServiceException, ValidationServiceException},
+        'get_user_profile': {UnauthorizedServiceException, NotFoundServiceException},
+        'update_user': {ValidationServiceException, UnauthorizedServiceException, NotFoundServiceException},
+        'logout': set(),
+        'verify_email': {ValidationServiceException, NotFoundServiceException},
+        'resend_verification': {ValidationServiceException},
+        'change_password': {ValidationServiceException, UnauthorizedServiceException},
+        'forgot_password': {ValidationServiceException, NotFoundServiceException},
+        'reset_password': {ValidationServiceException, UnauthorizedServiceException},
     }
     
     def __init__(self, db: Session):
-        self.db = db
+        super().__init__(db)
         self.email_service = get_email_service()
 
     # ===== 现有方法 =====
