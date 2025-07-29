@@ -16,11 +16,39 @@ class FolderBase(BaseModel):
 
 class CreateFolderRequest(FolderBase):
     """创建文件夹请求"""
-    pass
+    model_config = ConfigDict(
+        str_strip_whitespace=True,
+        validate_assignment=True,
+        json_schema_extra={
+            "examples": [
+                {
+                    "name": "课程大纲",
+                    "folder_type": "outline"
+                },
+                {
+                    "name": "期末考试资料",
+                    "folder_type": "exam"
+                }
+            ]
+        }
+    )
 
 
 class UpdateFolderRequest(BaseModel):
     """更新文件夹请求"""
+    model_config = ConfigDict(
+        str_strip_whitespace=True,
+        validate_assignment=True,
+        json_schema_extra={
+            "examples": [
+                {
+                    "name": "更新后的文件夹名称",
+                    "folder_type": "tutorial"
+                }
+            ]
+        }
+    )
+    
     name: Optional[str] = Field(None, min_length=1, max_length=100, description="文件夹名称")
     folder_type: Optional[Literal["outline", "tutorial", "lecture", "exam", "assignment", "others"]] = Field(
         None, description="文件夹类型"
@@ -29,12 +57,31 @@ class UpdateFolderRequest(BaseModel):
 
 class FolderStats(BaseModel):
     """文件夹统计信息"""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {"file_count": 5}
+            ]
+        }
+    )
+    
     file_count: int = Field(0, description="文件数量")
 
 
 class FolderInfo(BaseModel):
     """文件夹基本信息"""
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_schema_extra={
+            "examples": [
+                {
+                    "id": 1,
+                    "name": "课程大纲",
+                    "folder_type": "outline"
+                }
+            ]
+        }
+    )
     
     id: int
     name: str
@@ -43,7 +90,22 @@ class FolderInfo(BaseModel):
 
 class FolderResponse(FolderBase):
     """文件夹响应"""
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_schema_extra={
+            "examples": [
+                {
+                    "id": 1,
+                    "name": "课程大纲",
+                    "folder_type": "outline",
+                    "course_id": 1,
+                    "is_default": False,
+                    "created_at": "2025-01-15T10:30:00Z",
+                    "stats": {"file_count": 5}
+                }
+            ]
+        }
+    )
     
     id: int
     course_id: int
@@ -82,7 +144,43 @@ class FileBase(BaseModel):
 
 class FileResponse(BaseModel):
     """文件响应"""
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_schema_extra={
+            "examples": [
+                {
+                    "id": 1,
+                    "physical_file_id": 1,
+                    "original_name": "Python程序设计教程.pdf",
+                    "file_type": "document",
+                    "file_size": 2048000,
+                    "mime_type": "application/pdf",
+                    "course_id": 1,
+                    "folder_id": 1,
+                    "user_id": 1,
+                    "description": "Python基础教程文档",
+                    "tags": ["Python", "教程", "基础"],
+                    "scope": "course",
+                    "visibility": "private",
+                    "is_shareable": True,
+                    "share_settings": None,
+                    "is_processed": True,
+                    "processing_status": "completed",
+                    "processing_error": None,
+                    "processed_at": "2025-01-15T10:45:00Z",
+                    "chunk_count": 25,
+                    "content_preview": "Python是一种高级程序设计语言...",
+                    "created_at": "2025-01-15T10:30:00Z",
+                    "updated_at": "2025-01-15T10:45:00Z",
+                    "folder": {
+                        "id": 1,
+                        "name": "课程大纲",
+                        "folder_type": "outline"
+                    }
+                }
+            ]
+        }
+    )
     
     id: int
     physical_file_id: int
@@ -142,7 +240,23 @@ class UploadFileResponse(BaseResponse[UploadFileData]):
 
 class TemporaryFileResponse(BaseModel):
     """临时文件响应"""
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_schema_extra={
+            "examples": [
+                {
+                    "id": 1,
+                    "filename": "temp_document.pdf",
+                    "file_size": 1024000,
+                    "mime_type": "application/pdf",
+                    "user_id": 1,
+                    "expires_at": "2025-01-16T10:30:00Z",
+                    "purpose": "临时文档上传",
+                    "created_at": "2025-01-15T10:30:00Z"
+                }
+            ]
+        }
+    )
     
     id: int
     filename: str
@@ -185,7 +299,22 @@ class GlobalFileListResponse(BaseResponse[GlobalFileListData]):
 
 class FileShareResponse(BaseModel):
     """文件分享响应"""
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_schema_extra={
+            "examples": [
+                {
+                    "id": 1,
+                    "file_id": 1,
+                    "user_id": 1,
+                    "share_token": "abc123def456",
+                    "expires_at": "2025-01-22T10:30:00Z",
+                    "is_active": True,
+                    "created_at": "2025-01-15T10:30:00Z"
+                }
+            ]
+        }
+    )
     
     id: int
     file_id: int
@@ -198,6 +327,21 @@ class FileShareResponse(BaseModel):
 
 class CreateFileShareRequest(BaseModel):
     """创建文件分享请求"""
+    model_config = ConfigDict(
+        str_strip_whitespace=True,
+        validate_assignment=True,
+        json_schema_extra={
+            "examples": [
+                {
+                    "expires_at": "2025-01-22T10:30:00Z"
+                },
+                {
+                    "expires_at": None
+                }
+            ]
+        }
+    )
+    
     expires_at: Optional[datetime] = Field(None, description="过期时间")
 
 
@@ -215,7 +359,22 @@ class CreateFileShareResponse(BaseResponse[CreateFileShareData]):
 
 class FileAccessLogResponse(BaseModel):
     """文件访问日志响应"""
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_schema_extra={
+            "examples": [
+                {
+                    "id": 1,
+                    "file_id": 1,
+                    "user_id": 1,
+                    "access_type": "download",
+                    "ip_address": "192.168.1.100",
+                    "user_agent": "Mozilla/5.0...",
+                    "accessed_at": "2025-01-15T10:30:00Z"
+                }
+            ]
+        }
+    )
     
     id: int
     file_id: int
