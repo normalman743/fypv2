@@ -13,15 +13,12 @@ from src.shared.exceptions import (
     ConflictServiceException, ValidationServiceException, AccessDeniedServiceException,
     handle_service_exceptions
 )
+from src.shared.error_codes import ErrorCodes
 from src.shared.base_service import BaseService
 from .models import PhysicalFile, Folder, File, DocumentChunk, FileShare, FileAccessLog, FileGroup, FileGroupMember, TemporaryFile
 from .schemas import CreateFolderRequest, UpdateFolderRequest, CreateFileShareRequest
 from .file_storage import get_file_storage
 
-
-class StorageServiceException(BaseServiceException):
-    """Storage服务异常基类"""
-    pass
 
 
 class FolderService(BaseService):
@@ -29,11 +26,11 @@ class FolderService(BaseService):
     
     # 定义方法可能抛出的异常
     METHOD_EXCEPTIONS = {
-        "get_course_folders": {NotFoundServiceException, AccessDeniedServiceException},
-        "create_folder": {NotFoundServiceException, AccessDeniedServiceException, ConflictServiceException},  
-        "update_folder": {NotFoundServiceException, AccessDeniedServiceException, ConflictServiceException},
-        "delete_folder": {NotFoundServiceException, AccessDeniedServiceException, ConflictServiceException},
-        "get_folder_stats": set(),
+        "get_course_folders": {NotFoundServiceException, AccessDeniedServiceException, ValidationServiceException},
+        "create_folder": {NotFoundServiceException, AccessDeniedServiceException, ConflictServiceException, ValidationServiceException},  
+        "update_folder": {NotFoundServiceException, AccessDeniedServiceException, ConflictServiceException, ValidationServiceException},
+        "delete_folder": {NotFoundServiceException, AccessDeniedServiceException, ConflictServiceException, ValidationServiceException},
+        "get_folder_stats": {ValidationServiceException},
     }
     
     def __init__(self, db: Session):
@@ -49,16 +46,16 @@ class FolderService(BaseService):
             # 先获取当前用户
             user = self.db.query(User).filter(User.id == user_id).first()
             if not user:
-                raise NotFoundServiceException("用户不存在", "USER_NOT_FOUND")
+                raise NotFoundServiceException("用户不存在", ErrorCodes.USER_NOT_FOUND)
             
             # 然后检查课程权限
             course = self.db.query(Course).filter(Course.id == course_id).first()
             if not course:
-                raise NotFoundServiceException("课程不存在", "COURSE_NOT_FOUND")
+                raise NotFoundServiceException("课程不存在", ErrorCodes.COURSE_NOT_FOUND)
             
             # 验证权限：课程拥有者或管理员
             if course.user_id != user_id and user.role != "admin":
-                raise AccessDeniedServiceException("无权限访问该课程", "ACCESS_DENIED")
+                raise AccessDeniedServiceException("无权限访问该课程", ErrorCodes.ACCESS_DENIED)
             
             # 获取文件夹列表
             folders = self.db.query(Folder)\
@@ -71,7 +68,7 @@ class FolderService(BaseService):
         except (NotFoundServiceException, AccessDeniedServiceException):
             raise
         except Exception as e:
-            raise StorageServiceException(f"获取文件夹列表失败: {str(e)}", "DATABASE_ERROR")
+            raise ValidationServiceException(f"获取文件夹列表失败: {str(e)}", ErrorCodes.DATABASE_ERROR)
     
     def create_folder(self, course_id: int, folder_data: CreateFolderRequest, user_id: int) -> Folder:
         """创建文件夹"""
@@ -84,7 +81,7 @@ class FolderService(BaseService):
             ).first()
             
             if not course:
-                raise NotFoundServiceException("课程不存在或无权限访问", "COURSE_NOT_FOUND")
+                raise NotFoundServiceException("课程不存在或无权限访问", ErrorCodes.COURSE_NOT_FOUND)
             
             # 检查同名文件夹
             existing_folder = self.db.query(Folder).filter(
@@ -93,7 +90,7 @@ class FolderService(BaseService):
             ).first()
             
             if existing_folder:
-                raise ConflictServiceException("文件夹名称已存在", "FOLDER_NAME_EXISTS")
+                raise ConflictServiceException("文件夹名称已存在", ErrorCodes.FOLDER_NAME_EXISTS)
             
             # 创建文件夹
             folder = Folder(
@@ -109,11 +106,11 @@ class FolderService(BaseService):
             return folder
             
         except (NotFoundServiceException, ConflictServiceException):
-            self.handle_database_error("创建文件夹", StorageServiceException("业务错误"))
+            self.handle_database_error("创建文件夹", ValidationServiceException("业务错误"))
             raise
         except Exception as e:
             self.handle_database_error("创建文件夹", e)
-            raise StorageServiceException(f"创建文件夹失败: {str(e)}", "DATABASE_ERROR")
+            raise ValidationServiceException(f"创建文件夹失败: {str(e)}", ErrorCodes.DATABASE_ERROR)
     
     def update_folder(self, folder_id: int, folder_data: UpdateFolderRequest, user_id: int) -> Folder:
         """更新文件夹"""
@@ -127,7 +124,7 @@ class FolderService(BaseService):
                 ).first()
             
             if not folder:
-                raise StorageServiceException("文件夹不存在或无权限访问", "FOLDER_NOT_FOUND")
+                raise NotFoundServiceException("文件夹不存在或无权限访问", ErrorCodes.FOLDER_NOT_FOUND)
             
             # 更新字段
             if folder_data.name is not None:
@@ -139,7 +136,7 @@ class FolderService(BaseService):
                 ).first()
                 
                 if existing_folder:
-                    raise StorageServiceException("文件夹名称已存在", "FOLDER_NAME_EXISTS")
+                    raise ConflictServiceException("文件夹名称已存在", ErrorCodes.FOLDER_NAME_EXISTS)
                 
                 folder.name = folder_data.name
             
@@ -151,12 +148,12 @@ class FolderService(BaseService):
             
             return folder
             
-        except StorageServiceException:
+        except (NotFoundServiceException, ConflictServiceException):
             self.db.rollback()
             raise
         except Exception as e:
             self.db.rollback()
-            raise StorageServiceException(f"更新文件夹失败: {str(e)}", "DATABASE_ERROR")
+            raise ValidationServiceException(f"更新文件夹失败: {str(e)}", ErrorCodes.DATABASE_ERROR)
     
     def delete_folder(self, folder_id: int, user_id: int) -> None:
         """删除文件夹"""
@@ -170,27 +167,27 @@ class FolderService(BaseService):
                 ).first()
             
             if not folder:
-                raise StorageServiceException("文件夹不存在或无权限访问", "FOLDER_NOT_FOUND")
+                raise NotFoundServiceException("文件夹不存在或无权限访问", ErrorCodes.FOLDER_NOT_FOUND)
             
             # 检查是否为默认文件夹
             if folder.is_default:
-                raise StorageServiceException("无法删除默认文件夹", "CANNOT_DELETE_DEFAULT_FOLDER")
+                raise ConflictServiceException("无法删除默认文件夹", ErrorCodes.CANNOT_DELETE_DEFAULT_FOLDER)
             
             # 检查文件夹是否为空
             file_count = self.db.query(File).filter(File.folder_id == folder_id).count()
             if file_count > 0:
-                raise StorageServiceException("文件夹不为空，无法删除", "FOLDER_NOT_EMPTY")
+                raise ConflictServiceException("文件夹不为空，无法删除", ErrorCodes.FOLDER_NOT_EMPTY)
             
             # 删除文件夹
             self.db.delete(folder)
             self.db.commit()
             
-        except StorageServiceException:
+        except (NotFoundServiceException, ConflictServiceException):
             self.db.rollback()
             raise
         except Exception as e:
             self.db.rollback()
-            raise StorageServiceException(f"删除文件夹失败: {str(e)}", "DATABASE_ERROR")
+            raise ValidationServiceException(f"删除文件夹失败: {str(e)}", ErrorCodes.DATABASE_ERROR)
     
     def get_folder_stats(self, folder_id: int) -> dict:
         """获取文件夹统计信息"""
@@ -202,18 +199,18 @@ class FolderService(BaseService):
             }
             
         except Exception as e:
-            raise StorageServiceException(f"获取文件夹统计失败: {str(e)}", "DATABASE_ERROR")
+            raise ValidationServiceException(f"获取文件夹统计失败: {str(e)}", ErrorCodes.DATABASE_ERROR)
 
 
 class FileService(BaseService):
     """文件管理服务"""
     
     METHOD_EXCEPTIONS = {
-        "get_folder_files": {NotFoundServiceException, AccessDeniedServiceException},
+        "get_folder_files": {NotFoundServiceException, AccessDeniedServiceException, ValidationServiceException},
         "upload_file": {NotFoundServiceException, AccessDeniedServiceException, ValidationServiceException},
-        "download_file": {NotFoundServiceException, AccessDeniedServiceException},
-        "delete_file": {NotFoundServiceException, AccessDeniedServiceException},
-        "get_or_create_physical_file": {StorageServiceException},
+        "download_file": {NotFoundServiceException, AccessDeniedServiceException, ValidationServiceException},
+        "delete_file": {NotFoundServiceException, AccessDeniedServiceException, ValidationServiceException},
+        "get_or_create_physical_file": {ValidationServiceException},
         "calculate_file_hash": set(),
     }
     
@@ -232,7 +229,7 @@ class FileService(BaseService):
                 ).first()
             
             if not folder:
-                raise StorageServiceException("文件夹不存在或无权限访问", "FOLDER_NOT_FOUND")
+                raise NotFoundServiceException("文件夹不存在或无权限访问", ErrorCodes.FOLDER_NOT_FOUND)
             
             # 获取文件列表
             files = self.db.query(File)\
@@ -243,10 +240,10 @@ class FileService(BaseService):
                 
             return files
             
-        except StorageServiceException:
+        except (NotFoundServiceException, ValidationServiceException):
             raise
         except Exception as e:
-            raise StorageServiceException(f"获取文件列表失败: {str(e)}", "DATABASE_ERROR")
+            raise ValidationServiceException(f"获取文件列表失败: {str(e)}", ErrorCodes.DATABASE_ERROR)
     
     def upload_file(self, file_data, course_id: int, folder_id: int, user_id: int, description: Optional[str] = None) -> File:
         """上传文件"""
@@ -261,7 +258,7 @@ class FileService(BaseService):
                 ).first()
             
             if not folder:
-                raise StorageServiceException("文件夹不存在或无权限访问", "FOLDER_NOT_FOUND")
+                raise NotFoundServiceException("文件夹不存在或无权限访问", ErrorCodes.FOLDER_NOT_FOUND)
             
             # 读取文件内容和计算哈希
             file_content = file_data.file.read()
@@ -293,12 +290,12 @@ class FileService(BaseService):
             
             return file_record
             
-        except StorageServiceException:
+        except (NotFoundServiceException, ConflictServiceException):
             self.db.rollback()
             raise
         except Exception as e:
             self.db.rollback()
-            raise StorageServiceException(f"文件上传失败: {str(e)}", "UPLOAD_ERROR")
+            raise ValidationServiceException(f"文件上传失败: {str(e)}", ErrorCodes.UPLOAD_ERROR)
     
     @handle_service_exceptions
     def download_file(self, file_id: int, user_id: int, access_type: str = "download") -> Tuple[File, bytes]:
@@ -311,7 +308,7 @@ class FileService(BaseService):
                 .first()
             
             if not file_record:
-                raise NotFoundServiceException("文件不存在", "FILE_NOT_FOUND")
+                raise NotFoundServiceException("文件不存在", ErrorCodes.FILE_NOT_FOUND)
             
             # 验证访问权限
             if file_record.scope == 'course':
@@ -335,7 +332,7 @@ class FileService(BaseService):
             file_content = file_storage.read_file(file_record.physical_file.storage_path)
             
             if file_content is None:
-                raise NotFoundServiceException("文件不存在于存储中", "FILE_MISSING")
+                raise NotFoundServiceException("文件不存在于存储中", ErrorCodes.FILE_MISSING)
             
             # 记录访问日志
             access_log = FileAccessLog(
@@ -348,10 +345,10 @@ class FileService(BaseService):
             
             return file_record, file_content
             
-        except StorageServiceException:
+        except (NotFoundServiceException, ValidationServiceException):
             raise
         except Exception as e:
-            raise StorageServiceException(f"文件下载失败: {str(e)}", "DATABASE_ERROR")
+            raise ValidationServiceException(f"文件下载失败: {str(e)}", ErrorCodes.DATABASE_ERROR)
     
     @handle_service_exceptions
     def delete_file(self, file_id: int, user_id: int) -> None:
@@ -364,14 +361,14 @@ class FileService(BaseService):
                 .first()
             
             if not file_record:
-                raise NotFoundServiceException("文件不存在", "FILE_NOT_FOUND")
+                raise NotFoundServiceException("文件不存在", ErrorCodes.FILE_NOT_FOUND)
             
             # 验证权限：只能删除自己的文件或管理员
             from src.auth.models import User
             user = self.db.query(User).filter(User.id == user_id).first()
             
             if file_record.user_id != user_id and user.role != "admin":
-                raise AccessDeniedServiceException("无权限删除该文件", "ACCESS_DENIED")
+                raise AccessDeniedServiceException("无权限删除该文件", ErrorCodes.ACCESS_DENIED)
             
             # 获取物理文件信息
             physical_file = file_record.physical_file
@@ -396,7 +393,7 @@ class FileService(BaseService):
             raise
         except Exception as e:
             self.db.rollback()
-            raise StorageServiceException(f"删除文件失败: {str(e)}", "DATABASE_ERROR")
+            raise ValidationServiceException(f"删除文件失败: {str(e)}", ErrorCodes.DATABASE_ERROR)
     
     @handle_service_exceptions
     def get_or_create_physical_file(self, file_content: bytes, file_hash: str, mime_type: str, file_size: int) -> PhysicalFile:
@@ -446,7 +443,7 @@ class FileService(BaseService):
             
         except Exception as e:
             self.db.rollback()
-            raise StorageServiceException(f"处理物理文件失败: {str(e)}", "STORAGE_ERROR")
+            raise ValidationServiceException(f"处理物理文件失败: {str(e)}", ErrorCodes.STORAGE_ERROR)
     
     def calculate_file_hash(self, file_content: bytes) -> str:
         """计算文件SHA256哈希值"""
@@ -459,8 +456,8 @@ class TemporaryFileService(BaseService):
     METHOD_EXCEPTIONS = {
         "upload_temporary_file": {ValidationServiceException},
         "download_temporary_file": {NotFoundServiceException, ValidationServiceException},
-        "delete_temporary_file": {NotFoundServiceException},
-        "cleanup_expired_files": set(),
+        "delete_temporary_file": {NotFoundServiceException, ValidationServiceException},
+        "cleanup_expired_files": {ValidationServiceException},
     }
     
     def __init__(self, db: Session):
@@ -505,7 +502,7 @@ class TemporaryFileService(BaseService):
             
         except Exception as e:
             self.db.rollback()
-            raise StorageServiceException(f"上传临时文件失败: {str(e)}", "UPLOAD_ERROR")
+            raise ValidationServiceException(f"上传临时文件失败: {str(e)}", ErrorCodes.UPLOAD_ERROR)
     
     @handle_service_exceptions
     def download_temporary_file(self, file_id: int, user_id: int) -> Tuple[TemporaryFile, bytes]:
@@ -518,25 +515,25 @@ class TemporaryFileService(BaseService):
             ).first()
             
             if not temp_file:
-                raise NotFoundServiceException("临时文件不存在", "TEMP_FILE_NOT_FOUND")
+                raise NotFoundServiceException("临时文件不存在", ErrorCodes.TEMP_FILE_NOT_FOUND)
             
             # 检查是否过期
             if temp_file.expires_at < datetime.utcnow():
-                raise ValidationServiceException("临时文件已过期", "TEMP_FILE_EXPIRED")
+                raise ValidationServiceException("临时文件已过期", ErrorCodes.TEMP_FILE_EXPIRED)
             
             # 从存储中读取文件内容
             file_storage = get_file_storage()
             file_content = file_storage.read_file(temp_file.file_path)
             
             if file_content is None:
-                raise NotFoundServiceException("临时文件不存在于存储中", "TEMP_FILE_MISSING")
+                raise NotFoundServiceException("临时文件不存在于存储中", ErrorCodes.TEMP_FILE_MISSING)
             
             return temp_file, file_content
             
         except (NotFoundServiceException, ValidationServiceException):
             raise
         except Exception as e:
-            raise StorageServiceException(f"下载临时文件失败: {str(e)}", "DATABASE_ERROR")
+            raise ValidationServiceException(f"下载临时文件失败: {str(e)}", ErrorCodes.DATABASE_ERROR)
     
     @handle_service_exceptions
     def delete_temporary_file(self, file_id: int, user_id: int) -> None:
@@ -548,7 +545,7 @@ class TemporaryFileService(BaseService):
             ).first()
             
             if not temp_file:
-                raise NotFoundServiceException("临时文件不存在", "TEMP_FILE_NOT_FOUND")
+                raise NotFoundServiceException("临时文件不存在", ErrorCodes.TEMP_FILE_NOT_FOUND)
             
             # 删除实际文件
             file_storage = get_file_storage()
@@ -563,7 +560,7 @@ class TemporaryFileService(BaseService):
             raise
         except Exception as e:
             self.db.rollback()
-            raise StorageServiceException(f"删除临时文件失败: {str(e)}", "DATABASE_ERROR")
+            raise ValidationServiceException(f"删除临时文件失败: {str(e)}", ErrorCodes.DATABASE_ERROR)
     
     def cleanup_expired_files(self) -> int:
         """清理过期的临时文件"""
@@ -611,16 +608,16 @@ class TemporaryFileService(BaseService):
             
         except Exception as e:
             self.db.rollback()
-            raise StorageServiceException(f"清理过期文件失败: {str(e)}", "DATABASE_ERROR")
+            raise ValidationServiceException(f"清理过期文件失败: {str(e)}", ErrorCodes.DATABASE_ERROR)
 
 
 class GlobalFileService(BaseService):
     """全局文件管理服务（管理员专用）"""
     
     METHOD_EXCEPTIONS = {
-        "upload_global_file": {ValidationServiceException, StorageServiceException},
-        "get_global_files": {AccessDeniedServiceException},
-        "delete_global_file": {NotFoundServiceException, AccessDeniedServiceException},
+        "upload_global_file": {ValidationServiceException, AccessDeniedServiceException},
+        "get_global_files": {AccessDeniedServiceException, ValidationServiceException},
+        "delete_global_file": {NotFoundServiceException, AccessDeniedServiceException, ValidationServiceException},
     }
     
     def __init__(self, db: Session):
@@ -642,7 +639,7 @@ class GlobalFileService(BaseService):
                 User.role == "admin"
             ).first()
             if not admin:
-                raise AccessDeniedServiceException("需要管理员权限", "ADMIN_REQUIRED")
+                raise AccessDeniedServiceException("需要管理员权限", ErrorCodes.ADMIN_REQUIRED)
 
             # 保存文件并获取哈希值
             storage_path, file_content, file_hash = self.file_storage.save_upload_file(file)
@@ -693,7 +690,7 @@ class GlobalFileService(BaseService):
             raise
         except Exception as e:
             self.db.rollback()
-            raise StorageServiceException(f"上传全局文件失败: {str(e)}", "UPLOAD_ERROR")
+            raise ValidationServiceException(f"上传全局文件失败: {str(e)}", ErrorCodes.UPLOAD_ERROR)
 
     def get_global_files(
         self, 
@@ -710,7 +707,7 @@ class GlobalFileService(BaseService):
                 User.role == "admin"
             ).first()
             if not admin:
-                raise AccessDeniedServiceException("需要管理员权限", "ADMIN_REQUIRED")
+                raise AccessDeniedServiceException("需要管理员权限", ErrorCodes.ADMIN_REQUIRED)
 
             # 查询全局文件
             files = self.db.query(File)\
@@ -726,7 +723,7 @@ class GlobalFileService(BaseService):
         except AccessDeniedServiceException:
             raise
         except Exception as e:
-            raise StorageServiceException(f"获取全局文件列表失败: {str(e)}", "QUERY_ERROR")
+            raise ValidationServiceException(f"获取全局文件列表失败: {str(e)}", ErrorCodes.QUERY_ERROR)
 
     def delete_global_file(self, file_id: int, admin_user_id: int) -> bool:
         """删除全局文件（管理员专用）"""
@@ -738,7 +735,7 @@ class GlobalFileService(BaseService):
                 User.role == "admin"
             ).first()
             if not admin:
-                raise AccessDeniedServiceException("需要管理员权限", "ADMIN_REQUIRED")
+                raise AccessDeniedServiceException("需要管理员权限", ErrorCodes.ADMIN_REQUIRED)
 
             # 查找全局文件
             file_record = self.db.query(File).options(
@@ -749,7 +746,7 @@ class GlobalFileService(BaseService):
             ).first()
 
             if not file_record:
-                raise NotFoundServiceException("全局文件不存在", "GLOBAL_FILE_NOT_FOUND")
+                raise NotFoundServiceException("全局文件不存在", ErrorCodes.GLOBAL_FILE_NOT_FOUND)
 
             physical_file = file_record.physical_file
 
@@ -777,7 +774,7 @@ class GlobalFileService(BaseService):
             raise
         except Exception as e:
             self.db.rollback()
-            raise StorageServiceException(f"删除全局文件失败: {str(e)}", "DELETE_ERROR")
+            raise ValidationServiceException(f"删除全局文件失败: {str(e)}", ErrorCodes.DELETE_ERROR)
 
     def _determine_file_type(self, filename: str, content_type: str) -> str:
         """推断文件类型"""

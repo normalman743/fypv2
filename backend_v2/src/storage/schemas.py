@@ -1,5 +1,5 @@
 """Storage模块Pydantic Schema定义"""
-from pydantic import BaseModel, ConfigDict, Field, validator
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional, List, Literal
 from datetime import datetime
 from src.shared.schemas import BaseResponse

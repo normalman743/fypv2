@@ -7,8 +7,9 @@ from datetime import datetime, timedelta
 import secrets
 import string
 
-# 导入日志
+# 导入日志和错误码
 from src.shared.logging import get_logger
+from src.shared.error_codes import ErrorCodes
 
 # 导入模型
 from .models import AuditLog
@@ -64,7 +65,7 @@ class AdminService(BaseService):
         """创建邀请码"""
         # 1. 验证过期时间
         if request.expires_at and request.expires_at <= datetime.utcnow():
-            raise ValidationServiceException("过期时间不能早于当前时间", "INVALID_EXPIRE_TIME")
+            raise ValidationServiceException("过期时间不能早于当前时间", ErrorCodes.INVALID_EXPIRE_TIME)
         
         # 2. 生成唯一邀请码
         code = self._generate_unique_invite_code()
@@ -106,7 +107,7 @@ class AdminService(BaseService):
         except IntegrityError:
             self.db.rollback()
             # 理论上不会发生，因为我们生成唯一码
-            raise ConflictServiceException("邀请码生成冲突，请重试", "INVITE_CODE_CONFLICT")
+            raise ConflictServiceException("邀请码生成冲突，请重试", ErrorCodes.INVITE_CODE_CONFLICT)
 
     @handle_service_exceptions
     def get_invite_codes(self, skip: int = 0, limit: int = 100) -> Dict[str, Any]:
@@ -146,7 +147,7 @@ class AdminService(BaseService):
         """获取单个邀请码详情"""
         invite_code = self._get_invite_code_with_user_info(invite_code_id)
         if not invite_code:
-            raise NotFoundServiceException(f"邀请码 {invite_code_id} 不存在", "INVITE_CODE_NOT_FOUND")
+            raise NotFoundServiceException(f"邀请码 {invite_code_id} 不存在", ErrorCodes.INVITE_CODE_NOT_FOUND)
         
         return {
             "invite_code": invite_code,
@@ -159,15 +160,15 @@ class AdminService(BaseService):
         # 1. 查找邀请码
         invite_code = self.db.query(InviteCode).filter(InviteCode.id == invite_code_id).first()
         if not invite_code:
-            raise NotFoundServiceException(f"邀请码 {invite_code_id} 不存在", "INVITE_CODE_NOT_FOUND")
+            raise NotFoundServiceException(f"邀请码 {invite_code_id} 不存在", ErrorCodes.INVITE_CODE_NOT_FOUND)
         
         # 2. 验证更新权限（已使用的邀请码某些字段不能修改）
         if invite_code.is_used and request.expires_at is not None:
-            raise ValidationServiceException("已使用的邀请码不能修改过期时间", "USED_INVITE_CODE_READONLY")
+            raise ValidationServiceException("已使用的邀请码不能修改过期时间", ErrorCodes.USED_INVITE_CODE_READONLY)
         
         # 3. 验证过期时间
         if request.expires_at and request.expires_at <= datetime.utcnow():
-            raise ValidationServiceException("过期时间不能早于当前时间", "INVALID_EXPIRE_TIME")
+            raise ValidationServiceException("过期时间不能早于当前时间", ErrorCodes.INVALID_EXPIRE_TIME)
         
         # 4. 记录更新前的状态用于审计
         old_data = {
@@ -222,13 +223,13 @@ class AdminService(BaseService):
         # 1. 查找邀请码
         invite_code = self.db.query(InviteCode).filter(InviteCode.id == invite_code_id).first()
         if not invite_code:
-            raise NotFoundServiceException(f"邀请码 {invite_code_id} 不存在", "INVITE_CODE_NOT_FOUND")
+            raise NotFoundServiceException(f"邀请码 {invite_code_id} 不存在", ErrorCodes.INVITE_CODE_NOT_FOUND)
         
         # 2. 检查是否已使用（已使用的不能删除）
         if invite_code.is_used:
             raise ConflictServiceException(
                 f"邀请码 {invite_code.code} 已被使用，无法删除",
-                "INVITE_CODE_ALREADY_USED"
+                ErrorCodes.INVITE_CODE_ALREADY_USED
             )
         
         # 3. 记录删除前的信息用于审计
@@ -327,13 +328,13 @@ class AdminService(BaseService):
         """获取审计日志"""
         # 1. 验证日期范围
         if start_date and end_date and start_date > end_date:
-            raise ValidationServiceException("开始时间不能晚于结束时间", "INVALID_DATE_RANGE")
+            raise ValidationServiceException("开始时间不能晚于结束时间", ErrorCodes.INVALID_DATE_RANGE)
         
         # 2. 验证时间范围不能过大（防止查询超时）
         if start_date and end_date:
             date_diff = end_date - start_date
             if date_diff.days > 365:  # 限制一年内
-                raise ValidationServiceException("查询时间范围不能超过365天", "DATE_RANGE_TOO_LARGE")
+                raise ValidationServiceException("查询时间范围不能超过365天", ErrorCodes.DATE_RANGE_TOO_LARGE)
         
         # 3. 构建查询（优化：使用joinedload避免N+1查询）
         query = (

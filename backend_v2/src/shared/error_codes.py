@@ -27,6 +27,13 @@ class ErrorCodes:
     INVALID_INVITE_CODE = "INVALID_INVITE_CODE"        # 邀请码无效
     INVITE_CODE_EXPIRED = "INVITE_CODE_EXPIRED"        # 邀请码过期
     REGISTRATION_DISABLED = "REGISTRATION_DISABLED"    # 注册功能已关闭
+    INVITE_CODE_NOT_FOUND = "INVITE_CODE_NOT_FOUND"    # 邀请码不存在
+    INVITE_CODE_CONFLICT = "INVITE_CODE_CONFLICT"      # 邀请码生成冲突
+    INVITE_CODE_ALREADY_USED = "INVITE_CODE_ALREADY_USED"  # 邀请码已被使用
+    USED_INVITE_CODE_READONLY = "USED_INVITE_CODE_READONLY"  # 已使用邀请码为只读
+    INVALID_EXPIRE_TIME = "INVALID_EXPIRE_TIME"        # 过期时间无效
+    INVALID_DATE_RANGE = "INVALID_DATE_RANGE"          # 日期范围无效
+    DATE_RANGE_TOO_LARGE = "DATE_RANGE_TOO_LARGE"      # 日期范围过大
     
     # === 课程管理相关 ===
     COURSE_NOT_FOUND = "COURSE_NOT_FOUND"              # 课程不存在
@@ -45,6 +52,28 @@ class ErrorCodes:
     # === AI相关 ===
     AI_MODEL_NOT_FOUND = "AI_MODEL_NOT_FOUND"          # AI模型不存在
     AI_CONFIG_NOT_FOUND = "AI_CONFIG_NOT_FOUND"        # AI配置不存在
+    
+    # === 存储相关错误码 ===
+    FOLDER_NOT_FOUND = "FOLDER_NOT_FOUND"              # 文件夹不存在
+    FOLDER_NAME_EXISTS = "FOLDER_NAME_EXISTS"          # 文件夹名称已存在
+    CANNOT_DELETE_DEFAULT_FOLDER = "CANNOT_DELETE_DEFAULT_FOLDER"  # 无法删除默认文件夹
+    FOLDER_NOT_EMPTY = "FOLDER_NOT_EMPTY"              # 文件夹不为空
+    
+    FILE_NOT_FOUND = "FILE_NOT_FOUND"                  # 文件不存在
+    FILE_MISSING = "FILE_MISSING"                      # 文件丢失
+    UPLOAD_ERROR = "UPLOAD_ERROR"                      # 上传错误
+    STORAGE_ERROR = "STORAGE_ERROR"                    # 存储错误
+    ACCESS_DENIED = "ACCESS_DENIED"                    # 访问被拒绝
+    
+    TEMP_FILE_NOT_FOUND = "TEMP_FILE_NOT_FOUND"        # 临时文件不存在
+    TEMP_FILE_EXPIRED = "TEMP_FILE_EXPIRED"            # 临时文件已过期
+    TEMP_FILE_MISSING = "TEMP_FILE_MISSING"            # 临时文件丢失
+    
+    GLOBAL_FILE_NOT_FOUND = "GLOBAL_FILE_NOT_FOUND"    # 全局文件不存在
+    ADMIN_REQUIRED = "ADMIN_REQUIRED"                  # 需要管理员权限
+    DATABASE_ERROR = "DATABASE_ERROR"                  # 数据库错误
+    DELETE_ERROR = "DELETE_ERROR"                      # 删除错误
+    QUERY_ERROR = "QUERY_ERROR"                        # 查询错误
     
     # === 系统相关 ===
     RATE_LIMIT_EXCEEDED = "RATE_LIMIT_EXCEEDED"        # 请求频率超限
@@ -83,6 +112,27 @@ class CourseErrorCodes:
     SEMESTER_NOT_FOUND = ErrorCodes.SEMESTER_NOT_FOUND
     SEMESTER_CODE_EXISTS = ErrorCodes.SEMESTER_CODE_EXISTS
     SEMESTER_HAS_COURSES = ErrorCodes.SEMESTER_HAS_COURSES
+
+
+class StorageErrorCodes:
+    """存储相关错误码"""
+    FOLDER_NOT_FOUND = ErrorCodes.FOLDER_NOT_FOUND
+    FOLDER_NAME_EXISTS = ErrorCodes.FOLDER_NAME_EXISTS
+    CANNOT_DELETE_DEFAULT_FOLDER = ErrorCodes.CANNOT_DELETE_DEFAULT_FOLDER
+    FOLDER_NOT_EMPTY = ErrorCodes.FOLDER_NOT_EMPTY
+    FILE_NOT_FOUND = ErrorCodes.FILE_NOT_FOUND
+    FILE_MISSING = ErrorCodes.FILE_MISSING
+    UPLOAD_ERROR = ErrorCodes.UPLOAD_ERROR
+    STORAGE_ERROR = ErrorCodes.STORAGE_ERROR
+    ACCESS_DENIED = ErrorCodes.ACCESS_DENIED
+    TEMP_FILE_NOT_FOUND = ErrorCodes.TEMP_FILE_NOT_FOUND
+    TEMP_FILE_EXPIRED = ErrorCodes.TEMP_FILE_EXPIRED
+    TEMP_FILE_MISSING = ErrorCodes.TEMP_FILE_MISSING
+    GLOBAL_FILE_NOT_FOUND = ErrorCodes.GLOBAL_FILE_NOT_FOUND
+    ADMIN_REQUIRED = ErrorCodes.ADMIN_REQUIRED
+    DATABASE_ERROR = ErrorCodes.DATABASE_ERROR
+    DELETE_ERROR = ErrorCodes.DELETE_ERROR
+    QUERY_ERROR = ErrorCodes.QUERY_ERROR
 
 
 class SystemErrorCodes:

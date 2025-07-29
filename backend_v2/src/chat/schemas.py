@@ -1,5 +1,5 @@
 """Chat模块Pydantic Schema定义"""
-from pydantic import BaseModel, ConfigDict, Field, validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from typing import Optional, List, Literal
 from datetime import datetime
 from decimal import Decimal
@@ -20,10 +20,11 @@ class ChatBase(BaseModel):
     )
     rag_enabled: bool = Field(True, description="是否启用RAG")
 
-    @validator('course_id')
-    def validate_course_chat(cls, v, values):
+    @field_validator('course_id')
+    @classmethod
+    def validate_course_chat(cls, v, info):
         """验证课程聊天必须有course_id"""
-        if values.get('chat_type') == 'course' and v is None:
+        if info.data.get('chat_type') == 'course' and v is None:
             raise ValueError('课程聊天必须指定course_id')
         return v
 
