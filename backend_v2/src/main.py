@@ -75,12 +75,12 @@ def register_routers(app: FastAPI) -> None:
     from src.chat.router import router as chat_router
     api_v1.include_router(chat_router, tags=["聊天管理/Chat"])
     
+    # AI 模块路由
+    from src.ai.router import router as ai_router
+    api_v1.include_router(ai_router, tags=["AI智能助手/AI"])
+    
     # 将统一的API v1路由器注册到应用
     app.include_router(api_v1)
-    
-    # TODO: AI 模块路由待开发
-    # from src.ai.router import router as ai_router
-    # api_v1.include_router(ai_router, tags=["AI"])
 
 
 # 创建应用实例

@@ -1,19 +1,22 @@
 """Storage模块Service层业务逻辑"""
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict, Any
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_, or_, desc
 from datetime import datetime, timedelta
 import os
 import hashlib
 from pathlib import Path
+from fastapi import UploadFile
 
 from src.shared.exceptions import (
     BaseServiceException, NotFoundServiceException, 
-    ConflictServiceException, ValidationServiceException, AccessDeniedServiceException
+    ConflictServiceException, ValidationServiceException, AccessDeniedServiceException,
+    handle_service_exceptions
 )
 from src.shared.base_service import BaseService
 from .models import PhysicalFile, Folder, File, DocumentChunk, FileShare, FileAccessLog, FileGroup, FileGroupMember, TemporaryFile
 from .schemas import CreateFolderRequest, UpdateFolderRequest, CreateFileShareRequest
+from .file_storage import get_file_storage
 
 
 class StorageServiceException(BaseServiceException):
@@ -297,7 +300,8 @@ class FileService(BaseService):
             self.db.rollback()
             raise StorageServiceException(f"文件上传失败: {str(e)}", "UPLOAD_ERROR")
     
-    def download_file(self, file_id: int, user_id: int, access_type: str = "download") -> Tuple[File, str]:
+    @handle_service_exceptions
+    def download_file(self, file_id: int, user_id: int, access_type: str = "download") -> Tuple[File, bytes]:
         """下载文件"""
         try:
             # 获取文件并验证权限
@@ -307,7 +311,7 @@ class FileService(BaseService):
                 .first()
             
             if not file_record:
-                raise StorageServiceException("文件不存在", "FILE_NOT_FOUND")
+                raise NotFoundServiceException("文件不存在", "FILE_NOT_FOUND")
             
             # 验证访问权限
             if file_record.scope == 'course':
@@ -319,12 +323,19 @@ class FileService(BaseService):
                 ).first()
                 
                 if not course:
-                    raise StorageServiceException("无权限访问该文件", "ACCESS_DENIED")
+                    raise AccessDeniedServiceException("无权限访问该文件", "ACCESS_DENIED")
             
             elif file_record.scope == 'temporary':
                 # 临时文件只能被创建者访问
                 if file_record.user_id != user_id:
-                    raise StorageServiceException("无权限访问该文件", "ACCESS_DENIED")
+                    raise AccessDeniedServiceException("无权限访问该文件", "ACCESS_DENIED")
+            
+            # 从存储中读取文件内容
+            file_storage = get_file_storage()
+            file_content = file_storage.read_file(file_record.physical_file.storage_path)
+            
+            if file_content is None:
+                raise NotFoundServiceException("文件不存在于存储中", "FILE_MISSING")
             
             # 记录访问日志
             access_log = FileAccessLog(
@@ -335,40 +346,59 @@ class FileService(BaseService):
             self.db.add(access_log)
             self.db.commit()
             
-            return file_record, file_record.physical_file.storage_path
+            return file_record, file_content
             
         except StorageServiceException:
             raise
         except Exception as e:
             raise StorageServiceException(f"文件下载失败: {str(e)}", "DATABASE_ERROR")
     
+    @handle_service_exceptions
     def delete_file(self, file_id: int, user_id: int) -> None:
         """删除文件"""
         try:
-            # 获取文件并验证权限
-            file_record = self.db.query(File).filter(File.id == file_id).first()
+            # 获取文件及其物理文件信息
+            file_record = self.db.query(File)\
+                .options(joinedload(File.physical_file))\
+                .filter(File.id == file_id)\
+                .first()
             
             if not file_record:
-                raise StorageServiceException("文件不存在", "FILE_NOT_FOUND")
+                raise NotFoundServiceException("文件不存在", "FILE_NOT_FOUND")
             
             # 验证权限：只能删除自己的文件或管理员
             from src.auth.models import User
             user = self.db.query(User).filter(User.id == user_id).first()
             
             if file_record.user_id != user_id and user.role != "admin":
-                raise StorageServiceException("无权限删除该文件", "ACCESS_DENIED")
+                raise AccessDeniedServiceException("无权限删除该文件", "ACCESS_DENIED")
+            
+            # 获取物理文件信息
+            physical_file = file_record.physical_file
             
             # 删除文件记录
             self.db.delete(file_record)
+            
+            # 减少物理文件引用计数
+            if physical_file:
+                physical_file.reference_count -= 1
+                
+                # 如果没有引用了，删除物理文件
+                if physical_file.reference_count <= 0:
+                    file_storage = get_file_storage()
+                    file_storage.delete_file(physical_file.storage_path)
+                    self.db.delete(physical_file)
+            
             self.db.commit()
             
-        except StorageServiceException:
+        except (NotFoundServiceException, AccessDeniedServiceException):
             self.db.rollback()
             raise
         except Exception as e:
             self.db.rollback()
             raise StorageServiceException(f"删除文件失败: {str(e)}", "DATABASE_ERROR")
     
+    @handle_service_exceptions
     def get_or_create_physical_file(self, file_content: bytes, file_hash: str, mime_type: str, file_size: int) -> PhysicalFile:
         """获取或创建物理文件"""
         try:
@@ -383,10 +413,23 @@ class FileService(BaseService):
                 self.db.commit()
                 return physical_file
             
-            # 创建新的物理文件
-            # 这里需要实际的文件存储逻辑，暂时用占位符
-            storage_path = f"files/{file_hash[:2]}/{file_hash}"
+            # 获取文件存储实例
+            file_storage = get_file_storage()
             
+            # 获取文件扩展名（如果有的话）
+            file_extension = ""
+            if mime_type.startswith("image/"):
+                ext_map = {"image/jpeg": ".jpg", "image/png": ".png", "image/gif": ".gif"}
+                file_extension = ext_map.get(mime_type, "")
+            elif mime_type == "application/pdf":
+                file_extension = ".pdf"
+            elif mime_type.startswith("text/"):
+                file_extension = ".txt"
+            
+            # 实际保存文件到存储路径
+            storage_path, _ = file_storage.save_file_by_hash(file_content, file_hash, file_extension)
+            
+            # 创建物理文件记录
             physical_file = PhysicalFile(
                 file_hash=file_hash,
                 file_size=file_size,
@@ -398,8 +441,6 @@ class FileService(BaseService):
             self.db.add(physical_file)
             self.db.commit()
             self.db.refresh(physical_file)
-            
-            # TODO: 实际保存文件到存储路径
             
             return physical_file
             
@@ -425,34 +466,40 @@ class TemporaryFileService(BaseService):
     def __init__(self, db: Session):
         super().__init__(db)
     
-    def upload_temporary_file(self, file_data, user_id: int, expiry_hours: int = 24, purpose: Optional[str] = None) -> TemporaryFile:
+    @handle_service_exceptions
+    def upload_temporary_file(self, file_data: UploadFile, user_id: int, expiry_hours: int = 24, purpose: Optional[str] = None) -> TemporaryFile:
         """上传临时文件"""
         try:
             # 计算过期时间
             expires_at = datetime.utcnow() + timedelta(hours=expiry_hours)
             
             # 读取文件内容
+            file_data.file.seek(0)
             file_content = file_data.file.read()
+            file_data.file.seek(0)
             
-            # 这里应该保存文件到临时存储位置
-            # 暂时用占位符路径
-            file_path = f"temp/{user_id}/{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{file_data.filename}"
+            # 获取文件存储实例并保存临时文件
+            file_storage = get_file_storage()
+            file_path, _ = file_storage.save_temporary_file(
+                file_content, 
+                user_id, 
+                file_data.filename or "unknown"
+            )
             
             # 创建临时文件记录
             temp_file = TemporaryFile(
-                filename=file_data.filename,
+                filename=file_data.filename or "unknown",
                 file_path=file_path,
                 file_size=len(file_content),
-                mime_type=file_data.content_type,
+                mime_type=file_data.content_type or "application/octet-stream",
                 user_id=user_id,
-                expires_at=expires_at
+                expires_at=expires_at,
+                purpose=purpose
             )
             
             self.db.add(temp_file)
             self.db.commit()
             self.db.refresh(temp_file)
-            
-            # TODO: 实际保存文件到临时存储位置
             
             return temp_file
             
@@ -460,7 +507,8 @@ class TemporaryFileService(BaseService):
             self.db.rollback()
             raise StorageServiceException(f"上传临时文件失败: {str(e)}", "UPLOAD_ERROR")
     
-    def download_temporary_file(self, file_id: int, user_id: int) -> Tuple[TemporaryFile, str]:
+    @handle_service_exceptions
+    def download_temporary_file(self, file_id: int, user_id: int) -> Tuple[TemporaryFile, bytes]:
         """下载临时文件"""
         try:
             # 获取临时文件
@@ -470,19 +518,27 @@ class TemporaryFileService(BaseService):
             ).first()
             
             if not temp_file:
-                raise StorageServiceException("临时文件不存在", "TEMP_FILE_NOT_FOUND")
+                raise NotFoundServiceException("临时文件不存在", "TEMP_FILE_NOT_FOUND")
             
             # 检查是否过期
             if temp_file.expires_at < datetime.utcnow():
-                raise StorageServiceException("临时文件已过期", "TEMP_FILE_EXPIRED")
+                raise ValidationServiceException("临时文件已过期", "TEMP_FILE_EXPIRED")
             
-            return temp_file, temp_file.file_path
+            # 从存储中读取文件内容
+            file_storage = get_file_storage()
+            file_content = file_storage.read_file(temp_file.file_path)
             
-        except StorageServiceException:
+            if file_content is None:
+                raise NotFoundServiceException("临时文件不存在于存储中", "TEMP_FILE_MISSING")
+            
+            return temp_file, file_content
+            
+        except (NotFoundServiceException, ValidationServiceException):
             raise
         except Exception as e:
             raise StorageServiceException(f"下载临时文件失败: {str(e)}", "DATABASE_ERROR")
     
+    @handle_service_exceptions
     def delete_temporary_file(self, file_id: int, user_id: int) -> None:
         """删除临时文件"""
         try:
@@ -492,15 +548,17 @@ class TemporaryFileService(BaseService):
             ).first()
             
             if not temp_file:
-                raise StorageServiceException("临时文件不存在", "TEMP_FILE_NOT_FOUND")
+                raise NotFoundServiceException("临时文件不存在", "TEMP_FILE_NOT_FOUND")
             
-            # 删除文件记录
+            # 删除实际文件
+            file_storage = get_file_storage()
+            file_storage.delete_file(temp_file.file_path)
+            
+            # 删除数据库记录
             self.db.delete(temp_file)
             self.db.commit()
             
-            # TODO: 删除实际文件
-            
-        except StorageServiceException:
+        except NotFoundServiceException:
             self.db.rollback()
             raise
         except Exception as e:

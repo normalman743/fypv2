@@ -264,15 +264,27 @@ class AdminService(BaseService):
         # 获取系统统计
         total_users = self.db.query(User).count()
         
-        # TODO: 等Storage模块实现后添加文件统计，目前返回占位数据
+        # 获取存储统计信息
         try:
-            # 尝试导入Storage模型进行统计
-            from src.storage.models import File
+            # 导入Storage模型进行统计
+            from src.storage.models import File, PhysicalFile
+            
+            # 统计文件数量
             total_files = self.db.query(File).count()
-            # 计算已使用存储空间（这里是示例计算）
-            storage_used_mb = 0.0  # TODO: 实现实际的存储空间计算
+            
+            # 计算实际使用的存储空间
+            # 基于PhysicalFile的去重存储计算实际占用空间
+            physical_files = self.db.query(PhysicalFile).all()
+            storage_used_bytes = sum(pf.file_size for pf in physical_files if pf.file_size)
+            storage_used_mb = round(storage_used_bytes / (1024 * 1024), 2)
+            
         except ImportError:
-            # Storage模块尚未实现，使用占位数据
+            # Storage模块未正确导入，使用占位数据
+            total_files = 0
+            storage_used_mb = 0.0
+        except Exception as e:
+            # 数据库查询出错，记录日志但不影响其他功能
+            self.logger.warning(f"Storage统计查询失败: {e}")
             total_files = 0
             storage_used_mb = 0.0
         
