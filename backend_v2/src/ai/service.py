@@ -2,7 +2,7 @@
 import os
 import time
 import json
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple, Union
 from datetime import datetime
 from decimal import Decimal
 from sqlalchemy.orm import Session
@@ -15,6 +15,7 @@ except ImportError:
     OPENAI_AVAILABLE = False
 
 from src.shared.exceptions import BaseServiceException
+from src.shared.base_service import BaseService
 from src.shared.config import settings
 from .models import AIModel, AIConversationConfig
 from .schemas import AIRequest, AIResponse, RAGSource
@@ -25,20 +26,24 @@ class AIServiceException(BaseServiceException):
     pass
 
 
-class AIService:
+class AIService(BaseService):
     """AI对话服务"""
     
     METHOD_EXCEPTIONS = {
-        "generate_response": [AIServiceException],
-        "get_available_models": [AIServiceException],
-        "get_conversation_configs": [AIServiceException],
+        "generate_response": {AIServiceException},
+        "get_available_models": {AIServiceException},
+        "get_conversation_configs": {AIServiceException},
     }
     
     def __init__(self, db: Session):
-        self.db = db
-        self.openai_client = None
+        super().__init__(db)
+        self.openai_client: Optional[OpenAI] = None
         
         # 初始化OpenAI客户端
+        self._initialize_openai_client()
+    
+    def _initialize_openai_client(self) -> None:
+        """初始化OpenAI客户端"""
         if OPENAI_AVAILABLE and settings.openai_api_key and settings.openai_api_key != "sk-test-key":
             try:
                 self.openai_client = OpenAI(api_key=settings.openai_api_key)
@@ -49,7 +54,7 @@ class AIService:
                 print(f"⚠️ OpenAI client initialization failed: {e}")
                 self.openai_client = None
     
-    def generate_response(self, request: AIRequest, conversation_history: List[Dict[str, str]] = None) -> AIResponse:
+    def generate_response(self, request: AIRequest, conversation_history: Optional[List[Dict[str, str]]] = None) -> AIResponse:
         """生成AI响应"""
         try:
             start_time = time.time()
@@ -155,7 +160,7 @@ class AIService:
             print(f"⚠️ RAG检索失败: {e}")
             return []
     
-    def _build_context(self, request: AIRequest, conversation_history: List[Dict[str, str]], 
+    def _build_context(self, request: AIRequest, conversation_history: Optional[List[Dict[str, str]]], 
                       rag_sources: List[RAGSource], config: AIConversationConfig) -> List[Dict[str, str]]:
         """构建对话上下文"""
         context = []
@@ -198,7 +203,7 @@ class AIService:
         return base_prompt
     
     def _call_ai_api(self, context: List[Dict[str, str]], ai_model: AIModel, 
-                     config: AIConversationConfig) -> tuple[str, Dict[str, int]]:
+                     config: AIConversationConfig) -> Tuple[str, Dict[str, int]]:
         """调用AI API"""
         if self.openai_client and ai_model.provider == "openai":
             try:
@@ -227,7 +232,7 @@ class AIService:
         # Mock响应（开发环境或API不可用时）
         return self._generate_mock_response(context, ai_model)
     
-    def _generate_mock_response(self, context: List[Dict[str, str]], ai_model: AIModel) -> tuple[str, Dict[str, int]]:
+    def _generate_mock_response(self, context: List[Dict[str, str]], ai_model: AIModel) -> Tuple[str, Dict[str, int]]:
         """生成Mock响应"""
         user_message = context[-1]["content"] if context else "Hello"
         

@@ -3,7 +3,15 @@ import os
 import time
 import json
 import uuid
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    try:
+        from langchain.schema import Document
+        from langchain_community.vectorstores import Chroma
+    except ImportError:
+        Document = Any
+        Chroma = Any
 from datetime import datetime
 from sqlalchemy.orm import Session
 
@@ -32,6 +40,7 @@ except ImportError:
 
 from .config import settings
 from .exceptions import BaseServiceException
+from .base_service import BaseService
 
 
 class VectorizationServiceException(BaseServiceException):
@@ -110,17 +119,17 @@ class RAGSource:
         self.course_id = course_id
 
 
-class VectorizationService:
+class VectorizationService(BaseService):
     """向量化服务 - 负责文档处理和向量检索"""
     
     METHOD_EXCEPTIONS = {
-        "process_file": [VectorizationServiceException],
-        "retrieve_context": [VectorizationServiceException],
-        "remove_file_chunks": [VectorizationServiceException],
-        "get_stats": [VectorizationServiceException],
+        "process_file": {VectorizationServiceException},
+        "retrieve_context": {VectorizationServiceException},
+        "remove_file_chunks": {VectorizationServiceException},
+        "get_stats": {VectorizationServiceException},
     }
     
-    def __init__(self, data_dir: str = None, db_session: Session = None):
+    def __init__(self, data_dir: Optional[str] = None, db_session: Optional[Session] = None):
         """
         初始化向量化服务
         
@@ -128,6 +137,12 @@ class VectorizationService:
             data_dir: ChromaDB数据存储目录
             db_session: 数据库会话（用于同步保存文档切片）
         """
+        # 初始化BaseService（如果有db_session）
+        if db_session:
+            super().__init__(db_session)
+        else:
+            self.db = None
+        
         if not LANGCHAIN_AVAILABLE:
             raise VectorizationServiceException("LangChain未安装，无法使用向量化服务", "DEPENDENCY_ERROR")
         
