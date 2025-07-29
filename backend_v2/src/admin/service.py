@@ -16,49 +16,56 @@ from src.auth.models import InviteCode, User
 
 # 导入请求/响应模型
 from .schemas import (
-    CreateInviteCodeRequest, UpdateInviteCodeRequest, AuditLogQuery
+    CreateInviteCodeRequest, UpdateInviteCodeRequest, AuditLogQuery,
+    CreateInviteCodeData, InviteCodeListData, GetInviteCodeData,
+    UpdateInviteCodeData, SystemConfigData, AuditLogsData,
+    InviteCodeData, AuditLogData, PaginationInfo
 )
 
-# 导入异常
+# 导入异常（已升级到新的Service异常体系）
 from src.shared.exceptions import (
-    BadRequestError, NotFoundError, ConflictError, ForbiddenError
+    NotFoundServiceException, ConflictServiceException, 
+    ValidationServiceException, AccessDeniedServiceException
 )
+
+# 导入BaseService
+from src.shared.base_service import BaseService
 
 # 导入配置
 from src.shared.config import settings
 
 
-class AdminService:
-    """管理员服务类 - 基于Auth模块模式实现"""
+class AdminService(BaseService):
+    """管理员服务类 - 继承BaseService，使用新的异常体系"""
     
-    # 声明每个方法可能抛出的异常
+    # 声明每个方法可能抛出的异常（升级到Service异常）
     METHOD_EXCEPTIONS = {
         # 邀请码管理
-        'create_invite_code': {BadRequestError, ConflictError},
+        'create_invite_code': {ValidationServiceException, ConflictServiceException},
         'get_invite_codes': set(),  # 无特定异常
-        'get_invite_code': {NotFoundError},
-        'update_invite_code': {NotFoundError, BadRequestError},
-        'delete_invite_code': {NotFoundError, ConflictError},  # 已使用的不能删除
+        'get_invite_code': {NotFoundServiceException},
+        'update_invite_code': {NotFoundServiceException, ValidationServiceException},
+        'delete_invite_code': {NotFoundServiceException, ConflictServiceException},  # 已使用的不能删除
         
         # 系统配置
         'get_system_config': set(),  # 只读，无异常
         
         # 审计日志
-        'get_audit_logs': {BadRequestError},  # 日期格式错误等
+        'get_audit_logs': {ValidationServiceException},  # 日期格式错误等
         'create_audit_log': set(),  # 内部使用，无异常
     }
     
     def __init__(self, db: Session):
-        self.db = db
+        super().__init__(db)
         self.logger = get_logger(__name__)
 
     # ===== 邀请码管理 =====
     
-    def create_invite_code(self, request: CreateInviteCodeRequest, created_by: int) -> Dict[str, Any]:
+    def create_invite_code(self, request: CreateInviteCodeRequest, created_by: int) -> CreateInviteCodeData:
         """创建邀请码"""
         # 1. 验证过期时间
         if request.expires_at and request.expires_at <= datetime.utcnow():
-            raise BadRequestError("过期时间不能早于当前时间", error_code="INVALID_EXPIRE_TIME")
+            raise ValidationServiceException("过期时间不能早于当前时间", "INVALID_EXPIRE_TIME")
         
         # 2. 生成唯一邀请码
         code = self._generate_unique_invite_code()
@@ -89,20 +96,18 @@ class AdminService:
                 }
             )
             
-            # 5. 重新查询获取关联信息
-            created_invite_code = self._get_invite_code_with_user_info(invite_code.id)
+            # 5. 重新查询获取关联信息并转换为数据模型
+            invite_code_orm = self._get_invite_code_with_user_info(invite_code.id)
+            invite_code_data = InviteCodeData.model_validate(invite_code_orm)
             
-            return {
-                "invite_code": created_invite_code,
-                "message": "邀请码创建成功"
-            }
+            return CreateInviteCodeData(invite_code=invite_code_data)
             
         except IntegrityError:
             self.db.rollback()
             # 理论上不会发生，因为我们生成唯一码
-            raise ConflictError("邀请码生成冲突，请重试", error_code="INVITE_CODE_CONFLICT")
+            raise ConflictServiceException("邀请码生成冲突，请重试", "INVITE_CODE_CONFLICT")
 
-    def get_invite_codes(self, skip: int = 0, limit: int = 100) -> Dict[str, Any]:
+    def get_invite_codes(self, skip: int = 0, limit: int = 100) -> InviteCodeListData:
         """获取邀请码列表"""
         # 查询总数
         total = self.db.query(InviteCode).count()
@@ -120,43 +125,44 @@ class AdminService:
             .all()
         )
         
-        # 直接返回ORM对象，让Pydantic处理序列化
-        return {
-            "invite_codes": invite_codes,
-            "total": total,
-            "pagination": {
-                "skip": skip,
-                "limit": limit,
-                "total": total,
-                "has_more": skip + limit < total
-            }
-        }
+        # 转换为数据模型
+        invite_code_data_list = [InviteCodeData.model_validate(code) for code in invite_codes]
+        pagination_info = PaginationInfo(
+            skip=skip,
+            limit=limit,
+            total=total,
+            has_more=skip + limit < total
+        )
+        
+        return InviteCodeListData(
+            invite_codes=invite_code_data_list,
+            total=total,
+            pagination=pagination_info
+        )
 
-    def get_invite_code(self, invite_code_id: int) -> Dict[str, Any]:
+    def get_invite_code(self, invite_code_id: int) -> GetInviteCodeData:
         """获取单个邀请码详情"""
         invite_code = self._get_invite_code_with_user_info(invite_code_id)
         if not invite_code:
-            raise NotFoundError(f"邀请码 {invite_code_id} 不存在", error_code="INVITE_CODE_NOT_FOUND")
+            raise NotFoundServiceException(f"邀请码 {invite_code_id} 不存在", "INVITE_CODE_NOT_FOUND")
         
-        return {
-            "invite_code": invite_code,
-            "message": None
-        }
+        invite_code_data = InviteCodeData.model_validate(invite_code)
+        return GetInviteCodeData(invite_code=invite_code_data)
 
-    def update_invite_code(self, invite_code_id: int, request: UpdateInviteCodeRequest, updated_by: int) -> Dict[str, Any]:
+    def update_invite_code(self, invite_code_id: int, request: UpdateInviteCodeRequest, updated_by: int) -> UpdateInviteCodeData:
         """更新邀请码"""        
         # 1. 查找邀请码
         invite_code = self.db.query(InviteCode).filter(InviteCode.id == invite_code_id).first()
         if not invite_code:
-            raise NotFoundError(f"邀请码 {invite_code_id} 不存在", error_code="INVITE_CODE_NOT_FOUND")
+            raise NotFoundServiceException(f"邀请码 {invite_code_id} 不存在", "INVITE_CODE_NOT_FOUND")
         
         # 2. 验证更新权限（已使用的邀请码某些字段不能修改）
         if invite_code.is_used and request.expires_at is not None:
-            raise BadRequestError("已使用的邀请码不能修改过期时间", error_code="USED_INVITE_CODE_READONLY")
+            raise ValidationServiceException("已使用的邀请码不能修改过期时间", "USED_INVITE_CODE_READONLY")
         
         # 3. 验证过期时间
         if request.expires_at and request.expires_at <= datetime.utcnow():
-            raise BadRequestError("过期时间不能早于当前时间", error_code="INVALID_EXPIRE_TIME")
+            raise ValidationServiceException("过期时间不能早于当前时间", "INVALID_EXPIRE_TIME")
         
         # 4. 记录更新前的状态用于审计
         old_data = {
@@ -210,13 +216,13 @@ class AdminService:
         # 1. 查找邀请码
         invite_code = self.db.query(InviteCode).filter(InviteCode.id == invite_code_id).first()
         if not invite_code:
-            raise NotFoundError(f"邀请码 {invite_code_id} 不存在", error_code="INVITE_CODE_NOT_FOUND")
+            raise NotFoundServiceException(f"邀请码 {invite_code_id} 不存在", "INVITE_CODE_NOT_FOUND")
         
         # 2. 检查是否已使用（已使用的不能删除）
         if invite_code.is_used:
-            raise ConflictError(
+            raise ConflictServiceException(
                 f"邀请码 {invite_code.code} 已被使用，无法删除",
-                error_code="INVITE_CODE_ALREADY_USED"
+                "INVITE_CODE_ALREADY_USED"
             )
         
         # 3. 记录删除前的信息用于审计
@@ -246,7 +252,7 @@ class AdminService:
 
     # ===== 系统配置 =====
     
-    def get_system_config(self) -> Dict[str, Any]:
+    def get_system_config(self) -> SystemConfigData:
         """获取系统配置 - 过滤敏感信息"""
         # 获取系统统计
         total_users = self.db.query(User).count()
@@ -291,17 +297,17 @@ class AdminService:
         end_date: Optional[datetime] = None,
         skip: int = 0, 
         limit: int = 100
-    ) -> Dict[str, Any]:
+    ) -> AuditLogsData:
         """获取审计日志"""
         # 1. 验证日期范围
         if start_date and end_date and start_date > end_date:
-            raise BadRequestError("开始时间不能晚于结束时间", error_code="INVALID_DATE_RANGE")
+            raise ValidationServiceException("开始时间不能晚于结束时间", "INVALID_DATE_RANGE")
         
         # 2. 验证时间范围不能过大（防止查询超时）
         if start_date and end_date:
             date_diff = end_date - start_date
             if date_diff.days > 365:  # 限制一年内
-                raise BadRequestError("查询时间范围不能超过365天", error_code="DATE_RANGE_TOO_LARGE")
+                raise ValidationServiceException("查询时间范围不能超过365天", "DATE_RANGE_TOO_LARGE")
         
         # 3. 构建查询（优化：使用joinedload避免N+1查询）
         query = (
