@@ -29,7 +29,7 @@ router = APIRouter(prefix="/auth")
     operation_id="register_user"
 ))
 @service_api_handler(AuthService, 'register')
-def register(user_data: UserRegister, db: DbDep):
+async def register(user_data: UserRegister, db: DbDep):
     """用户注册"""
     service = AuthService(db)
     result = service.register(user_data)
@@ -48,7 +48,7 @@ def register(user_data: UserRegister, db: DbDep):
     operation_id="login_user"
 ))
 @service_api_handler(AuthService, 'login')
-def login(user_data: UserLogin, db: DbDep):
+async def login(user_data: UserLogin, db: DbDep):
     """用户登录"""
     service = AuthService(db)
     result = service.login(user_data)
@@ -71,7 +71,7 @@ def login(user_data: UserLogin, db: DbDep):
     operation_id="get_current_user_profile"
 ))
 @service_api_handler(AuthService, 'get_user_profile')
-def get_me(current_user: UserDep, db: DbDep):
+async def get_me(current_user: UserDep, db: DbDep):
     """获取当前用户信息"""
     service = AuthService(db)
     result = service.get_user_profile(current_user.id)
@@ -90,7 +90,7 @@ def get_me(current_user: UserDep, db: DbDep):
     operation_id="update_current_user"
 ))
 @service_api_handler(AuthService, 'update_user')
-def update_me(
+async def update_me(
     user_data: UserUpdate,
     current_user: UserDep,
     db: DbDep
@@ -113,7 +113,7 @@ def update_me(
     operation_id="logout_user"
 ))
 @service_api_handler(AuthService, 'logout')
-def logout(current_user: UserDep, db: DbDep):
+async def logout(current_user: UserDep, db: DbDep):
     """用户登出"""
     service = AuthService(db)
     result = service.logout(current_user.id)

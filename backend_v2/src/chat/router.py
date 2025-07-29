@@ -29,7 +29,7 @@ message_router = APIRouter(tags=["消息管理/Message Management"])
     operation_id="get_user_chats"
 ))
 @service_api_handler(ChatService, 'get_user_chats')
-def get_chats(
+async def get_chats(
     current_user: UserDep,
     db: DbDep,
     chat_type: Optional[str] = Query(None, description="聊天类型过滤")
@@ -94,7 +94,7 @@ def get_chats(
     operation_id="create_chat"
 ))
 @service_api_handler(ChatService, 'create_chat')
-def create_chat(
+async def create_chat(
     chat_data: CreateChatRequest,
     current_user: UserDep,
     db: DbDep
@@ -116,7 +116,7 @@ def create_chat(
     operation_id="update_chat"
 ))
 @service_api_handler(ChatService, 'update_chat')
-def update_chat(
+async def update_chat(
     chat_data: UpdateChatRequest,
     current_user: UserDep,
     db: DbDep,
@@ -145,7 +145,7 @@ def update_chat(
     operation_id="delete_chat"
 ))
 @service_api_handler(ChatService, 'delete_chat')
-def delete_chat(
+async def delete_chat(
     current_user: UserDep,
     db: DbDep,
     chat_id: int = Path(..., description="Chat ID")
@@ -170,7 +170,7 @@ def delete_chat(
     operation_id="get_chat_messages"
 ))
 @service_api_handler(MessageService, 'get_chat_messages')
-def get_chat_messages(
+async def get_chat_messages(
     current_user: UserDep,
     db: DbDep,
     chat_id: int = Path(..., description="Chat ID"),
@@ -220,7 +220,7 @@ def get_chat_messages(
     operation_id="send_message"
 ))
 @service_api_handler(MessageService, 'send_message')
-def send_message(
+async def send_message(
     message_data: SendMessageRequest,
     current_user: UserDep,
     db: DbDep,
@@ -263,7 +263,7 @@ def send_message(
     operation_id="edit_message"
 ))
 @service_api_handler(MessageService, 'edit_message')
-def edit_message(
+async def edit_message(
     message_data: EditMessageRequest,
     current_user: UserDep,
     db: DbDep,
@@ -293,7 +293,7 @@ def edit_message(
     operation_id="delete_message"
 ))
 @service_api_handler(MessageService, 'delete_message')
-def delete_message(
+async def delete_message(
     current_user: UserDep,
     db: DbDep,
     message_id: int = Path(..., description="Message ID")

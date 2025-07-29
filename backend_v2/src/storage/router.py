@@ -30,7 +30,7 @@ file_router = APIRouter(tags=["文件管理/File Management"])
     operation_id="get_course_folders"
 ))
 @service_api_handler(FolderService, 'get_course_folders')
-def get_course_folders(
+async def get_course_folders(
     current_user: UserDep,
     db: DbDep,
     course_id: int = Path(..., description="Course ID")
@@ -68,7 +68,7 @@ def get_course_folders(
     operation_id="create_folder"
 ))
 @service_api_handler(FolderService, 'create_folder')
-def create_folder(
+async def create_folder(
     folder_data: CreateFolderRequest,
     current_user: UserDep,
     db: DbDep,
@@ -96,7 +96,7 @@ def create_folder(
     operation_id="update_folder"
 ))
 @service_api_handler(FolderService, 'update_folder')
-def update_folder(
+async def update_folder(
     folder_data: UpdateFolderRequest,
     current_user: UserDep,
     db: DbDep,
@@ -124,7 +124,7 @@ def update_folder(
     operation_id="delete_folder"
 ))
 @service_api_handler(FolderService, 'delete_folder')
-def delete_folder(
+async def delete_folder(
     current_user: UserDep,
     db: DbDep,
     folder_id: int = Path(..., description="Folder ID")
@@ -149,7 +149,7 @@ def delete_folder(
     operation_id="get_folder_files"
 ))
 @service_api_handler(FileService, 'get_folder_files')
-def get_folder_files(
+async def get_folder_files(
     current_user: UserDep,
     db: DbDep,
     folder_id: int = Path(..., description="Folder ID")
@@ -178,7 +178,7 @@ def get_folder_files(
     operation_id="upload_file"
 ))
 @service_api_handler(FileService, 'upload_file')
-def upload_file(
+async def upload_file(
     current_user: UserDep,
     db: DbDep,
     file: UploadFile = File(...),
@@ -205,7 +205,7 @@ def upload_file(
     operation_id="download_file"
 ))
 @service_api_handler(FileService, 'download_file')
-def download_file(
+async def download_file(
     current_user: UserDep,
     db: DbDep,
     file_id: int = Path(..., description="File ID")
@@ -229,7 +229,7 @@ def download_file(
     operation_id="delete_file"
 ))
 @service_api_handler(FileService, 'delete_file')
-def delete_file(
+async def delete_file(
     current_user: UserDep,
     db: DbDep,
     file_id: int = Path(..., description="File ID")
@@ -255,7 +255,7 @@ def delete_file(
     operation_id="upload_temporary_file"
 ))
 @service_api_handler(TemporaryFileService, 'upload_temporary_file')
-def upload_temporary_file(
+async def upload_temporary_file(
     current_user: UserDep,
     db: DbDep,
     file: UploadFile = File(...),
@@ -281,7 +281,7 @@ def upload_temporary_file(
     operation_id="download_temporary_file"
 ))
 @service_api_handler(TemporaryFileService, 'download_temporary_file')
-def download_temporary_file(
+async def download_temporary_file(
     current_user: UserDep,
     db: DbDep,
     file_id: int = Path(..., description="临时文件ID")
@@ -304,7 +304,7 @@ def download_temporary_file(
     operation_id="delete_temporary_file"
 ))
 @service_api_handler(TemporaryFileService, 'delete_temporary_file')
-def delete_temporary_file(
+async def delete_temporary_file(
     current_user: UserDep,
     db: DbDep,
     file_id: int = Path(..., description="临时文件ID")
@@ -328,7 +328,7 @@ def delete_temporary_file(
     description="上传全局文件（管理员专用）",
     operation_id="upload_global_file"
 )
-def upload_global_file(
+async def upload_global_file(
     admin_user: AdminUserDep,
     db: DbDep,
     file: UploadFile = File(...),
@@ -351,7 +351,7 @@ def upload_global_file(
     description="获取全局文件列表（管理员专用）",
     operation_id="get_global_files"
 )
-def get_global_files(
+async def get_global_files(
     admin_user: AdminUserDep,
     db: DbDep,
     skip: int = Query(0, ge=0, description="跳过记录数"),
@@ -379,7 +379,7 @@ def get_global_files(
     description="删除全局文件（管理员专用）",
     operation_id="delete_global_file"
 )
-def delete_global_file(
+async def delete_global_file(
     admin_user: AdminUserDep,
     db: DbDep,
     file_id: int = Path(..., description="文件ID")

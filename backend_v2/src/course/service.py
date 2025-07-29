@@ -25,6 +25,7 @@ from src.shared.exceptions import (
     BadRequestServiceException, NotFoundServiceException, 
     ConflictServiceException, AccessDeniedServiceException
 )
+from src.shared.error_codes import ErrorCodes
 
 
 class SemesterService(BaseService):
@@ -72,7 +73,7 @@ class SemesterService(BaseService):
             )
             
             if not semester:
-                raise NotFoundServiceException("学期不存在", error_code="SEMESTER_NOT_FOUND")
+                raise NotFoundServiceException("学期不存在", ErrorCodes.SEMESTER_NOT_FOUND)
             
             return {
                 "semester": semester,
@@ -94,7 +95,7 @@ class SemesterService(BaseService):
                 .first()
             )
             if existing:
-                raise ConflictServiceException(f"学期代码 '{request.code}' 已存在", error_code="SEMESTER_CODE_EXISTS")
+                raise ConflictServiceException(f"学期代码 '{request.code}' 已存在", ErrorCodes.SEMESTER_CODE_EXISTS)
             
             # 创建学期
             semester = Semester(
@@ -137,7 +138,7 @@ class SemesterService(BaseService):
                 .first()
             )
             if not semester:
-                raise NotFoundServiceException("学期不存在", error_code="SEMESTER_NOT_FOUND")
+                raise NotFoundServiceException("学期不存在", ErrorCodes.SEMESTER_NOT_FOUND)
             
             # 检查代码唯一性（如果要更新代码）
             if request.code and request.code.strip().upper() != semester.code:
@@ -150,7 +151,7 @@ class SemesterService(BaseService):
                     .first()
                 )
                 if existing:
-                    raise ConflictServiceException(f"学期代码 '{request.code}' 已存在", error_code="SEMESTER_CODE_EXISTS")
+                    raise ConflictServiceException(f"学期代码 '{request.code}' 已存在", ErrorCodes.SEMESTER_CODE_EXISTS)
             
             # 更新字段
             update_data = request.model_dump(exclude_unset=True)
@@ -198,7 +199,7 @@ class SemesterService(BaseService):
                 .first()
             )
             if not semester:
-                raise NotFoundServiceException("学期不存在", error_code="SEMESTER_NOT_FOUND")
+                raise NotFoundServiceException("学期不存在", ErrorCodes.SEMESTER_NOT_FOUND)
             
             # 检查是否有关联的课程
             course_count = (
@@ -209,7 +210,7 @@ class SemesterService(BaseService):
             if course_count > 0:
                 raise ConflictServiceException(
                     f"无法删除学期，有 {course_count} 门课程关联到此学期",
-                    error_code="SEMESTER_HAS_COURSES"
+                    ErrorCodes.SEMESTER_HAS_COURSES
                 )
             
             # 软删除
@@ -240,7 +241,7 @@ class SemesterService(BaseService):
                 .first()
             )
             if not semester:
-                raise NotFoundServiceException("学期不存在", error_code="SEMESTER_NOT_FOUND")
+                raise NotFoundServiceException("学期不存在", ErrorCodes.SEMESTER_NOT_FOUND)
             
             # 获取课程列表
             courses = (
@@ -313,11 +314,11 @@ class CourseService(BaseService):
             )
             
             if not course:
-                raise NotFoundServiceException("课程不存在", error_code="COURSE_NOT_FOUND")
+                raise NotFoundServiceException("课程不存在", ErrorCodes.COURSE_NOT_FOUND)
             
             # 权限检查
             if course.user_id != user_id:
-                raise AccessDeniedServiceException("无权访问此课程", error_code="COURSE_ACCESS_DENIED")
+                raise AccessDeniedServiceException("无权访问此课程", ErrorCodes.COURSE_ACCESS_DENIED)
             
             return {
                 "course": course,
@@ -340,7 +341,7 @@ class CourseService(BaseService):
                 .first()
             )
             if not semester:
-                raise BadRequestServiceException("学期不存在或已停用", error_code="SEMESTER_NOT_FOUND")
+                raise BadRequestServiceException("学期不存在或已停用", ErrorCodes.SEMESTER_NOT_FOUND)
             
             # 检查同一用户在同一学期内课程代码唯一性
             existing = (
@@ -355,7 +356,7 @@ class CourseService(BaseService):
             if existing:
                 raise ConflictServiceException(
                     f"课程代码 '{request.code}' 在此学期内已存在",
-                    error_code="COURSE_CODE_EXISTS"
+                    ErrorCodes.COURSE_CODE_EXISTS
                 )
             
             # 创建课程
@@ -402,11 +403,11 @@ class CourseService(BaseService):
             )
             
             if not course:
-                raise NotFoundServiceException("课程不存在", error_code="COURSE_NOT_FOUND")
+                raise NotFoundServiceException("课程不存在", ErrorCodes.COURSE_NOT_FOUND)
             
             # 权限检查
             if course.user_id != user_id:
-                raise AccessDeniedServiceException("无权修改此课程", error_code="COURSE_UPDATE_DENIED")
+                raise AccessDeniedServiceException("无权修改此课程", ErrorCodes.COURSE_UPDATE_DENIED)
             
             # 检查代码唯一性（如果要更新代码）
             if request.code and request.code.strip() != course.code:
@@ -423,7 +424,7 @@ class CourseService(BaseService):
                 if existing:
                     raise ConflictServiceException(
                         f"课程代码 '{request.code}' 在此学期内已存在",
-                        error_code="COURSE_CODE_EXISTS"
+                        ErrorCodes.COURSE_CODE_EXISTS
                     )
             
             # 更新字段
@@ -467,11 +468,11 @@ class CourseService(BaseService):
             )
             
             if not course:
-                raise NotFoundServiceException("课程不存在", error_code="COURSE_NOT_FOUND")
+                raise NotFoundServiceException("课程不存在", ErrorCodes.COURSE_NOT_FOUND)
             
             # 权限检查
             if course.user_id != user_id:
-                raise AccessDeniedServiceException("无权删除此课程", error_code="COURSE_DELETE_DENIED")
+                raise AccessDeniedServiceException("无权删除此课程", ErrorCodes.COURSE_DELETE_DENIED)
             
             # 物理删除（当文件/聊天模块实现后，需要检查关联数据）
             self.db.delete(course)

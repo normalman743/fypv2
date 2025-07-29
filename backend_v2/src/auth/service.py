@@ -18,6 +18,7 @@ from src.shared.exceptions import (
     AccessDeniedServiceException, UnauthorizedServiceException,
     NotFoundServiceException, ValidationServiceException
 )
+from src.shared.error_codes import ErrorCodes
 from src.shared.config import settings
 from src.shared.email import get_email_service
 from src.shared.base_service import BaseService
@@ -26,18 +27,18 @@ from src.shared.base_service import BaseService
 class AuthService(BaseService):
     """认证服务类 - 继承BaseService，改进数据库会话管理"""
     
-    # 声明每个方法可能抛出的异常（使用新的Service异常类）
+    # 声明每个方法可能抛出的异常（与实际代码保持一致）
     METHOD_EXCEPTIONS = {
-        'register': {ConflictServiceException, ValidationServiceException},
-        'login': {UnauthorizedServiceException, ValidationServiceException},
-        'get_user_profile': {UnauthorizedServiceException, NotFoundServiceException},
-        'update_user': {ValidationServiceException, UnauthorizedServiceException, NotFoundServiceException},
+        'register': {ConflictServiceException, AccessDeniedServiceException, BadRequestServiceException},
+        'login': {UnauthorizedServiceException, BadRequestServiceException},
+        'get_user_profile': {UnauthorizedServiceException},
+        'update_user': {BadRequestServiceException, ConflictServiceException},
         'logout': set(),
-        'verify_email': {ValidationServiceException, NotFoundServiceException},
-        'resend_verification': {ValidationServiceException},
-        'change_password': {ValidationServiceException, UnauthorizedServiceException},
-        'forgot_password': {ValidationServiceException, NotFoundServiceException},
-        'reset_password': {ValidationServiceException, UnauthorizedServiceException},
+        'verify_email': {BadRequestServiceException},
+        'resend_verification': {BadRequestServiceException},
+        'change_password': {BadRequestServiceException, UnauthorizedServiceException},
+        'forgot_password': {BadRequestServiceException},
+        'reset_password': {BadRequestServiceException},
     }
     
     def __init__(self, db: Session):
@@ -76,7 +77,7 @@ class AuthService(BaseService):
         # 1. 获取用户
         user = self._get_user_by_username_or_email(user_data.username)
         if not user:
-            raise UnauthorizedError("用户名或密码错误", error_code="INVALID_CREDENTIALS")
+            raise UnauthorizedServiceException("用户名或密码错误", ErrorCodes.INVALID_CREDENTIALS)
 
         # 2. 检查账户状态
         self._check_account_status(user)
@@ -84,7 +85,7 @@ class AuthService(BaseService):
         # 3. 验证密码
         if not self._verify_password(user_data.password, user.password_hash):
             self._handle_failed_login(user)
-            raise UnauthorizedError("用户名或密码错误", error_code="INVALID_CREDENTIALS")
+            raise UnauthorizedServiceException("用户名或密码错误", ErrorCodes.INVALID_CREDENTIALS)
 
         # 4. 登录成功处理
         self._handle_successful_login(user)
@@ -103,7 +104,7 @@ class AuthService(BaseService):
         """更新用户信息"""
         user = self.db.query(User).filter(User.id == user_id).first()
         if not user:
-            raise BadRequestServiceException("用户不存在", error_code="USER_NOT_FOUND")
+            raise BadRequestServiceException("用户不存在", ErrorCodes.USER_NOT_FOUND)
 
         # 检查用户名唯一性
         if user_data.username and user_data.username != user.username:
@@ -112,7 +113,7 @@ class AuthService(BaseService):
                 User.id != user_id
             ).first()
             if existing:
-                raise ConflictServiceException("用户名已存在", error_code="USERNAME_EXISTS")
+                raise ConflictServiceException("用户名已存在", ErrorCodes.USERNAME_EXISTS)
 
         # 更新字段
         update_data = user_data.model_dump(exclude_unset=True)
@@ -131,7 +132,7 @@ class AuthService(BaseService):
         """获取用户详细信息"""
         user = self.db.query(User).filter(User.id == user_id).first()
         if not user:
-            raise UnauthorizedError("用户不存在", error_code="USER_NOT_FOUND")
+            raise UnauthorizedServiceException("用户不存在", ErrorCodes.USER_NOT_FOUND)
         
         return {
             "user": user,
@@ -160,7 +161,7 @@ class AuthService(BaseService):
         ).first()
 
         if not verification:
-            raise BadRequestServiceException("验证码无效或已过期", error_code="INVALID_VERIFICATION_CODE")
+            raise BadRequestServiceException("验证码无效或已过期", ErrorCodes.INVALID_VERIFICATION_CODE)
 
         # 标记验证码为已使用
         verification.is_used = True
@@ -181,10 +182,10 @@ class AuthService(BaseService):
         """重新发送验证码"""
         user = self.db.query(User).filter(User.email == email).first()
         if not user:
-            raise BadRequestServiceException("邮箱不存在", error_code="EMAIL_NOT_FOUND")
+            raise BadRequestServiceException("邮箱不存在", ErrorCodes.EMAIL_NOT_FOUND)
 
         if user.email_verified:
-            raise BadRequestServiceException("邮箱已验证", error_code="EMAIL_ALREADY_VERIFIED")
+            raise BadRequestServiceException("邮箱已验证", ErrorCodes.EMAIL_ALREADY_VERIFIED)
 
         # 检查发送频率限制
         self._check_verification_rate_limit(email)
@@ -202,11 +203,11 @@ class AuthService(BaseService):
         """修改密码"""
         user = self.db.query(User).filter(User.id == user_id).first()
         if not user:
-            raise BadRequestServiceException("用户不存在", error_code="USER_NOT_FOUND")
+            raise BadRequestServiceException("用户不存在", ErrorCodes.USER_NOT_FOUND)
 
         # 验证旧密码
         if not self._verify_password(request.old_password, user.password_hash):
-            raise UnauthorizedError("当前密码错误", error_code="INVALID_PASSWORD")
+            raise UnauthorizedServiceException("当前密码错误", ErrorCodes.INVALID_PASSWORD)
 
         # 更新密码
         user.password_hash = self._get_password_hash(request.new_password)
@@ -252,7 +253,7 @@ class AuthService(BaseService):
         ).first()
 
         if not reset_record:
-            raise BadRequestServiceException("重置令牌无效或已过期", error_code="INVALID_RESET_TOKEN")
+            raise BadRequestServiceException("重置令牌无效或已过期", ErrorCodes.INVALID_RESET_TOKEN)
 
         # 更新密码
         user = reset_record.user
@@ -273,7 +274,7 @@ class AuthService(BaseService):
     def _check_registration_enabled(self):
         """检查注册是否启用"""
         if not settings.enable_registration:
-            raise AccessDeniedServiceException("注册功能已关闭", error_code="REGISTRATION_DISABLED")
+            raise AccessDeniedServiceException("注册功能已关闭", ErrorCodes.REGISTRATION_DISABLED)
 
     def _validate_user_uniqueness(self, username: str, email: str):
         """验证用户唯一性"""
@@ -283,9 +284,9 @@ class AuthService(BaseService):
         
         if existing_user:
             if existing_user.username == username:
-                raise ConflictServiceException("用户名已存在", error_code="USERNAME_EXISTS")
+                raise ConflictServiceException("用户名已存在", ErrorCodes.USERNAME_EXISTS)
             else:
-                raise ConflictServiceException("邮箱已注册", error_code="EMAIL_EXISTS")
+                raise ConflictServiceException("邮箱已注册", ErrorCodes.EMAIL_EXISTS)
 
     def _validate_email_domain(self, email: str):
         """验证邮箱域名"""
@@ -293,7 +294,7 @@ class AuthService(BaseService):
         if allowed_domains:
             domain = email.split('@')[1].lower()
             if domain not in allowed_domains:
-                raise BadRequestServiceException(f"不支持的邮箱域名，请使用：{', '.join(allowed_domains)}", error_code="INVALID_EMAIL_DOMAIN")
+                raise BadRequestServiceException(f"不支持的邮箱域名，请使用：{', '.join(allowed_domains)}", ErrorCodes.INVALID_EMAIL_DOMAIN)
 
     def _validate_and_consume_invite_code(self, code: str) -> InviteCode:
         """验证并消费邀请码"""
@@ -304,10 +305,10 @@ class AuthService(BaseService):
         ).first()
 
         if not invite_code:
-            raise BadRequestServiceException("邀请码无效或已使用", error_code="INVALID_INVITE_CODE")
+            raise BadRequestServiceException("邀请码无效或已使用", ErrorCodes.INVALID_INVITE_CODE)
 
         if invite_code.expires_at and invite_code.expires_at < datetime.utcnow():
-            raise BadRequestServiceException("邀请码已过期", error_code="INVITE_CODE_EXPIRED")
+            raise BadRequestServiceException("邀请码已过期", ErrorCodes.INVITE_CODE_EXPIRED)
 
         return invite_code
 
@@ -334,7 +335,7 @@ class AuthService(BaseService):
 
         except IntegrityError:
             self.db.rollback()
-            raise ConflictServiceException("用户名或邮箱已存在", error_code="USER_ALREADY_EXISTS")
+            raise ConflictServiceException("用户名或邮箱已存在", ErrorCodes.USER_ALREADY_EXISTS)
 
     def _send_verification_email_if_enabled(self, user: User) -> str:
         """如果启用了邮箱验证，发送验证邮件"""
@@ -398,10 +399,10 @@ class AuthService(BaseService):
     def _check_account_status(self, user: User):
         """检查账户状态"""
         if not user.is_active:
-            raise UnauthorizedError("账户已被禁用", error_code="ACCOUNT_DISABLED")
+            raise UnauthorizedServiceException("账户已被禁用", ErrorCodes.ACCOUNT_DISABLED)
         
         if user.locked_until and user.locked_until > datetime.utcnow():
-            raise UnauthorizedError("账户暂时锁定，请稍后再试", error_code="ACCOUNT_LOCKED")
+            raise UnauthorizedServiceException("账户暂时锁定，请稍后再试", ErrorCodes.ACCOUNT_LOCKED)
 
     def _handle_failed_login(self, user: User):
         """处理登录失败"""
@@ -429,7 +430,7 @@ class AuthService(BaseService):
         ).count()
         
         if recent_count >= 1:
-            raise BadRequestServiceException("发送过于频繁，请稍后再试", error_code="RATE_LIMIT_EXCEEDED")
+            raise BadRequestServiceException("发送过于频繁，请稍后再试", ErrorCodes.RATE_LIMIT_EXCEEDED)
 
     def _check_password_reset_rate_limit(self, user_id: int):
         """检查密码重置发送频率限制"""
@@ -440,7 +441,7 @@ class AuthService(BaseService):
         ).count()
         
         if recent_count >= 3:
-            raise BadRequestServiceException("密码重置请求过于频繁，请稍后再试", error_code="RATE_LIMIT_EXCEEDED")
+            raise BadRequestServiceException("密码重置请求过于频繁，请稍后再试", ErrorCodes.RATE_LIMIT_EXCEEDED)
 
     # ===== 密码和令牌相关方法 =====
     
