@@ -128,7 +128,8 @@ async def logout(current_user: UserDep, db: DbDep):
     AuthService, 'verify_email', UserProfileResponse,
     summary="验证邮箱",
     description="使用验证码验证用户邮箱地址",
-    operation_id="verify_user_email"
+    operation_id="verify_user_email",
+    include_in_schema=False  # 不在自动生成的文档中显示
 ))
 @service_api_handler(AuthService, 'verify_email')
 async def verify_email(
@@ -150,7 +151,8 @@ async def verify_email(
     AuthService, 'resend_verification', MessageResponse,
     summary="重发验证码",
     description="重新发送邮箱验证码",
-    operation_id="resend_verification_code"
+    operation_id="resend_verification_code",
+    include_in_schema=False  # 不在自动生成的文档中显示
 ))
 @service_api_handler(AuthService, 'resend_verification')
 async def resend_verification(
@@ -174,7 +176,8 @@ async def resend_verification(
     AuthService, 'change_password', MessageResponse,
     summary="修改密码",
     description="修改当前用户密码，需要提供当前密码验证",
-    operation_id="change_user_password"
+    operation_id="change_user_password",
+    include_in_schema=False  # 不在自动生成的文档中显示
 ))
 @service_api_handler(AuthService, 'change_password')
 async def change_password(
@@ -197,7 +200,8 @@ async def change_password(
     AuthService, 'forgot_password', MessageResponse,
     summary="忘记密码",
     description="发送密码重置邮件到用户注册邮箱",
-    operation_id="forgot_password"
+    operation_id="forgot_password",
+    include_in_schema=False  # 不在自动生成的文档中显示
 ))
 @service_api_handler(AuthService, 'forgot_password')
 async def forgot_password(
@@ -219,7 +223,8 @@ async def forgot_password(
     AuthService, 'reset_password', MessageResponse,
     summary="重置密码",
     description="使用重置令牌重置用户密码",
-    operation_id="reset_password"
+    operation_id="reset_password",
+    include_in_schema=False  # 不在自动生成的文档中显示
 ))
 @service_api_handler(AuthService, 'reset_password')
 async def reset_password(

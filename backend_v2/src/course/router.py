@@ -84,7 +84,8 @@ async def create_semester(
     SemesterService, 'get_semester', GetSemesterResponse,
     summary="获取学期详情",
     description="获取指定学期的详细信息",
-    operation_id="get_semester"
+    operation_id="get_semester",
+    include_in_schema=False  # 不在自动生成的文档中显示
 ))
 @service_api_handler(SemesterService, 'get_semester')
 async def get_semester(
@@ -161,7 +162,8 @@ async def delete_semester(
     SemesterService, 'get_semester_courses', SemesterCoursesResponse,
     summary="获取学期课程",
     description="获取指定学期下的所有课程",
-    operation_id="get_semester_courses"
+    operation_id="get_semester_courses",
+    include_in_schema=False  # 不在自动生成的文档中显示
 ))
 @service_api_handler(SemesterService, 'get_semester_courses')
 async def get_semester_courses(

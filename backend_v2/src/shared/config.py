@@ -44,6 +44,15 @@ class Settings(BaseSettings):
         "example.com,test.com",
         env="ALLOWED_EMAIL_DOMAINS"
     )
+    verification_code_expire_minutes: int = Field(10, env="VERIFICATION_CODE_EXPIRE_MINUTES")
+    resend_api_key: str = Field("", env="RESEND_API_KEY")
+    email_from_address: str = Field("noreply@example.com", env="EMAIL_FROM_ADDRESS")
+    
+    # AI配置
+    openai_api_key: str = Field("", env="OPENAI_API_KEY")
+    
+    # 向量化配置
+    vector_data_dir: str = Field("./data/chroma", env="VECTOR_DATA_DIR")
     
     @field_validator('environment')
     @classmethod

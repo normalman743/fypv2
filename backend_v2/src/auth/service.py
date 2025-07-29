@@ -17,6 +17,7 @@ from src.shared.exceptions import (
     BadRequestError, ConflictError, ForbiddenError, UnauthorizedError
 )
 from src.shared.config import settings
+from src.shared.email import get_email_service
 
 
 class AuthService:
@@ -39,6 +40,7 @@ class AuthService:
     
     def __init__(self, db: Session):
         self.db = db
+        self.email_service = get_email_service()
 
     # ===== 现有方法 =====
     
@@ -60,11 +62,11 @@ class AuthService:
         user = self._create_user(user_data, invite_code_obj)
 
         # 6. 发送验证邮件
-        self._send_verification_email_if_enabled(user)
+        message = self._send_verification_email_if_enabled(user)
 
         return {
             "user": user,
-            "message": "注册成功！验证邮件已发送，如果没有收到，请检查垃圾邮件或稍后再试。"
+            "message": message
         }
 
     def login(self, user_data: UserLogin) -> Dict[str, Any]:
@@ -186,10 +188,10 @@ class AuthService:
         self._check_verification_rate_limit(email)
 
         # 发送新的验证码
-        success = self._send_verification_email(user, "registration")
+        success = self._send_verification_email_with_service(user)
         
         return {
-            "message": f"验证码已发送至 {email}"
+            "message": f"验证码已发送至 {email}" if success else "发送验证码失败，请稍后重试"
         }
 
     # ===== 新增方法 =====
@@ -235,9 +237,9 @@ class AuthService:
         self.db.commit()
 
         # 发送重置邮件
-        self._send_password_reset_email(user, reset_token)
+        success = self._send_password_reset_email_with_service(user, reset_token)
 
-        return {"message": "重置邮件已发送，请查收"}
+        return {"message": "重置邮件已发送，请查收" if success else "发送重置邮件失败，请稍后重试"}
 
     def reset_password(self, request: ResetPasswordRequest) -> Dict[str, str]:
         """重置密码"""
@@ -332,46 +334,58 @@ class AuthService:
             self.db.rollback()
             raise ConflictError("用户名或邮箱已存在", error_code="USER_ALREADY_EXISTS")
 
-    def _send_verification_email_if_enabled(self, user: User):
+    def _send_verification_email_if_enabled(self, user: User) -> str:
         """如果启用了邮箱验证，发送验证邮件"""
         if settings.enable_email_verification:
-            self._send_verification_email(user, "registration")
+            success = self._send_verification_email_with_service(user)
+            return "验证邮件已发送，请查收您的邮箱" if success else "注册成功，但验证邮件发送失败"
+        return "恭喜你，注册成功！"
+            
 
-    def _send_verification_email(self, user: User, verification_type: str) -> bool:
-        """发送验证邮件"""
-        # 生成6位验证码
-        verification_code = ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(6))
-        
-        # 创建验证记录
-        verification = EmailVerification(
-            user_id=user.id,
-            email=user.email,
-            verification_code=verification_code,
-            verification_type=verification_type,
-            expires_at=datetime.utcnow() + timedelta(minutes=10)
-        )
-        self.db.add(verification)
-        self.db.commit()
+    def _send_verification_email_with_service(self, user: User) -> bool:
+        """使用邮件服务发送验证邮件"""
+        try:
+            # 检查发送频率
+            if not self.email_service.can_send_email(self.db, user.email, "verification"):
+                return False
+            
+            # 生成验证码
+            verification_code = self.email_service.generate_verification_code()
+            
+            # 创建验证记录
+            verification = EmailVerification(
+                user_id=user.id,
+                email=user.email,
+                verification_code=verification_code,
+                verification_type="registration",
+                expires_at=datetime.utcnow() + timedelta(minutes=settings.verification_code_expire_minutes)
+            )
+            self.db.add(verification)
+            self.db.commit()
+            
+            # 发送邮件
+            return self.email_service.send_verification_email(
+                user.email, 
+                user.username, 
+                verification_code
+            )
+            
+        except Exception as e:
+            print(f"⚠️ 发送验证邮件失败: {e}")
+            self.db.rollback()
+            return False
 
-        # 邮件发送逻辑 - 测试环境打印，生产环境应使用实际邮件服务
-        if settings.environment == "development":
-            print(f"验证码：{verification_code} (邮箱：{user.email})")
-        else:
-            # 生产环境应该调用实际的邮件服务
-            # 例如: EmailService.send_verification_email(user.email, verification_code)
-            pass
-        
-        return True
-
-    def _send_password_reset_email(self, user: User, reset_token: str):
-        """发送密码重置邮件"""
-        # 邮件发送逻辑 - 测试环境打印，生产环境应使用实际邮件服务
-        if settings.environment == "development":
-            print(f"重置令牌：{reset_token} (邮箱：{user.email})")
-        else:
-            # 生产环境应该调用实际的邮件服务
-            # 例如: EmailService.send_password_reset_email(user.email, reset_token)
-            pass
+    def _send_password_reset_email_with_service(self, user: User, reset_token: str) -> bool:
+        """使用邮件服务发送密码重置邮件"""
+        try:
+            return self.email_service.send_password_reset_email(
+                user.email,
+                user.username,
+                reset_token
+            )
+        except Exception as e:
+            print(f"⚠️ 发送密码重置邮件失败: {e}")
+            return False
 
     def _get_user_by_username_or_email(self, identifier: str) -> Optional[User]:
         """通过用户名或邮箱获取用户"""
