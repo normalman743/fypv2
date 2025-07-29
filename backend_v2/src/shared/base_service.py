@@ -1,12 +1,15 @@
 """共享的Service基类"""
-from typing import Dict, Set, Type, Optional, List, Any
+from typing import Dict, Set, Type, Optional, List, Any, Awaitable
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from abc import ABC
+import asyncio
 
 from .exceptions import BaseServiceException
+from .async_utils import AsyncServiceMixin
 
 
-class BaseService(ABC):
+class BaseService(ABC, AsyncServiceMixin):
     """Service基类，提供通用功能和异常声明"""
     
     # 子类需要声明的异常映射
@@ -61,6 +64,26 @@ class BaseService(ABC):
         except Exception as e:
             self.handle_database_error(operation, e)
             return False
+    
+    async def safe_commit_async(self, operation: str = "unknown") -> bool:
+        """安全的异步数据库提交
+        
+        Args:
+            operation: 操作名称，用于日志
+            
+        Returns:
+            是否提交成功
+        """
+        if isinstance(self.db, AsyncSession):
+            try:
+                await self.db.commit()
+                return True
+            except Exception as e:
+                self.handle_database_error(operation, e)
+                return False
+        else:
+            # 如果不是异步session，降级到同步提交
+            return self.safe_commit(operation)
     
     def safe_refresh(self, instance, operation: str = "unknown") -> bool:
         """安全的实例刷新

@@ -54,7 +54,7 @@ class AIService(BaseService):
                 print(f"⚠️ OpenAI client initialization failed: {e}")
                 self.openai_client = None
     
-    def generate_response(self, request: AIRequest, conversation_history: Optional[List[Dict[str, str]]] = None) -> AIResponse:
+    async def generate_response_async(self, request: AIRequest, conversation_history: Optional[List[Dict[str, str]]] = None) -> AIResponse:
         """生成AI响应"""
         try:
             start_time = time.time()
@@ -88,7 +88,7 @@ class AIService(BaseService):
             )
             
             # 5. 调用AI API
-            response_content, tokens_info = self._call_ai_api(
+            response_content, tokens_info = await self._call_ai_api_async(
                 context,
                 ai_model,
                 config
@@ -114,6 +114,28 @@ class AIService(BaseService):
             raise
         except Exception as e:
             raise AIServiceException(f"生成AI响应失败: {str(e)}", "GENERATION_ERROR")
+    
+    def generate_response(self, request: AIRequest, conversation_history: Optional[List[Dict[str, str]]] = None) -> AIResponse:
+        """生成AI响应（同步版本，兼容旧代码）"""
+        # 在新的事件循环中运行异步方法
+        loop = None
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            pass
+        
+        if loop is None:
+            # 没有运行中的事件循环，直接运行
+            return asyncio.run(self.generate_response_async(request, conversation_history))
+        else:
+            # 有运行中的事件循环，在线程池中运行
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(
+                    asyncio.run, 
+                    self.generate_response_async(request, conversation_history)
+                )
+                return future.result()
     
     def get_available_models(self) -> List[AIModel]:
         """获取可用的AI模型列表"""
@@ -202,17 +224,21 @@ class AIService(BaseService):
         
         return base_prompt
     
-    def _call_ai_api(self, context: List[Dict[str, str]], ai_model: AIModel, 
-                     config: AIConversationConfig) -> Tuple[str, Dict[str, int]]:
-        """调用AI API"""
+    async def _call_ai_api_async(self, context: List[Dict[str, str]], ai_model: AIModel, 
+                                config: AIConversationConfig) -> Tuple[str, Dict[str, int]]:
+        """异步调用AI API"""
         if self.openai_client and ai_model.provider == "openai":
             try:
-                response = self.openai_client.chat.completions.create(
-                    model=ai_model.model_id,
-                    messages=context,
-                    max_tokens=ai_model.max_tokens,
-                    temperature=float(ai_model.temperature),
-                    top_p=float(ai_model.top_p)
+                # 使用asyncio在线程池中运行同步的OpenAI调用
+                response = await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda: self.openai_client.chat.completions.create(
+                        model=ai_model.model_id,
+                        messages=context,
+                        max_tokens=ai_model.max_tokens,
+                        temperature=float(ai_model.temperature),
+                        top_p=float(ai_model.top_p)
+                    )
                 )
                 
                 content = response.choices[0].message.content

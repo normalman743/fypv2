@@ -1,6 +1,7 @@
 """共享邮件服务"""
 import secrets
 import string
+import asyncio
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 from sqlalchemy.orm import Session
@@ -212,9 +213,9 @@ class EmailService:
         except Exception as e:
             raise EmailServiceException(f"发送通知邮件失败: {str(e)}", "SEND_ERROR")
     
-    def _send_email(self, to_email: str, subject: str, 
-                   html_content: str = None, text_content: str = None) -> bool:
-        """发送邮件的通用方法"""
+    async def _send_email_async(self, to_email: str, subject: str, 
+                               html_content: str = None, text_content: str = None) -> bool:
+        """异步发送邮件的通用方法"""
         if self.resend_client and settings.email_from_address:
             try:
                 email_data = {
@@ -228,7 +229,11 @@ class EmailService:
                 if text_content:
                     email_data["text"] = text_content
                 
-                self.resend_client.Emails.send(email_data)
+                # 在线程池中运行同步的邮件发送
+                await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda: self.resend_client.Emails.send(email_data)
+                )
                 print(f"📧 Email sent successfully to {to_email}")
                 return True
                 
@@ -246,6 +251,29 @@ Content: {text_content or 'HTML content (see logs)'}
             if html_content:
                 print(f"HTML Content: {html_content[:200]}...")
             return True
+    
+    def _send_email(self, to_email: str, subject: str, 
+                   html_content: str = None, text_content: str = None) -> bool:
+        """发送邮件的同步版本（兼容旧代码）"""
+        # 在新的事件循环中运行异步方法
+        loop = None
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            pass
+        
+        if loop is None:
+            # 没有运行中的事件循环，直接运行
+            return asyncio.run(self._send_email_async(to_email, subject, html_content, text_content))
+        else:
+            # 有运行中的事件循环，在线程池中运行
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(
+                    asyncio.run, 
+                    self._send_email_async(to_email, subject, html_content, text_content)
+                )
+                return future.result()
 
 
 # 全局邮件服务实例
