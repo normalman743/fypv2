@@ -3,6 +3,7 @@ import asyncio
 import functools
 from typing import Callable, Any, Awaitable, Union
 from concurrent.futures import ThreadPoolExecutor
+from .logging import get_logger
 
 
 def async_to_sync(async_func: Callable[..., Awaitable[Any]]) -> Callable[..., Any]:
@@ -110,7 +111,8 @@ def async_retry(max_attempts: int = 3, delay: float = 1.0, backoff: float = 2.0)
                     if attempt == max_attempts - 1:
                         break
                     
-                    print(f"⚠️ Attempt {attempt + 1} failed: {e}, retrying in {current_delay}s...")
+                    logger = get_logger('async_retry')
+                    logger.warning(f"Attempt {attempt + 1} failed: {e}, retrying in {current_delay}s...")
                     await asyncio.sleep(current_delay)
                     current_delay *= backoff
             

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from .config import settings
 from .exceptions import BaseServiceException
 from .error_codes import ErrorCodes
+from .logging import get_logger
 
 
 class EmailServiceException(BaseServiceException):
@@ -126,6 +127,7 @@ class EmailService:
     
     def __init__(self):
         self.resend_client = None
+        self.logger = get_logger(self.__class__.__name__)
         
         # 初始化Resend客户端
         if settings.resend_api_key and settings.resend_api_key != "test-key":
@@ -133,11 +135,11 @@ class EmailService:
                 import resend
                 resend.api_key = settings.resend_api_key
                 self.resend_client = resend
-                print("📧 Resend email client initialized successfully")
+                self.logger.info("Resend email client initialized successfully")
             except ImportError:
-                print("⚠️ Resend library not installed, using development mode")
+                self.logger.warning("Resend library not installed, using development mode")
             except Exception as e:
-                print(f"⚠️ Resend client initialization failed: {e}")
+                self.logger.warning(f"Resend client initialization failed: {e}")
     
     def generate_verification_code(self, length: int = 6) -> str:
         """生成验证码"""
@@ -235,22 +237,17 @@ class EmailService:
                     None,
                     lambda: self.resend_client.Emails.send(email_data)
                 )
-                print(f"📧 Email sent successfully to {to_email}")
+                self.logger.info(f"Email sent successfully to {to_email}")
                 return True
                 
             except Exception as e:
-                print(f"❌ Failed to send email via Resend: {e}")
+                self.logger.error(f"Failed to send email via Resend: {e}")
                 return False
         else:
             # 开发模式：打印邮件内容
-            print(f"""
-📧 Development Mode - Email Details:
-To: {to_email}
-Subject: {subject}
-Content: {text_content or 'HTML content (see logs)'}
-            """)
+            self.logger.info(f"Development Mode - Email Details: To: {to_email}, Subject: {subject}, Content: {text_content or 'HTML content (see logs)'}")
             if html_content:
-                print(f"HTML Content: {html_content[:200]}...")
+                self.logger.debug(f"HTML Content: {html_content[:200]}...")
             return True
     
     def _send_email(self, to_email: str, subject: str, 

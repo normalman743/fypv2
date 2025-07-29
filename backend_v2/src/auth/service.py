@@ -402,7 +402,7 @@ class AuthService(BaseService):
             )
             
         except Exception as e:
-            print(f"⚠️ 发送验证邮件失败: {e}")
+            self.logger.warning(f"发送验证邮件失败: {e}")
             self.db.rollback()
             return False
 
@@ -415,7 +415,7 @@ class AuthService(BaseService):
                 reset_token
             )
         except Exception as e:
-            print(f"⚠️ 发送密码重置邮件失败: {e}")
+            self.logger.warning(f"发送密码重置邮件失败: {e}")
             return False
 
     def _get_user_by_username_or_email(self, identifier: str) -> Optional[User]:

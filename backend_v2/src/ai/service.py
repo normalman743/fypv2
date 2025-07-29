@@ -57,9 +57,9 @@ class AIService(BaseService):
                 self.openai_client = OpenAI(api_key=settings.openai_api_key)
                 # 测试连接
                 self.openai_client.models.list()
-                print("🚀 OpenAI client initialized successfully")
+                self.logger.info("OpenAI client initialized successfully")
             except Exception as e:
-                print(f"⚠️ OpenAI client initialization failed: {e}")
+                self.logger.warning(f"OpenAI client initialization failed: {e}")
                 self.openai_client = None
     
     async def generate_response_async(self, request: AIRequest, conversation_history: Optional[List[Dict[str, str]]] = None) -> AIResponse:
@@ -187,7 +187,7 @@ class AIService(BaseService):
             return vectorization_service.retrieve_context(query, chat_type, course_id, limit)
             
         except Exception as e:
-            print(f"⚠️ RAG检索失败: {e}")
+            self.logger.warning(f"RAG检索失败: {e}")
             return []
     
     def _build_context(self, request: AIRequest, conversation_history: Optional[List[Dict[str, str]]], 
@@ -259,7 +259,7 @@ class AIService(BaseService):
                 return content, tokens_info
                 
             except Exception as e:
-                print(f"⚠️ OpenAI API调用失败: {e}")
+                self.logger.warning(f"OpenAI API调用失败: {e}")
                 # 降级到Mock响应
                 pass
         

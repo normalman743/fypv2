@@ -7,6 +7,7 @@ import asyncio
 
 from .exceptions import BaseServiceException
 from .async_utils import AsyncServiceMixin
+from .logging import get_logger
 
 
 class BaseService(ABC, AsyncServiceMixin):
@@ -22,11 +23,12 @@ class BaseService(ABC, AsyncServiceMixin):
             db: 数据库会话
         """
         self.db = db
+        self.logger = get_logger(self.__class__.__name__)
     
     def validate_method_exceptions(self) -> None:
         """验证子类是否正确声明了异常映射"""
         if not hasattr(self, 'METHOD_EXCEPTIONS') or not self.METHOD_EXCEPTIONS:
-            print(f"⚠️ Warning: {self.__class__.__name__} 没有声明 METHOD_EXCEPTIONS")
+            self.logger.warning(f"Warning: {self.__class__.__name__} 没有声明 METHOD_EXCEPTIONS")
     
     def get_method_exceptions(self, method_name: str) -> Set[Type[BaseServiceException]]:
         """获取指定方法可能抛出的异常类型
@@ -47,7 +49,7 @@ class BaseService(ABC, AsyncServiceMixin):
             error: 原始异常
         """
         self.db.rollback()
-        print(f"❌ Database error in {operation}: {error}")
+        self.logger.error(f"Database error in {operation}: {error}")
     
     def safe_commit(self, operation: str = "unknown") -> bool:
         """安全的数据库提交
@@ -99,7 +101,7 @@ class BaseService(ABC, AsyncServiceMixin):
             self.db.refresh(instance)
             return True
         except Exception as e:
-            print(f"⚠️ Failed to refresh instance in {operation}: {e}")
+            self.logger.warning(f"Failed to refresh instance in {operation}: {e}")
             return False
 
 
@@ -193,5 +195,5 @@ class ConversationHistoryMixin:
             return history
             
         except Exception as e:
-            print(f"⚠️ 获取对话历史失败: {e}")
+            self.logger.warning(f"获取对话历史失败: {e}")
             return []

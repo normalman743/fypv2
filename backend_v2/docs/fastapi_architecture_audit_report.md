@@ -1538,6 +1538,8 @@ async def register(user_data: UserRegister, db: DbDep):  # async但...
     service = AuthService(db)
     result = service.register(user_data)  # 调用sync方法
 ```
+**修复了** file和chat（message）的异步 其他的应该不影响
+
 
 **修复建议**: 统一使用async模式或明确同步模式
 
@@ -1552,6 +1554,8 @@ self.logger.error(f"获取学期列表失败: {e}")  # course/service.py:63
 ```
 
 **修复方案**: 统一使用结构化日志
+
+**已经没有print了
 
 #### 📋 Medium级别问题
 

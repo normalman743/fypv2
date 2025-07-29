@@ -15,6 +15,7 @@ if TYPE_CHECKING:
 from datetime import datetime
 from sqlalchemy.orm import Session
 from .error_codes import ErrorCodes
+from .logging import get_logger
 
 # LangChain imports
 try:
@@ -55,16 +56,17 @@ class OpenAIEmbeddingsWrapper:
     def __init__(self, model: str = "text-embedding-ada-002"):
         self.model = model
         self.client = None
+        self.logger = get_logger(self.__class__.__name__)
         
         if OPENAI_AVAILABLE and settings.openai_api_key and settings.openai_api_key != "sk-test-key":
             try:
                 self.client = OpenAI(api_key=settings.openai_api_key)
                 # 测试API连接
                 self.client.embeddings.create(model=self.model, input=["test"])
-                print("🚀 OpenAI Embeddings initialized successfully")
+                self.logger.info("OpenAI Embeddings initialized successfully")
             except Exception as e:
-                print(f"⚠️ OpenAI API initialization failed: {e}")
-                print("🔄 Falling back to Mock Embeddings")
+                self.logger.warning(f"OpenAI API initialization failed: {e}")
+                self.logger.info("Falling back to Mock Embeddings")
                 self.client = None
     
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
@@ -77,8 +79,8 @@ class OpenAIEmbeddingsWrapper:
                 )
                 return [embedding.embedding for embedding in response.data]
             except Exception as e:
-                print(f"⚠️ OpenAI API call failed: {e}")
-                print("🔄 Falling back to Mock Embeddings")
+                self.logger.warning(f"OpenAI API call failed: {e}")
+                self.logger.info("Falling back to Mock Embeddings")
         
         return self._mock_embeddings(texts)
     
@@ -92,8 +94,8 @@ class OpenAIEmbeddingsWrapper:
                 )
                 return response.data[0].embedding
             except Exception as e:
-                print(f"⚠️ OpenAI API call failed: {e}")
-                print("🔄 Falling back to Mock Embeddings")
+                self.logger.warning(f"OpenAI API call failed: {e}")
+                self.logger.info("Falling back to Mock Embeddings")
         
         return self._mock_embeddings([text])[0]
     
@@ -143,6 +145,7 @@ class VectorizationService(BaseService):
             super().__init__(db_session)
         else:
             self.db = None
+            self.logger = get_logger(self.__class__.__name__)
         
         if not LANGCHAIN_AVAILABLE:
             raise VectorizationServiceException("LangChain未安装，无法使用向量化服务", ErrorCodes.DEPENDENCY_ERROR)
@@ -175,7 +178,7 @@ class VectorizationService(BaseService):
         
         self.text_loader = TextLoader
         
-        print(f"📁 Vectorization Service initialized with data directory: {self.data_dir}")
+        self.logger.info(f"Vectorization Service initialized with data directory: {self.data_dir}")
     
     def process_file(self, file_obj, file_path: str) -> Dict[str, Any]:
         """
@@ -189,7 +192,7 @@ class VectorizationService(BaseService):
             处理结果信息
         """
         try:
-            print(f"🚀 Processing file: {file_obj.original_name} (ID: {file_obj.id})")
+            self.logger.info(f"Processing file: {file_obj.original_name} (ID: {file_obj.id})")
             start_time = time.time()
             
             # 1. 验证文件类型
@@ -200,24 +203,24 @@ class VectorizationService(BaseService):
             # 2. 选择加载器
             if file_ext in self.specialized_loaders:
                 loader_class = self.specialized_loaders[file_ext]
-                print(f"✅ Using specialized loader: {loader_class.__name__}")
+                self.logger.debug(f"Using specialized loader: {loader_class.__name__}")
             else:
                 loader_class = self.text_loader
-                print(f"✅ Using TextLoader")
+                self.logger.debug("Using TextLoader")
             
             # 3. 加载文档
-            print(f"📖 Loading document content...")
+            self.logger.debug("Loading document content...")
             loader = loader_class(file_path)
             documents = loader.load()
-            print(f"✅ Loaded {len(documents)} documents")
+            self.logger.debug(f"Loaded {len(documents)} documents")
             
             # 4. 分割文档
-            print(f"✂️ Splitting documents into chunks...")
+            self.logger.debug("Splitting documents into chunks...")
             chunks = self.text_splitter.split_documents(documents)
-            print(f"✅ Created {len(chunks)} chunks")
+            self.logger.debug(f"Created {len(chunks)} chunks")
             
             # 5. 添加元数据
-            print(f"🏷️ Adding metadata to chunks...")
+            self.logger.debug("Adding metadata to chunks...")
             for i, chunk in enumerate(chunks):
                 chunk.metadata.update({
                     "file_id": str(file_obj.id),
@@ -230,20 +233,20 @@ class VectorizationService(BaseService):
             
             # 6. 确定集合名称
             collection_name = self._get_collection_name(file_obj)
-            print(f"✅ Using collection: {collection_name}")
+            self.logger.info(f"✅ Using collection: {collection_name}")
             
             # 7. 存储到向量数据库
-            print(f"🧠 Creating embeddings and storing to vector database...")
+            self.logger.info(f"🧠 Creating embeddings and storing to vector database...")
             vectorstore = self._get_or_create_vectorstore(collection_name)
             vectorstore.add_documents(chunks)
-            print(f"✅ Stored in vector database")
+            self.logger.info(f"✅ Stored in vector database")
             
             # 8. 同步保存到关系数据库
             if self.db_session:
                 self._save_chunks_to_db(chunks, file_obj)
             
             processing_time = time.time() - start_time
-            print(f"✅ File processed: {len(chunks)} chunks, {processing_time:.2f}s")
+            self.logger.info(f"✅ File processed: {len(chunks)} chunks, {processing_time:.2f}s")
             
             return {
                 "file_id": file_obj.id,
@@ -273,7 +276,7 @@ class VectorizationService(BaseService):
             相关文档源列表
         """
         try:
-            print(f"🔍 Retrieving context for: '{query}' (type: {chat_type}, course: {course_id})")
+            self.logger.info(f"🔍 Retrieving context for: '{query}' (type: {chat_type}, course: {course_id})")
             
             results = []
             
@@ -312,7 +315,7 @@ class VectorizationService(BaseService):
                 )
                 rag_sources.append(rag_source)
             
-            print(f"📊 Retrieved {len(rag_sources)} relevant sources")
+            self.logger.info(f"📊 Retrieved {len(rag_sources)} relevant sources")
             return rag_sources
             
         except Exception as e:
@@ -321,7 +324,7 @@ class VectorizationService(BaseService):
     def remove_file_chunks(self, file_id: int) -> None:
         """删除指定文件的所有chunks"""
         try:
-            print(f"🗑️ Removing chunks for file {file_id}")
+            self.logger.info(f"🗑️ Removing chunks for file {file_id}")
             
             # 1. 从关系数据库删除
             if self.db_session:
@@ -330,7 +333,7 @@ class VectorizationService(BaseService):
                     DocumentChunk.file_id == file_id
                 ).delete()
                 self.db_session.commit()
-                print(f"✅ Deleted {deleted_count} chunks from database")
+                self.logger.info(f"✅ Deleted {deleted_count} chunks from database")
             
             # 2. 从向量数据库删除
             removed_count = 0
@@ -348,12 +351,12 @@ class VectorizationService(BaseService):
                     if ids_to_delete:
                         collection.delete(ids=ids_to_delete)
                         removed_count += len(ids_to_delete)
-                        print(f"✅ Deleted {len(ids_to_delete)} chunks from collection '{collection_name}'")
+                        self.logger.info(f"✅ Deleted {len(ids_to_delete)} chunks from collection '{collection_name}'")
                         
                 except Exception as e:
-                    print(f"⚠️ Failed to delete from collection '{collection_name}': {e}")
+                    self.logger.error(f"⚠️ Failed to delete from collection '{collection_name}': {e}")
             
-            print(f"✅ Removed {removed_count} chunks from vector databases")
+            self.logger.info(f"✅ Removed {removed_count} chunks from vector databases")
             
         except Exception as e:
             if self.db_session:
@@ -423,7 +426,7 @@ class VectorizationService(BaseService):
                 )
                 return self.vectorstores[collection_name]
             except Exception as e:
-                print(f"⚠️ Failed to load collection {collection_name}: {e}")
+                self.logger.error(f"⚠️ Failed to load collection {collection_name}: {e}")
         
         return None
     
@@ -438,10 +441,10 @@ class VectorizationService(BaseService):
             ).count()
             
             if existing_chunks > 0:
-                print(f"⚠️ File {file_obj.id} already has {existing_chunks} chunks, skipping")
+                self.logger.info(f"⚠️ File {file_obj.id} already has {existing_chunks} chunks, skipping")
                 return
             
-            print(f"💾 Saving {len(chunks)} chunks to database")
+            self.logger.info(f"💾 Saving {len(chunks)} chunks to database")
             
             for i, chunk in enumerate(chunks):
                 chunk_record = DocumentChunk(
@@ -454,10 +457,10 @@ class VectorizationService(BaseService):
                 self.db_session.add(chunk_record)
             
             self.db_session.commit()
-            print(f"✅ Successfully saved {len(chunks)} chunks to database")
+            self.logger.info(f"✅ Successfully saved {len(chunks)} chunks to database")
             
         except Exception as e:
-            print(f"❌ Failed to save chunks to database: {e}")
+            self.logger.error(f"❌ Failed to save chunks to database: {e}")
             self.db_session.rollback()
 
 

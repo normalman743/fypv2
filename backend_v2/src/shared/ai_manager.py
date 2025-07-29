@@ -6,6 +6,7 @@ from decimal import Decimal
 from src.ai.service import AIService
 from src.ai.schemas import AIRequest
 from .base_service import AIResponseMixin, ConversationHistoryMixin
+from .logging import get_logger
 
 
 class AIManager(AIResponseMixin, ConversationHistoryMixin):
@@ -19,6 +20,7 @@ class AIManager(AIResponseMixin, ConversationHistoryMixin):
         """
         self.db = db
         self.ai_service = AIService(db)
+        self.logger = get_logger(self.__class__.__name__)
     
     def generate_ai_response(
         self, 
@@ -74,7 +76,7 @@ class AIManager(AIResponseMixin, ConversationHistoryMixin):
             
         except Exception as e:
             # 降级到简单回复
-            print(f"⚠️ AI服务调用失败，使用降级回复: {e}")
+            self.logger.warning(f"AI服务调用失败，使用降级回复: {e}")
             return self._generate_fallback_response(message, "AI服务调用失败")
     
     def generate_initial_response(
