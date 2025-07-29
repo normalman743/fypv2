@@ -59,6 +59,99 @@ class ChatService(BaseService):
         except Exception as e:
             raise BadRequestServiceException(f"获取聊天列表失败: {str(e)}", ErrorCodes.DATABASE_ERROR)
     
+    async def create_chat_async(self, chat_data: CreateChatRequest, user_id: int) -> Dict[str, Any]:
+        """异步创建聊天并发送首条消息"""
+        try:
+            # 验证课程权限（如果是课程聊天）
+            if chat_data.chat_type == 'course' and chat_data.course_id:
+                from src.course.models import Course
+                course = self.db.query(Course).filter(
+                    Course.id == chat_data.course_id,
+                    or_(Course.user_id == user_id, Course.user.has(role="admin"))
+                ).first()
+                
+                if not course:
+                    raise NotFoundServiceException("课程不存在或无权限访问", ErrorCodes.COURSE_NOT_FOUND)
+            
+            # 创建聊天
+            chat = Chat(
+                title=self._generate_chat_title(chat_data.first_message),
+                chat_type=chat_data.chat_type,
+                course_id=chat_data.course_id,
+                user_id=user_id,
+                custom_prompt=chat_data.custom_prompt,
+                ai_model=chat_data.ai_model,
+                search_enabled=chat_data.search_enabled,
+                context_mode=chat_data.context_mode,
+                rag_enabled=chat_data.rag_enabled
+            )
+            
+            self.db.add(chat)
+            self.db.flush()  # 获取chat_id但不提交
+            
+            # 创建用户消息
+            user_message = Message(
+                chat_id=chat.id,
+                content=chat_data.first_message,
+                role='user'
+            )
+            
+            self.db.add(user_message)
+            self.db.flush()
+            
+            # 异步生成AI回复
+            import asyncio
+            loop = asyncio.get_event_loop()
+            ai_response = await loop.run_in_executor(
+                None,
+                self.ai_manager.generate_initial_response,
+                chat_data.first_message,
+                chat_data.ai_model,
+                chat_data.rag_enabled,
+                chat_data.context_mode,
+                chat_data.chat_type,
+                chat_data.course_id,
+                chat_data.file_ids,
+                chat_data.custom_prompt
+            )
+            
+            # 创建AI消息
+            ai_message = Message(
+                chat_id=chat.id,
+                content=ai_response.get("content", "抱歉，AI服务暂时不可用"),
+                role='assistant',
+                tokens_used=ai_response.get("tokens_used"),
+                input_tokens=ai_response.get("input_tokens"),
+                output_tokens=ai_response.get("output_tokens"),
+                cost=ai_response.get("cost"),
+                response_time_ms=ai_response.get("response_time_ms"),
+                rag_sources=ai_response.get("rag_sources", []),
+                context_size=ai_response.get("context_size")
+            )
+            
+            self.db.add(ai_message)
+            
+            # 更新聊天的最后更新时间
+            chat.updated_at = datetime.utcnow()
+            
+            # 提交事务
+            if not self.safe_commit("创建聊天"):
+                raise BadRequestServiceException("创建聊天失败", ErrorCodes.COMMIT_ERROR)
+            
+            self.db.refresh(chat)
+            
+            return {
+                "chat": chat,
+                "user_message": user_message,
+                "ai_message": ai_message,
+                "ai_response": ai_response
+            }
+            
+        except (NotFoundServiceException, ValidationServiceException):
+            raise
+        except Exception as e:
+            raise BadRequestServiceException(f"创建聊天失败: {str(e)}", ErrorCodes.CREATE_ERROR)
+    
     def create_chat(self, chat_data: CreateChatRequest, user_id: int) -> Dict[str, Any]:
         """创建聊天并发送首条消息"""
         try:
@@ -295,6 +388,88 @@ class MessageService(BaseService):
             raise
         except Exception as e:
             raise BadRequestServiceException(f"获取消息列表失败: {str(e)}", ErrorCodes.DATABASE_ERROR)
+    
+    async def send_message_async(self, chat_id: int, message_data: SendMessageRequest, user_id: int) -> Dict[str, Any]:
+        """异步发送消息并获取AI回复"""
+        try:
+            # 验证聊天权限
+            chat = self.db.query(Chat).filter(
+                Chat.id == chat_id,
+                Chat.user_id == user_id
+            ).first()
+            
+            if not chat:
+                raise NotFoundServiceException("聊天不存在或无权限访问", "ErrorCodes.CHAT_NOT_FOUND")
+            
+            # 创建用户消息
+            user_message = Message(
+                chat_id=chat_id,
+                content=message_data.content,
+                role='user'
+            )
+            
+            self.db.add(user_message)
+            self.db.flush()
+            
+            # 处理文件引用
+            if message_data.file_ids:
+                for file_id in message_data.file_ids:
+                    file_ref = MessageFileReference(
+                        message_id=user_message.id,
+                        file_id=file_id
+                    )
+                    self.db.add(file_ref)
+            
+            # 异步生成AI回复
+            import asyncio
+            loop = asyncio.get_event_loop()
+            ai_response = await loop.run_in_executor(
+                None,
+                self.ai_manager.generate_followup_response,
+                chat_id,
+                message_data.content,
+                chat.ai_model,
+                chat.rag_enabled,
+                chat.context_mode,
+                chat.chat_type,
+                chat.course_id,
+                message_data.file_ids,
+                chat.custom_prompt
+            )
+            
+            # 创建AI消息
+            ai_message = Message(
+                chat_id=chat_id,
+                content=ai_response.get("content", "抱歉，AI服务暂时不可用"),
+                role='assistant',
+                tokens_used=ai_response.get("tokens_used"),
+                input_tokens=ai_response.get("input_tokens"),
+                output_tokens=ai_response.get("output_tokens"),
+                cost=ai_response.get("cost"),
+                response_time_ms=ai_response.get("response_time_ms"),
+                rag_sources=ai_response.get("rag_sources", []),
+                context_size=ai_response.get("context_size")
+            )
+            
+            self.db.add(ai_message)
+            
+            # 更新聊天的最后更新时间
+            chat.updated_at = datetime.utcnow()
+            
+            # 提交事务
+            if not self.safe_commit("发送消息"):
+                raise BadRequestServiceException("发送消息失败", ErrorCodes.COMMIT_ERROR)
+            
+            return {
+                "user_message": user_message,
+                "ai_message": ai_message,
+                "ai_response": ai_response
+            }
+            
+        except (NotFoundServiceException, ValidationServiceException):
+            raise
+        except Exception as e:
+            raise BadRequestServiceException(f"发送消息失败: {str(e)}", ErrorCodes.SEND_ERROR)
     
     def send_message(self, chat_id: int, message_data: SendMessageRequest, user_id: int) -> Dict[str, Any]:
         """发送消息并获取AI回复"""

@@ -188,7 +188,7 @@ async def upload_file(
 ):
     """上传文件到指定文件夹"""
     service = FileService(db)
-    file_record = service.upload_file(file, course_id, folder_id, current_user.id, description)
+    file_record = await service.upload_file_async(file, course_id, folder_id, current_user.id, description)
     
     file_response = FileResponse.model_validate(file_record)
     
@@ -264,7 +264,7 @@ async def upload_temporary_file(
 ):
     """上传临时文件"""
     service = TemporaryFileService(db)
-    temp_file = service.upload_temporary_file(file, current_user.id, expiry_hours, purpose)
+    temp_file = await service.upload_temporary_file_async(file, current_user.id, expiry_hours, purpose)
     
     temp_file_response = TemporaryFileResponse.model_validate(temp_file)
     
@@ -336,7 +336,7 @@ async def upload_global_file(
 ):
     """上传全局文件（管理员专用）"""
     service = GlobalFileService(db)
-    file_record = service.upload_global_file(file, admin_user.id, description)
+    file_record = await service.upload_global_file_async(file, admin_user.id, description)
 
     file_response = FileResponse.model_validate(file_record)
     return UploadFileResponse(

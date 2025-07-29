@@ -101,7 +101,7 @@ async def create_chat(
 ):
     """创建聊天"""
     service = ChatService(db)
-    result = service.create_chat(chat_data, current_user.id)
+    result = await service.create_chat_async(chat_data, current_user.id)
     
     return CreateChatResponse(
         success=True,
@@ -228,7 +228,7 @@ async def send_message(
 ):
     """发送消息"""
     service = MessageService(db)
-    result = service.send_message(chat_id, message_data, current_user.id)
+    result = await service.send_message_async(chat_id, message_data, current_user.id)
     
     # 转换为响应格式
     user_message = ChatMessageResponse(

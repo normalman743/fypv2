@@ -212,6 +212,7 @@ class FileService(BaseService):
     METHOD_EXCEPTIONS = {
         "get_folder_files": {NotFoundServiceException, AccessDeniedServiceException, ValidationServiceException},
         "upload_file": {NotFoundServiceException, AccessDeniedServiceException, ValidationServiceException},
+        "upload_file_async": {NotFoundServiceException, AccessDeniedServiceException, ValidationServiceException},
         "download_file": {NotFoundServiceException, AccessDeniedServiceException, ValidationServiceException},
         "delete_file": {NotFoundServiceException, AccessDeniedServiceException, ValidationServiceException},
         "get_or_create_physical_file": {ValidationServiceException},
@@ -248,6 +249,60 @@ class FileService(BaseService):
             raise
         except Exception as e:
             raise ValidationServiceException(f"获取文件列表失败: {str(e)}", ErrorCodes.DATABASE_ERROR)
+    
+    async def upload_file_async(self, file_data, course_id: int, folder_id: int, user_id: int, description: Optional[str] = None) -> File:
+        """异步上传文件"""
+        try:
+            # 验证权限
+            folder = self.db.query(Folder)\
+                .join(Folder.course)\
+                .filter(
+                    Folder.id == folder_id,
+                    Folder.course_id == course_id,
+                    or_(Course.user_id == user_id, Course.user.has(role="admin"))
+                ).first()
+            
+            if not folder:
+                raise NotFoundServiceException("文件夹不存在或无权限访问", ErrorCodes.FOLDER_NOT_FOUND)
+            
+            # 异步读取文件内容
+            import asyncio
+            loop = asyncio.get_event_loop()
+            file_content = await loop.run_in_executor(None, file_data.file.read)
+            file_hash = self.calculate_file_hash(file_content)
+            
+            # 获取或创建物理文件
+            physical_file = self.get_or_create_physical_file(
+                file_content, file_hash, file_data.content_type, len(file_content)
+            )
+            
+            # 创建文件记录
+            file_record = File(
+                physical_file_id=physical_file.id,
+                original_name=file_data.filename,
+                file_type=Path(file_data.filename).suffix.lower().lstrip('.'),
+                description=description,
+                scope='course',
+                course_id=course_id,
+                folder_id=folder_id,
+                user_id=user_id,
+                file_size=len(file_content),
+                mime_type=file_data.content_type,
+                file_hash=file_hash
+            )
+            
+            self.db.add(file_record)
+            self.db.commit()
+            self.db.refresh(file_record)
+            
+            return file_record
+            
+        except (NotFoundServiceException, ConflictServiceException):
+            self.db.rollback()
+            raise
+        except Exception as e:
+            self.db.rollback()
+            raise ValidationServiceException(f"文件上传失败: {str(e)}", ErrorCodes.UPLOAD_ERROR)
     
     def upload_file(self, file_data, course_id: int, folder_id: int, user_id: int, description: Optional[str] = None) -> File:
         """上传文件"""
@@ -472,6 +527,49 @@ class TemporaryFileService(BaseService):
         super().__init__(db)
     
     @handle_service_exceptions
+    async def upload_temporary_file_async(self, file_data: UploadFile, user_id: int, expiry_hours: int = 24, purpose: Optional[str] = None) -> TemporaryFile:
+        """异步上传临时文件"""
+        try:
+            # 计算过期时间
+            expires_at = datetime.utcnow() + timedelta(hours=expiry_hours)
+            
+            # 异步读取文件内容
+            import asyncio
+            loop = asyncio.get_event_loop()
+            file_data.file.seek(0)
+            file_content = await loop.run_in_executor(None, file_data.file.read)
+            file_data.file.seek(0)
+            
+            # 获取文件存储实例并保存临时文件
+            file_storage = get_file_storage()
+            file_path, _ = file_storage.save_temporary_file(
+                file_content, 
+                user_id, 
+                file_data.filename or "unknown"
+            )
+            
+            # 创建临时文件记录
+            temp_file = TemporaryFile(
+                filename=file_data.filename or "unknown",
+                file_path=file_path,
+                file_size=len(file_content),
+                mime_type=file_data.content_type or "application/octet-stream",
+                user_id=user_id,
+                expires_at=expires_at,
+                purpose=purpose
+            )
+            
+            self.db.add(temp_file)
+            self.db.commit()
+            self.db.refresh(temp_file)
+            
+            return temp_file
+            
+        except Exception as e:
+            self.db.rollback()
+            raise ValidationServiceException(f"上传临时文件失败: {str(e)}", ErrorCodes.UPLOAD_ERROR)
+    
+    @handle_service_exceptions
     def upload_temporary_file(self, file_data: UploadFile, user_id: int, expiry_hours: int = 24, purpose: Optional[str] = None) -> TemporaryFile:
         """上传临时文件"""
         try:
@@ -631,6 +729,78 @@ class GlobalFileService(BaseService):
     def __init__(self, db: Session):
         super().__init__(db)
         self.file_storage = get_file_storage()
+    
+    async def upload_global_file_async(
+        self, 
+        file: UploadFile, 
+        admin_user_id: int,
+        description: Optional[str] = None
+    ) -> File:
+        """异步上传全局文件（管理员专用）"""
+        try:
+            # 验证管理员权限
+            from src.auth.models import User
+            admin = self.db.query(User).filter(
+                User.id == admin_user_id,
+                User.role == "admin"
+            ).first()
+            if not admin:
+                raise AccessDeniedServiceException("需要管理员权限", ErrorCodes.ADMIN_REQUIRED)
+
+            # 异步保存文件并获取哈希值
+            import asyncio
+            loop = asyncio.get_event_loop()
+            storage_path, file_content, file_hash = await loop.run_in_executor(
+                None, self.file_storage.save_upload_file, file
+            )
+
+            # 检查是否已存在相同哈希的物理文件
+            physical_file = self.db.query(PhysicalFile).filter(
+                PhysicalFile.file_hash == file_hash
+            ).first()
+
+            if not physical_file:
+                physical_file = PhysicalFile(
+                    file_hash=file_hash,
+                    file_size=len(file_content),
+                    mime_type=file.content_type or "application/octet-stream",
+                    storage_path=storage_path,
+                    reference_count=1
+                )
+                self.db.add(physical_file)
+                self.db.flush()
+            else:
+                physical_file.reference_count += 1
+
+            # 创建全局文件记录
+            global_file = File(
+                physical_file_id=physical_file.id,
+                original_name=file.filename,
+                file_type=self._determine_file_type(file.filename, file.content_type),
+                description=description,
+                scope='global',  # 关键：标记为全局文件
+                visibility='public',
+                course_id=None,
+                folder_id=None,
+                user_id=admin_user_id,
+                file_size=len(file_content),
+                mime_type=file.content_type,
+                file_hash=file_hash,
+                is_processed=False,
+                processing_status="pending"
+            )
+
+            self.db.add(global_file)
+            self.db.commit()
+            self.db.refresh(global_file)
+
+            return global_file
+
+        except (AccessDeniedServiceException, ValidationServiceException):
+            raise
+        except Exception as e:
+            self.db.rollback()
+            raise ValidationServiceException(f"上传全局文件失败: {str(e)}", ErrorCodes.UPLOAD_ERROR)
     
     def upload_global_file(
         self, 

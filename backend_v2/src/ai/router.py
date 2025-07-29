@@ -15,11 +15,11 @@ from src.shared.api_decorator import create_service_route_config, service_api_ha
 from src.shared.schemas import BaseResponse
 
 # 创建路由器
-router = APIRouter(prefix="/ai")
+router = APIRouter(prefix="/ai", include_in_schema=False, tags=["AI智能助手/AI"])
 
 
 # ===== AI对话接口 =====
-
+"""
 @router.post("/chat", **create_service_route_config(
     AIService, 'generate_response', BaseResponse[AIResponse],
     summary="AI对话生成",
@@ -32,7 +32,6 @@ async def ai_chat(
     current_user: UserDep,
     db: DbDep
 ):
-    """AI对话生成"""
     service = AIService(db)
     result = service.generate_response(request, current_user.id)
     
@@ -41,7 +40,7 @@ async def ai_chat(
         data=result,
         message="对话生成成功"
     )
-
+"""
 
 # ===== AI模型管理 =====
 
