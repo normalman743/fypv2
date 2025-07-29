@@ -54,6 +54,11 @@ class Settings(BaseSettings):
     # 向量化配置
     vector_data_dir: str = Field("./data/chroma", env="VECTOR_DATA_DIR")
     
+    # 文件存储配置
+    max_file_size_mb: int = Field(100, env="MAX_FILE_SIZE_MB", description="单个文件最大大小(MB)")
+    max_upload_files_per_user: int = Field(1000, env="MAX_UPLOAD_FILES_PER_USER", description="每用户最大上传文件数")
+    storage_data_dir: str = Field("./data/storage", env="STORAGE_DATA_DIR", description="文件存储目录")
+    
     @field_validator('environment')
     @classmethod
     def validate_environment(cls, v: str) -> str:

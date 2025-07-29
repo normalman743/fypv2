@@ -22,7 +22,8 @@ from .schemas import (
 # 导入异常（已升级到新的Service异常体系）
 from src.shared.exceptions import (
     NotFoundServiceException, ConflictServiceException, 
-    ValidationServiceException, AccessDeniedServiceException
+    ValidationServiceException, AccessDeniedServiceException,
+    handle_service_exceptions
 )
 
 # 导入BaseService
@@ -58,6 +59,7 @@ class AdminService(BaseService):
 
     # ===== 邀请码管理 =====
     
+    @handle_service_exceptions
     def create_invite_code(self, request: CreateInviteCodeRequest, created_by: int) -> Dict[str, Any]:
         """创建邀请码"""
         # 1. 验证过期时间
@@ -106,6 +108,7 @@ class AdminService(BaseService):
             # 理论上不会发生，因为我们生成唯一码
             raise ConflictServiceException("邀请码生成冲突，请重试", "INVITE_CODE_CONFLICT")
 
+    @handle_service_exceptions
     def get_invite_codes(self, skip: int = 0, limit: int = 100) -> Dict[str, Any]:
         """获取邀请码列表"""
         # 查询总数
@@ -138,6 +141,7 @@ class AdminService(BaseService):
             "pagination": pagination_info
         }
 
+    @handle_service_exceptions
     def get_invite_code(self, invite_code_id: int) -> Dict[str, Any]:
         """获取单个邀请码详情"""
         invite_code = self._get_invite_code_with_user_info(invite_code_id)
@@ -149,6 +153,7 @@ class AdminService(BaseService):
             "message": None
         }
 
+    @handle_service_exceptions
     def update_invite_code(self, invite_code_id: int, request: UpdateInviteCodeRequest, updated_by: int) -> Dict[str, Any]:
         """更新邀请码"""        
         # 1. 查找邀请码
@@ -211,6 +216,7 @@ class AdminService(BaseService):
             "message": "邀请码更新成功"
         }
 
+    @handle_service_exceptions
     def delete_invite_code(self, invite_code_id: int, deleted_by: int) -> Dict[str, Any]:
         """删除邀请码"""
         # 1. 查找邀请码
@@ -252,14 +258,23 @@ class AdminService(BaseService):
 
     # ===== 系统配置 =====
     
+    @handle_service_exceptions
     def get_system_config(self) -> Dict[str, Any]:
         """获取系统配置 - 过滤敏感信息"""
         # 获取系统统计
         total_users = self.db.query(User).count()
-        # TODO: 等Storage模块实现后添加文件统计
-        # total_files = self.db.query(File).count()
-        total_files = 0
-        storage_used_mb = 0.0
+        
+        # TODO: 等Storage模块实现后添加文件统计，目前返回占位数据
+        try:
+            # 尝试导入Storage模型进行统计
+            from src.storage.models import File
+            total_files = self.db.query(File).count()
+            # 计算已使用存储空间（这里是示例计算）
+            storage_used_mb = 0.0  # TODO: 实现实际的存储空间计算
+        except ImportError:
+            # Storage模块尚未实现，使用占位数据
+            total_files = 0
+            storage_used_mb = 0.0
         
         return {
             "data": {
@@ -277,15 +292,16 @@ class AdminService(BaseService):
                 "total_files": total_files,
                 "storage_used_mb": storage_used_mb,
                 
-                # 限制配置（从配置中获取，如果没有则使用默认值）
-                "max_file_size_mb": 100,  # TODO: 从设置中获取
-                "max_upload_files_per_user": 1000,  # TODO: 从设置中获取
+                # 限制配置（从settings中获取）
+                "max_file_size_mb": settings.max_file_size_mb,
+                "max_upload_files_per_user": settings.max_upload_files_per_user,
             },
             "message": None
         }
 
     # ===== 审计日志 =====
     
+    @handle_service_exceptions
     def get_audit_logs(
         self, 
         user_id: Optional[int] = None,

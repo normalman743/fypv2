@@ -29,11 +29,25 @@ def get_current_user_id(
     try:
         token = credentials.credentials
         payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
-        user_id: int = payload.get("sub")
+        user_id = payload.get("sub")
+        
+        # 类型安全检查：确保user_id是有效的整数
         if user_id is None:
-            raise UnauthorizedServiceException("无效的认证令牌", "INVALID_TOKEN")
+            raise UnauthorizedServiceException("JWT令牌中缺少用户ID", "MISSING_USER_ID")
+        
+        if not isinstance(user_id, int):
+            try:
+                user_id = int(user_id)
+            except (ValueError, TypeError):
+                raise UnauthorizedServiceException("JWT令牌中的用户ID格式无效", "INVALID_USER_ID_FORMAT")
+        
+        if user_id <= 0:
+            raise UnauthorizedServiceException("JWT令牌中的用户ID无效", "INVALID_USER_ID")
+            
         return user_id
-    except JWTError:
+        
+    except JWTError as e:
+        logger.warning(f"JWT解析失败: {e}")
         raise UnauthorizedServiceException("无效的认证令牌", "INVALID_TOKEN")
 
 
