@@ -38,6 +38,14 @@ class ErrorCodes:
     SEMESTER_CODE_EXISTS = "SEMESTER_CODE_EXISTS"      # 学期代码已存在
     SEMESTER_HAS_COURSES = "SEMESTER_HAS_COURSES"      # 学期包含课程
     
+    # === 聊天相关 ===
+    CHAT_NOT_FOUND = "CHAT_NOT_FOUND"                  # 聊天不存在
+    MESSAGE_NOT_FOUND = "MESSAGE_NOT_FOUND"            # 消息不存在
+    
+    # === AI相关 ===
+    AI_MODEL_NOT_FOUND = "AI_MODEL_NOT_FOUND"          # AI模型不存在
+    AI_CONFIG_NOT_FOUND = "AI_CONFIG_NOT_FOUND"        # AI配置不存在
+    
     # === 系统相关 ===
     RATE_LIMIT_EXCEEDED = "RATE_LIMIT_EXCEEDED"        # 请求频率超限
     INVALID_RESET_TOKEN = "INVALID_RESET_TOKEN"        # 重置令牌无效

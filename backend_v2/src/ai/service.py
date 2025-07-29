@@ -15,25 +15,32 @@ try:
 except ImportError:
     OPENAI_AVAILABLE = False
 
-from src.shared.exceptions import BaseServiceException
+from src.shared.exceptions import (
+    BaseServiceException, NotFoundServiceException, 
+    AccessDeniedServiceException, ValidationServiceException,
+    BadRequestServiceException
+)
+from src.shared.error_codes import ErrorCodes
 from src.shared.base_service import BaseService
 from src.shared.config import settings
 from .models import AIModel, AIConversationConfig
 from .schemas import AIRequest, AIResponse, RAGSource
 
 
-class AIServiceException(BaseServiceException):
-    """AI服务异常基类"""
-    pass
+# 移除自定义异常类，统一使用标准Service异常
 
 
 class AIService(BaseService):
     """AI对话服务"""
     
     METHOD_EXCEPTIONS = {
-        "generate_response": {AIServiceException},
-        "get_available_models": {AIServiceException},
-        "get_conversation_configs": {AIServiceException},
+        "generate_response": {ValidationServiceException, BadRequestServiceException},
+        "get_available_models": set(),
+        "get_conversation_configs": set(),
+        "search_knowledge_base": {ValidationServiceException, AccessDeniedServiceException},
+        "vectorize_file": {NotFoundServiceException, AccessDeniedServiceException, ValidationServiceException},
+        "vectorize_course_files": {NotFoundServiceException, AccessDeniedServiceException},
+        "get_vectorization_status": {NotFoundServiceException, AccessDeniedServiceException},
     }
     
     def __init__(self, db: Session):
@@ -63,12 +70,12 @@ class AIService(BaseService):
             # 1. 获取AI模型配置
             ai_model = self._get_ai_model(request.ai_model)
             if not ai_model:
-                raise AIServiceException(f"AI模型 {request.ai_model} 不存在或未激活", "MODEL_NOT_FOUND")
+                raise BadRequestServiceException(f"AI模型 {request.ai_model} 不存在或未激活", "MODEL_NOT_FOUND")
             
             # 2. 获取对话配置
             config = self._get_conversation_config(request.context_mode)
             if not config:
-                raise AIServiceException(f"对话配置 {request.context_mode} 不存在", "CONFIG_NOT_FOUND")
+                raise BadRequestServiceException(f"对话配置 {request.context_mode} 不存在", "CONFIG_NOT_FOUND")
             
             # 3. RAG检索（如果启用）
             rag_sources = []
@@ -111,10 +118,10 @@ class AIService(BaseService):
                 context_size=len(context)
             )
             
-        except AIServiceException:
+        except BadRequestServiceException:
             raise
         except Exception as e:
-            raise AIServiceException(f"生成AI响应失败: {str(e)}", "GENERATION_ERROR")
+            raise BadRequestServiceException(f"生成AI响应失败: {str(e)}", "GENERATION_ERROR")
     
     def generate_response(self, request: AIRequest, conversation_history: Optional[List[Dict[str, str]]] = None) -> AIResponse:
         """生成AI响应（同步版本，兼容旧代码）"""
@@ -144,7 +151,7 @@ class AIService(BaseService):
             models = self.db.query(AIModel).filter(AIModel.is_active == True).all()
             return models
         except Exception as e:
-            raise AIServiceException(f"获取AI模型列表失败: {str(e)}", "DATABASE_ERROR")
+            raise BadRequestServiceException(f"获取AI模型列表失败: {str(e)}", "DATABASE_ERROR")
     
     def get_conversation_configs(self) -> List[AIConversationConfig]:
         """获取对话配置列表"""
@@ -154,7 +161,7 @@ class AIService(BaseService):
             ).all()
             return configs
         except Exception as e:
-            raise AIServiceException(f"获取对话配置失败: {str(e)}", "DATABASE_ERROR")
+            raise BadRequestServiceException(f"获取对话配置失败: {str(e)}", "DATABASE_ERROR")
     
     def _get_ai_model(self, model_name: str) -> Optional[AIModel]:
         """获取AI模型配置"""

@@ -5,28 +5,34 @@ from sqlalchemy import and_, or_, desc, func
 from datetime import datetime
 from decimal import Decimal
 
-from src.shared.exceptions import BaseServiceException
+from src.shared.exceptions import (
+    BaseServiceException, NotFoundServiceException, 
+    AccessDeniedServiceException, ValidationServiceException,
+    BadRequestServiceException
+)
+from src.shared.error_codes import ErrorCodes
 from src.shared.base_service import BaseService
 from src.shared.ai_manager import get_ai_manager
 from .models import Chat, Message, MessageFileReference, MessageRAGSource
 from .schemas import CreateChatRequest, UpdateChatRequest, SendMessageRequest, EditMessageRequest
 
 
-class ChatServiceException(BaseServiceException):
-    """Chat服务异常基类"""
-    pass
+# 移除自定义异常类，统一使用标准Service异常
 
 
 class ChatService(BaseService):
     """聊天管理服务"""
     
-    # 定义方法可能抛出的异常
+    # 定义方法可能抛出的异常（使用标准Service异常）
     METHOD_EXCEPTIONS = {
-        "get_user_chats": {ChatServiceException},
-        "create_chat": {ChatServiceException},
-        "update_chat": {ChatServiceException},
-        "delete_chat": {ChatServiceException},
-        "get_chat_stats": {ChatServiceException},
+        "get_user_chats": {AccessDeniedServiceException},
+        "create_chat": {ValidationServiceException, BadRequestServiceException},
+        "update_chat": {NotFoundServiceException, AccessDeniedServiceException, ValidationServiceException},
+        "delete_chat": {NotFoundServiceException, AccessDeniedServiceException},
+        "get_chat_messages": {NotFoundServiceException, AccessDeniedServiceException},
+        "send_message": {NotFoundServiceException, AccessDeniedServiceException, ValidationServiceException},
+        "edit_message": {NotFoundServiceException, AccessDeniedServiceException, ValidationServiceException},
+        "delete_message": {NotFoundServiceException, AccessDeniedServiceException},
     }
     
     def __init__(self, db: Session):
@@ -51,7 +57,7 @@ class ChatService(BaseService):
             return chats
             
         except Exception as e:
-            raise ChatServiceException(f"获取聊天列表失败: {str(e)}", "DATABASE_ERROR")
+            raise BadRequestServiceException(f"获取聊天列表失败: {str(e)}", "DATABASE_ERROR")
     
     def create_chat(self, chat_data: CreateChatRequest, user_id: int) -> Dict[str, Any]:
         """创建聊天并发送首条消息"""
@@ -65,7 +71,7 @@ class ChatService(BaseService):
                 ).first()
                 
                 if not course:
-                    raise ChatServiceException("课程不存在或无权限访问", "COURSE_NOT_FOUND")
+                    raise NotFoundServiceException("课程不存在或无权限访问", ErrorCodes.COURSE_NOT_FOUND)
             
             # 创建聊天
             chat = Chat(
@@ -134,7 +140,7 @@ class ChatService(BaseService):
             self.db.add(ai_message)
             
             if not self.safe_commit("创建聊天"):
-                raise ChatServiceException("创建聊天失败", "COMMIT_ERROR")
+                raise BadRequestServiceException("创建聊天失败", "COMMIT_ERROR")
             
             # 刷新获取完整数据
             self.safe_refresh(chat, "创建聊天")
@@ -162,12 +168,12 @@ class ChatService(BaseService):
                 }
             }
             
-        except ChatServiceException:
-            self.handle_database_error("创建聊天", ChatServiceException("业务错误"))
+        except BadRequestServiceException:
+            self.handle_database_error("创建聊天", BadRequestServiceException("业务错误"))
             raise
         except Exception as e:
             self.handle_database_error("创建聊天", e)
-            raise ChatServiceException(f"创建聊天失败: {str(e)}", "CREATE_ERROR")
+            raise BadRequestServiceException(f"创建聊天失败: {str(e)}", "CREATE_ERROR")
     
     def update_chat(self, chat_id: int, chat_data: UpdateChatRequest, user_id: int) -> Chat:
         """更新聊天信息"""
@@ -179,7 +185,7 @@ class ChatService(BaseService):
             ).first()
             
             if not chat:
-                raise ChatServiceException("聊天不存在或无权限访问", "CHAT_NOT_FOUND")
+                raise NotFoundServiceException("聊天不存在或无权限访问", "ErrorCodes.CHAT_NOT_FOUND")
             
             # 更新字段
             if chat_data.title is not None:
@@ -192,17 +198,17 @@ class ChatService(BaseService):
                 chat.rag_enabled = chat_data.rag_enabled
             
             if not self.safe_commit("更新聊天"):
-                raise ChatServiceException("更新聊天失败", "COMMIT_ERROR")
+                raise BadRequestServiceException("更新聊天失败", "COMMIT_ERROR")
             self.safe_refresh(chat, "更新聊天")
             
             return chat
             
-        except ChatServiceException:
-            self.handle_database_error("更新聊天", ChatServiceException("业务错误"))
+        except BadRequestServiceException:
+            self.handle_database_error("更新聊天", BadRequestServiceException("业务错误"))
             raise
         except Exception as e:
             self.handle_database_error("更新聊天", e)
-            raise ChatServiceException(f"更新聊天失败: {str(e)}", "UPDATE_ERROR")
+            raise BadRequestServiceException(f"更新聊天失败: {str(e)}", "UPDATE_ERROR")
     
     def delete_chat(self, chat_id: int, user_id: int) -> None:
         """删除聊天"""
@@ -214,19 +220,19 @@ class ChatService(BaseService):
             ).first()
             
             if not chat:
-                raise ChatServiceException("聊天不存在或无权限访问", "CHAT_NOT_FOUND")
+                raise NotFoundServiceException("聊天不存在或无权限访问", "ErrorCodes.CHAT_NOT_FOUND")
             
             # 删除聊天（级联删除消息）
             self.db.delete(chat)
             if not self.safe_commit("删除聊天"):
-                raise ChatServiceException("删除聊天失败", "COMMIT_ERROR")
+                raise BadRequestServiceException("删除聊天失败", "COMMIT_ERROR")
             
-        except ChatServiceException:
-            self.handle_database_error("删除聊天", ChatServiceException("业务错误"))
+        except BadRequestServiceException:
+            self.handle_database_error("删除聊天", BadRequestServiceException("业务错误"))
             raise
         except Exception as e:
             self.handle_database_error("删除聊天", e)
-            raise ChatServiceException(f"删除聊天失败: {str(e)}", "DELETE_ERROR")
+            raise BadRequestServiceException(f"删除聊天失败: {str(e)}", "DELETE_ERROR")
     
     def get_chat_stats(self, chat_id: int) -> dict:
         """获取聊天统计信息"""
@@ -238,7 +244,7 @@ class ChatService(BaseService):
             }
             
         except Exception as e:
-            raise ChatServiceException(f"获取聊天统计失败: {str(e)}", "DATABASE_ERROR")
+            raise BadRequestServiceException(f"获取聊天统计失败: {str(e)}", "DATABASE_ERROR")
     
     def _generate_chat_title(self, first_message: str) -> str:
         """根据首条消息生成聊天标题"""
@@ -253,10 +259,10 @@ class MessageService(BaseService):
     """消息管理服务"""
     
     METHOD_EXCEPTIONS = {
-        "get_chat_messages": {ChatServiceException},
-        "send_message": {ChatServiceException},
-        "edit_message": {ChatServiceException},
-        "delete_message": {ChatServiceException},
+        "get_chat_messages": {BadRequestServiceException},
+        "send_message": {BadRequestServiceException},
+        "edit_message": {BadRequestServiceException},
+        "delete_message": {BadRequestServiceException},
     }
     
     def __init__(self, db: Session):
@@ -273,7 +279,7 @@ class MessageService(BaseService):
             ).first()
             
             if not chat:
-                raise ChatServiceException("聊天不存在或无权限访问", "CHAT_NOT_FOUND")
+                raise NotFoundServiceException("聊天不存在或无权限访问", "ErrorCodes.CHAT_NOT_FOUND")
             
             # 获取消息列表
             messages = self.db.query(Message)\
@@ -285,10 +291,10 @@ class MessageService(BaseService):
                 
             return messages
             
-        except ChatServiceException:
+        except BadRequestServiceException:
             raise
         except Exception as e:
-            raise ChatServiceException(f"获取消息列表失败: {str(e)}", "DATABASE_ERROR")
+            raise BadRequestServiceException(f"获取消息列表失败: {str(e)}", "DATABASE_ERROR")
     
     def send_message(self, chat_id: int, message_data: SendMessageRequest, user_id: int) -> Dict[str, Any]:
         """发送消息并获取AI回复"""
@@ -300,7 +306,7 @@ class MessageService(BaseService):
             ).first()
             
             if not chat:
-                raise ChatServiceException("聊天不存在或无权限访问", "CHAT_NOT_FOUND")
+                raise NotFoundServiceException("聊天不存在或无权限访问", "ErrorCodes.CHAT_NOT_FOUND")
             
             # 创建用户消息
             user_message = Message(
@@ -357,7 +363,7 @@ class MessageService(BaseService):
             chat.updated_at = datetime.utcnow()
             
             if not self.safe_commit("发送消息"):
-                raise ChatServiceException("发送消息失败", "COMMIT_ERROR")
+                raise BadRequestServiceException("发送消息失败", "COMMIT_ERROR")
             
             # 刷新获取完整数据
             self.safe_refresh(user_message, "发送消息")
@@ -378,12 +384,12 @@ class MessageService(BaseService):
                 }
             }
             
-        except ChatServiceException:
-            self.handle_database_error("发送消息", ChatServiceException("业务错误"))
+        except BadRequestServiceException:
+            self.handle_database_error("发送消息", BadRequestServiceException("业务错误"))
             raise
         except Exception as e:
             self.handle_database_error("发送消息", e)
-            raise ChatServiceException(f"发送消息失败: {str(e)}", "SEND_ERROR")
+            raise BadRequestServiceException(f"发送消息失败: {str(e)}", "SEND_ERROR")
     
     def edit_message(self, message_id: int, message_data: EditMessageRequest, user_id: int) -> Message:
         """编辑消息"""
@@ -398,7 +404,7 @@ class MessageService(BaseService):
                 ).first()
             
             if not message:
-                raise ChatServiceException("消息不存在或无权限编辑", "MESSAGE_NOT_FOUND")
+                raise NotFoundServiceException("消息不存在或无权限编辑", "ErrorCodes.MESSAGE_NOT_FOUND")
             
             # 更新消息内容
             message.content = message_data.content
@@ -406,17 +412,17 @@ class MessageService(BaseService):
             message.edited_at = datetime.utcnow()
             
             if not self.safe_commit("编辑消息"):
-                raise ChatServiceException("编辑消息失败", "COMMIT_ERROR")
+                raise BadRequestServiceException("编辑消息失败", "COMMIT_ERROR")
             self.safe_refresh(message, "编辑消息")
             
             return message
             
-        except ChatServiceException:
-            self.handle_database_error("编辑消息", ChatServiceException("业务错误"))
+        except BadRequestServiceException:
+            self.handle_database_error("编辑消息", BadRequestServiceException("业务错误"))
             raise
         except Exception as e:
             self.handle_database_error("编辑消息", e)
-            raise ChatServiceException(f"编辑消息失败: {str(e)}", "EDIT_ERROR")
+            raise BadRequestServiceException(f"编辑消息失败: {str(e)}", "EDIT_ERROR")
     
     def delete_message(self, message_id: int, user_id: int) -> None:
         """删除消息"""
@@ -430,16 +436,16 @@ class MessageService(BaseService):
                 ).first()
             
             if not message:
-                raise ChatServiceException("消息不存在或无权限删除", "MESSAGE_NOT_FOUND")
+                raise NotFoundServiceException("消息不存在或无权限删除", "ErrorCodes.MESSAGE_NOT_FOUND")
             
             # 删除消息
             self.db.delete(message)
             if not self.safe_commit("删除消息"):
-                raise ChatServiceException("删除消息失败", "COMMIT_ERROR")
+                raise BadRequestServiceException("删除消息失败", "COMMIT_ERROR")
             
-        except ChatServiceException:
-            self.handle_database_error("删除消息", ChatServiceException("业务错误"))
+        except BadRequestServiceException:
+            self.handle_database_error("删除消息", BadRequestServiceException("业务错误"))
             raise
         except Exception as e:
             self.handle_database_error("删除消息", e)
-            raise ChatServiceException(f"删除消息失败: {str(e)}", "DELETE_ERROR")
+            raise BadRequestServiceException(f"删除消息失败: {str(e)}", "DELETE_ERROR")
