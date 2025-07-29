@@ -7,7 +7,7 @@ import logging
 
 from .database import get_db
 from .config import settings
-from .exceptions import UnauthorizedError, ForbiddenError
+from .exceptions import UnauthorizedServiceException, AccessDeniedServiceException
 from .types import UserProtocol
 
 logger = logging.getLogger(__name__)
@@ -31,10 +31,10 @@ def get_current_user_id(
         payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
         user_id: int = payload.get("sub")
         if user_id is None:
-            raise UnauthorizedError("无效的认证令牌")
+            raise UnauthorizedServiceException("无效的认证令牌", "INVALID_TOKEN")
         return user_id
     except JWTError:
-        raise UnauthorizedError("无效的认证令牌")
+        raise UnauthorizedServiceException("无效的认证令牌", "INVALID_TOKEN")
 
 
 def get_current_user(
@@ -47,7 +47,7 @@ def get_current_user(
     from src.auth.models import User
     user = db.query(User).filter(User.id == user_id).first()
     if user is None:
-        raise UnauthorizedError("用户不存在")
+        raise UnauthorizedServiceException("用户不存在", "USER_NOT_FOUND")
     return user
 
 
@@ -67,7 +67,7 @@ def get_optional_current_user(
         from src.auth.models import User
         user = db.query(User).filter(User.id == user_id).first()
         return user  # 如果用户不存在返回None，不抛出异常
-    except (UnauthorizedError, Exception):
+    except (UnauthorizedServiceException, Exception):
         return None
 
 
@@ -78,7 +78,7 @@ def require_admin(
     要求管理员权限
     """
     if current_user.role != "admin":
-        raise ForbiddenError("需要管理员权限")
+        raise AccessDeniedServiceException("需要管理员权限")
     return current_user
 
 

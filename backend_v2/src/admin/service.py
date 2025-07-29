@@ -14,12 +14,9 @@ from src.shared.logging import get_logger
 from .models import AuditLog
 from src.auth.models import InviteCode, User
 
-# 导入请求/响应模型
+# 导入请求模型
 from .schemas import (
-    CreateInviteCodeRequest, UpdateInviteCodeRequest, AuditLogQuery,
-    CreateInviteCodeData, InviteCodeListData, GetInviteCodeData,
-    UpdateInviteCodeData, SystemConfigData, AuditLogsData,
-    InviteCodeData, AuditLogData, PaginationInfo
+    CreateInviteCodeRequest, UpdateInviteCodeRequest, AuditLogQuery
 )
 
 # 导入异常（已升级到新的Service异常体系）
@@ -61,7 +58,7 @@ class AdminService(BaseService):
 
     # ===== 邀请码管理 =====
     
-    def create_invite_code(self, request: CreateInviteCodeRequest, created_by: int) -> CreateInviteCodeData:
+    def create_invite_code(self, request: CreateInviteCodeRequest, created_by: int) -> Dict[str, Any]:
         """创建邀请码"""
         # 1. 验证过期时间
         if request.expires_at and request.expires_at <= datetime.utcnow():
@@ -96,18 +93,20 @@ class AdminService(BaseService):
                 }
             )
             
-            # 5. 重新查询获取关联信息并转换为数据模型
+            # 5. 重新查询获取关联信息
             invite_code_orm = self._get_invite_code_with_user_info(invite_code.id)
-            invite_code_data = InviteCodeData.model_validate(invite_code_orm)
             
-            return CreateInviteCodeData(invite_code=invite_code_data)
+            return {
+                "invite_code": invite_code_orm,
+                "message": "邀请码创建成功"
+            }
             
         except IntegrityError:
             self.db.rollback()
             # 理论上不会发生，因为我们生成唯一码
             raise ConflictServiceException("邀请码生成冲突，请重试", "INVITE_CODE_CONFLICT")
 
-    def get_invite_codes(self, skip: int = 0, limit: int = 100) -> InviteCodeListData:
+    def get_invite_codes(self, skip: int = 0, limit: int = 100) -> Dict[str, Any]:
         """获取邀请码列表"""
         # 查询总数
         total = self.db.query(InviteCode).count()
@@ -125,31 +124,32 @@ class AdminService(BaseService):
             .all()
         )
         
-        # 转换为数据模型
-        invite_code_data_list = [InviteCodeData.model_validate(code) for code in invite_codes]
-        pagination_info = PaginationInfo(
-            skip=skip,
-            limit=limit,
-            total=total,
-            has_more=skip + limit < total
-        )
+        # 构建分页信息字典
+        pagination_info = {
+            "skip": skip,
+            "limit": limit,
+            "total": total,
+            "has_more": skip + limit < total
+        }
         
-        return InviteCodeListData(
-            invite_codes=invite_code_data_list,
-            total=total,
-            pagination=pagination_info
-        )
+        return {
+            "invite_codes": invite_codes,
+            "total": total,
+            "pagination": pagination_info
+        }
 
-    def get_invite_code(self, invite_code_id: int) -> GetInviteCodeData:
+    def get_invite_code(self, invite_code_id: int) -> Dict[str, Any]:
         """获取单个邀请码详情"""
         invite_code = self._get_invite_code_with_user_info(invite_code_id)
         if not invite_code:
             raise NotFoundServiceException(f"邀请码 {invite_code_id} 不存在", "INVITE_CODE_NOT_FOUND")
         
-        invite_code_data = InviteCodeData.model_validate(invite_code)
-        return GetInviteCodeData(invite_code=invite_code_data)
+        return {
+            "invite_code": invite_code,
+            "message": None
+        }
 
-    def update_invite_code(self, invite_code_id: int, request: UpdateInviteCodeRequest, updated_by: int) -> UpdateInviteCodeData:
+    def update_invite_code(self, invite_code_id: int, request: UpdateInviteCodeRequest, updated_by: int) -> Dict[str, Any]:
         """更新邀请码"""        
         # 1. 查找邀请码
         invite_code = self.db.query(InviteCode).filter(InviteCode.id == invite_code_id).first()
@@ -252,7 +252,7 @@ class AdminService(BaseService):
 
     # ===== 系统配置 =====
     
-    def get_system_config(self) -> SystemConfigData:
+    def get_system_config(self) -> Dict[str, Any]:
         """获取系统配置 - 过滤敏感信息"""
         # 获取系统统计
         total_users = self.db.query(User).count()
@@ -261,28 +261,26 @@ class AdminService(BaseService):
         total_files = 0
         storage_used_mb = 0.0
         
-        config_data = {
-            # 应用信息
-            "app_name": settings.app_name,
-            "app_version": settings.app_version,
-            "environment": settings.environment,
-            
-            # 功能开关
-            "registration_enabled": settings.enable_registration,
-            "email_verification_enabled": settings.enable_email_verification,
-            
-            # 系统统计
-            "total_users": total_users,
-            "total_files": total_files,
-            "storage_used_mb": storage_used_mb,
-            
-            # 限制配置（从配置中获取，如果没有则使用默认值）
-            "max_file_size_mb": 100,  # TODO: 从设置中获取
-            "max_upload_files_per_user": 1000,  # TODO: 从设置中获取
-        }
-        
         return {
-            "data": config_data,
+            "data": {
+                # 应用信息
+                "app_name": settings.app_name,
+                "app_version": settings.app_version,
+                "environment": settings.environment,
+                
+                # 功能开关
+                "registration_enabled": settings.enable_registration,
+                "email_verification_enabled": settings.enable_email_verification,
+                
+                # 系统统计
+                "total_users": total_users,
+                "total_files": total_files,
+                "storage_used_mb": storage_used_mb,
+                
+                # 限制配置（从配置中获取，如果没有则使用默认值）
+                "max_file_size_mb": 100,  # TODO: 从设置中获取
+                "max_upload_files_per_user": 1000,  # TODO: 从设置中获取
+            },
             "message": None
         }
 
@@ -297,7 +295,7 @@ class AdminService(BaseService):
         end_date: Optional[datetime] = None,
         skip: int = 0, 
         limit: int = 100
-    ) -> AuditLogsData:
+    ) -> Dict[str, Any]:
         """获取审计日志"""
         # 1. 验证日期范围
         if start_date and end_date and start_date > end_date:
@@ -335,16 +333,18 @@ class AdminService(BaseService):
         total = query.count()
         logs = query.order_by(AuditLog.created_at.desc()).offset(skip).limit(limit).all()
         
-        # 直接返回ORM对象，让Pydantic处理序列化
+        # 构建分页信息字典
+        pagination_info = {
+            "skip": skip,
+            "limit": limit,
+            "total": total,
+            "has_more": skip + limit < total
+        }
+        
         return {
             "logs": logs,
             "total": total,
-            "pagination": {
-                "skip": skip,
-                "limit": limit,
-                "total": total,
-                "has_more": skip + limit < total
-            }
+            "pagination": pagination_info
         }
 
     def create_audit_log(
