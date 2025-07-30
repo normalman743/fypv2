@@ -231,7 +231,7 @@ async def logout(current_user: User = Depends(get_current_user)):
         data={"message": "已成功登出"}
     )
 
-@router.post("/verify-email", response_model=SuccessResponse)
+@router.post("/verify-email", response_model=SuccessResponse,include_in_schema=settings.registration_email_verification)
 async def verify_email(
     request: EmailVerificationRequest,
     db: Session = Depends(get_db)
@@ -257,7 +257,7 @@ async def verify_email(
         }
     )
 
-@router.post("/resend-verification", response_model=SuccessResponse)
+@router.post("/resend-verification", response_model=SuccessResponse, include_in_schema=settings.registration_email_verification)
 async def resend_verification(
     request: ResendVerificationRequest,
     db: Session = Depends(get_db)

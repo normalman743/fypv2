@@ -78,7 +78,7 @@ async def get_invite_codes(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.put("/invite-codes/{invite_code_id}", response_model=UpdateInviteCodeResponse)
+@router.put("/invite-codes/{invite_code_id}", response_model=UpdateInviteCodeResponse,include_in_schema=False)
 async def update_invite_code(
     invite_code_id: int,
     request: UpdateInviteCodeRequest,
@@ -121,7 +121,7 @@ async def delete_invite_code(
         raise HTTPException(status_code=400, detail=str(e))
 
 # 系统配置
-@router.get("/system/config", response_model=SystemConfigResponse)
+@router.get("/system/config", response_model=SystemConfigResponse,include_in_schema=False)
 async def get_system_config(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
@@ -137,7 +137,7 @@ async def get_system_config(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.put("/system/config", response_model=SystemConfigResponse)
+@router.put("/system/config", response_model=SystemConfigResponse,include_in_schema=False)
 async def update_system_config(
     config: Dict[str, Any],
     db: Session = Depends(get_db),
@@ -155,7 +155,7 @@ async def update_system_config(
         raise HTTPException(status_code=400, detail=str(e))
 
 # 审计日志
-@router.get("/audit-logs", response_model=AuditLogsResponse)
+@router.get("/audit-logs", response_model=AuditLogsResponse,include_in_schema=False)
 async def get_audit_logs(
     user_id: Optional[int] = Query(None),
     action: Optional[str] = Query(None),

@@ -151,7 +151,7 @@ async def get_folder_files(
     )
 
 
-@router.get("/files/{file_id}/preview", response_model=FilePreviewResponse)
+@router.get("/files/{file_id}/preview", response_model=FilePreviewResponse,include_in_schema=False)
 async def get_file_preview(
     file_id: int = Path(..., description="File ID"),
     current_user: User = Depends(get_current_user),
@@ -174,7 +174,7 @@ async def get_file_preview(
     )
 
 
-@router.get("/files/{file_id}/status")
+@router.get("/files/{file_id}/status",include_in_schema=False)
 async def get_file_status(
     file_id: int = Path(..., description="File ID"),
     current_user: User = Depends(get_current_user),
@@ -197,7 +197,7 @@ async def get_file_status(
     }
 
 
-@router.get("/tasks/{task_id}/progress")
+@router.get("/tasks/{task_id}/progress", include_in_schema=False)
 async def get_task_progress(
     task_id: str = Path(..., description="Task ID"),
     current_user: User = Depends(get_current_user)
@@ -221,7 +221,7 @@ async def get_task_progress(
     }
 
 
-@router.get("/files/{file_id}/download")
+@router.get("/files/{file_id}/download", include_in_schema=False)
 async def download_file(
     file_id: int = Path(..., description="File ID"),
     current_user: User = Depends(get_current_user),
@@ -244,7 +244,7 @@ async def download_file(
     )
 
 
-@router.get("/files/temporary/{token}/download")
+@router.get("/files/temporary/{token}/download", include_in_schema=False)
 async def download_temporary_file(
     token: str = Path(..., description="临时文件访问token"),
     db: Session = Depends(get_db)
@@ -272,7 +272,7 @@ async def download_temporary_file(
     )
 
 
-@router.delete("/files/temporary/{file_id}", response_model=SuccessResponse)
+@router.delete("/files/temporary/{file_id}", response_model=SuccessResponse,include_in_schema=False)
 async def delete_temporary_file(
     file_id: int = Path(..., description="临时文件ID"),
     current_user: User = Depends(get_current_user),

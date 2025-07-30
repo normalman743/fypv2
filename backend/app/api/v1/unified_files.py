@@ -18,7 +18,7 @@ from app.core.exceptions import NotFoundError, BadRequestError
 router = APIRouter(tags=["统一文件管理"])
 
 
-@router.post("/files/upload", response_model=FileUploadResponse, operation_id="unified_upload_file")
+@router.post("/files/upload", response_model=FileUploadResponse, operation_id="unified_upload_file",include_in_schema=False)
 async def upload_file(
     file: UploadFile = File(...),
     course_id: int = Form(...),
@@ -90,7 +90,7 @@ async def upload_file(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/files", response_model=FileListResponse)
+@router.get("/files", response_model=FileListResponse,include_in_schema=False)
 async def get_files(
     scope: Optional[str] = Query(None),
     course_id: Optional[int] = Query(None),
@@ -153,7 +153,7 @@ async def get_files(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/files/{file_id}", response_model=FileDetailResponse)
+@router.get("/files/{file_id}", response_model=FileDetailResponse,include_in_schema=False)
 async def get_file_detail(
     file_id: int,
     db: Session = Depends(get_db),
@@ -214,7 +214,7 @@ async def get_file_detail(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/files/{file_id}/share", response_model=FileShareResponse, operation_id="share_file")
+@router.post("/files/{file_id}/share", response_model=FileShareResponse, operation_id="share_file",include_in_schema=False)
 async def share_file(
     file_id: int,
     shared_with_type: str = Form(...),  # 'user', 'course', 'group', 'public'
@@ -256,7 +256,7 @@ async def share_file(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.delete("/files/{file_id}", response_model=FileDeleteResponse, operation_id="unified_delete_file")
+@router.delete("/files/{file_id}", response_model=FileDeleteResponse, operation_id="unified_delete_file",include_in_schema=False)
 async def delete_file(
     file_id: int,
     db: Session = Depends(get_db),
@@ -275,7 +275,7 @@ async def delete_file(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/files/{file_id}/access-logs", response_model=FileAccessLogResponse)
+@router.get("/files/{file_id}/access-logs", response_model=FileAccessLogResponse, include_in_schema=False)
 async def get_file_access_logs(
     file_id: int,
     skip: int = Query(0, ge=0),
