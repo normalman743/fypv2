@@ -103,9 +103,31 @@ async def create_chat(
     service = ChatService(db)
     result = await service.create_chat_async(chat_data, current_user.id)
     
+    # 转换ORM对象为字典
+    data = {
+        "chat": {
+            "id": result["chat"].id,
+            "title": result["chat"].title,
+            "chat_type": result["chat"].chat_type,
+            "created_at": result["chat"].created_at
+        },
+        "user_message": {
+            "id": result["user_message"].id,
+            "content": result["user_message"].content,
+            "role": result["user_message"].role,
+            "created_at": result["user_message"].created_at
+        },
+        "ai_message": {
+            "id": result["ai_message"].id,
+            "content": result["ai_message"].content,
+            "role": result["ai_message"].role,
+            "created_at": result["ai_message"].created_at
+        }
+    }
+    
     return CreateChatResponse(
         success=True,
-        data=result
+        data=data
     )
 
 

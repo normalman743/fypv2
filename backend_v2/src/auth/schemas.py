@@ -116,6 +116,17 @@ class UserUpdate(BaseModel):
         description="最后打开的学期ID (可选)"
     )
     
+    @field_validator('last_opened_semester_id')
+    @classmethod
+    def validate_semester_id(cls, v: Optional[int]) -> Optional[int]:
+        """验证学期ID基本格式"""
+        if v is None:
+            return v
+        if v <= 0:
+            raise ValueError('学期ID必须是正整数')
+        
+        return v
+    
     @field_validator('username')
     @classmethod
     def validate_username(cls, v):
@@ -259,7 +270,7 @@ class LoginResponse(BaseResponse[LoginData]):
                     "user": {
                         "id": 1,
                         "username": "john_doe",
-                        "email": "john@example.com",
+                        "email": "john@link.cuhk.edu.hk",
                         "role": "user",
                         "balance": 1.0,
                         "email_verified": True
@@ -302,7 +313,7 @@ class GetUserProfileResponse(BaseResponse[UserResponse]):
                 "data": {
                     "id": 1,
                     "username": "john_doe", 
-                    "email": "john@example.com",
+                    "email": "john@link.cuhk.edu.hk",
                     "display_name": "John Doe",
                     "avatar_url": None,
                     "is_verified": True,
@@ -323,7 +334,7 @@ class UpdateUserProfileResponse(BaseResponse[UserResponse]):
                 "data": {
                     "id": 1,
                     "username": "john_doe",
-                    "email": "john@example.com", 
+                    "email": "john@link.cuhk.edu.hk", 
                     "display_name": "John Doe Updated",
                     "avatar_url": "https://example.com/avatar.jpg",
                     "is_verified": True,

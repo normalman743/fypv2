@@ -136,11 +136,6 @@ class CreateFolderResponse(BaseResponse[CreateFolderData]):
 
 # ===== 文件相关Schema =====
 
-class FileBase(BaseModel):
-    original_name: str = Field(..., max_length=255, description="原始文件名")
-    description: Optional[str] = Field(None, description="文件描述")
-    tags: Optional[List[str]] = Field(None, description="文件标签")
-
 
 class FileResponse(BaseModel):
     """文件响应"""

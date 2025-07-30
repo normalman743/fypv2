@@ -1,0 +1,58 @@
+# Campus LLM System v2 - Testing Dependencies
+# E2E测试框架所需的Python包依赖
+
+# Core Testing Framework
+pytest>=7.4.0                    # 核心测试框架
+pytest-asyncio>=0.21.0          # 异步测试支持
+pytest-cov>=4.1.0               # 代码覆盖率测试
+pytest-mock>=3.11.0             # Mock和patching支持
+pytest-xdist>=3.3.0             # 并行测试执行
+pytest-html>=3.2.0              # HTML测试报告生成
+pytest-json-report>=1.5.0       # JSON格式测试报告
+
+# Data Generation and Mocking
+faker>=19.0.0                   # 智能测试数据生成
+factory-boy>=3.3.0              # 对象工厂模式支持
+
+# HTTP Client and API Testing
+httpx>=0.24.0                   # 现代HTTP客户端，支持异步
+requests>=2.31.0                # 传统HTTP客户端备用
+responses>=0.23.0               # HTTP请求Mock支持
+
+# Database Testing Support
+pytest-alembic>=0.10.0          # 数据库迁移测试
+sqlalchemy-utils>=0.41.0        # SQLAlchemy测试工具
+
+# File and Path Handling
+pathlib2>=2.3.0                 # 路径处理增强
+tempfile>=3.11.0                # 临时文件管理（内置）
+
+# Security Testing
+bandit>=1.7.0                   # 安全漏洞扫描
+safety>=2.3.0                   # 依赖安全检查
+
+# Performance Testing
+pytest-benchmark>=4.0.0         # 性能基准测试
+memory-profiler>=0.60.0         # 内存使用分析
+
+# Environment and Configuration
+python-dotenv>=1.0.0            # 环境变量管理
+pydantic>=2.0.0                 # 数据验证（与主项目保持一致）
+
+# Utility Libraries
+colorama>=0.4.0                 # 彩色终端输出
+rich>=13.0.0                    # 丰富的控制台输出
+click>=8.1.0                    # 命令行工具支持
+
+# Development Tools
+pre-commit>=3.3.0               # Git hooks管理
+black>=23.0.0                   # 代码格式化
+isort>=5.12.0                   # import排序
+flake8>=6.0.0                   # 代码质量检查
+
+# Documentation Testing
+doctest>=3.11.0                # 文档测试（内置）
+sphinx>=7.0.0                  # 可选：文档生成
+
+# Optional: Load Testing (for performance tests)
+locust>=2.15.0                 # 负载测试框架

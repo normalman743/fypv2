@@ -41,12 +41,34 @@ class Settings(BaseSettings):
     
     # 邮箱配置
     allowed_email_domains: str = Field(
-        "example.com,test.com",
+        "edu.hk,584743.xyz",
         env="ALLOWED_EMAIL_DOMAINS"
     )
     verification_code_expire_minutes: int = Field(10, env="VERIFICATION_CODE_EXPIRE_MINUTES")
     resend_api_key: str = Field("", env="RESEND_API_KEY")
     email_from_address: str = Field("noreply@example.com", env="EMAIL_FROM_ADDRESS")
+    
+    # 文件上传限制配置
+    max_file_size: int = Field(52428800, env="MAX_FILE_SIZE")  # 50 MB
+    max_course_size: int = Field(204800000, env="MAX_COURSE_SIZE")  # 200 MB
+    max_user_storage: int = Field(1073741824, env="MAX_USER_STORAGE")  # 1 GB
+    
+    # 文件类型限制配置
+    allowed_document_extensions: str = Field(
+        ".pdf,.docx,.doc,.txt,.md,.py,.js,.html,.css,.json,.c,.cpp,.h,.hpp,.java,.xml,.yaml,.yml,.sql,.sh,.ini,.conf,.cfg",
+        env="ALLOWED_DOCUMENT_EXTENSIONS",
+        description="课程和全局文件允许的文档扩展名"
+    )
+    allowed_image_extensions: str = Field(
+        ".jpg,.jpeg,.png,.gif,.bmp,.webp,.svg",
+        env="ALLOWED_IMAGE_EXTENSIONS",
+        description="临时文件允许的图片扩展名"
+    )
+    strict_file_validation: bool = Field(
+        True,
+        env="STRICT_FILE_VALIDATION", 
+        description="是否启用严格文件类型验证"
+    )
     
     # AI配置
     openai_api_key: str = Field("", env="OPENAI_API_KEY")
@@ -92,10 +114,25 @@ class Settings(BaseSettings):
     
     @property
     def allowed_email_domains_list(self) -> List[str]:
-        """获取允许的邮箱域名列表"""
+        """获取允许的邮箱域名列表 edu.hk , 584743.xyz"""
         if not self.allowed_email_domains:
-            return []
+            return ["edu.hk", "584743.xyz"]
         return [domain.strip() for domain in self.allowed_email_domains.split(",") if domain.strip()]
+    
+    @property
+    def allowed_document_extensions_list(self) -> List[str]:
+        """获取允许的文档扩展名列表"""
+        return [ext.strip().lower() for ext in self.allowed_document_extensions.split(",") if ext.strip()]
+    
+    @property 
+    def allowed_image_extensions_list(self) -> List[str]:
+        """获取允许的图片扩展名列表"""
+        return [ext.strip().lower() for ext in self.allowed_image_extensions.split(",") if ext.strip()]
+    
+    @property
+    def allowed_temp_extensions_list(self) -> List[str]:
+        """获取临时文件允许的扩展名列表（文档+图片）"""
+        return self.allowed_document_extensions_list + self.allowed_image_extensions_list
     
     model_config = {
         "env_file": ".env",

@@ -40,6 +40,7 @@ class AIService(BaseService):
         "search_knowledge_base": {ValidationServiceException, AccessDeniedServiceException},
         "vectorize_file": {NotFoundServiceException, AccessDeniedServiceException, ValidationServiceException},
         "vectorize_course_files": {NotFoundServiceException, AccessDeniedServiceException},
+        "vectorize_global_files": {NotFoundServiceException, AccessDeniedServiceException, ValidationServiceException},
         "get_vectorization_status": {NotFoundServiceException, AccessDeniedServiceException},
     }
     
@@ -303,3 +304,226 @@ class AIService(BaseService):
             
         except Exception:
             return None
+    
+    def vectorize_file(self, file_id: int, user_id: int) -> Dict[str, Any]:
+        """向量化单个文件"""
+        try:
+            # 导入Storage相关模型
+            from src.storage.models import File
+            
+            # 验证文件是否存在且用户有权限访问
+            file_record = self.db.query(File).filter(File.id == file_id).first()
+            if not file_record:
+                raise NotFoundServiceException("文件不存在", ErrorCodes.FILE_NOT_FOUND)
+            
+            # 验证权限：文件所有者或管理员
+            from src.auth.models import User
+            user = self.db.query(User).filter(User.id == user_id).first()
+            if not user:
+                raise NotFoundServiceException("用户不存在", ErrorCodes.USER_NOT_FOUND)
+            
+            if file_record.user_id != user_id and user.role != "admin":
+                raise AccessDeniedServiceException("无权限访问该文件", ErrorCodes.ACCESS_DENIED)
+            
+            # 检查文件是否已经在处理中
+            if file_record.processing_status == "processing":
+                return {
+                    "file_id": file_id,
+                    "status": "already_processing",
+                    "message": "文件正在处理中"
+                }
+            
+            # 更新处理状态
+            file_record.processing_status = "processing"
+            file_record.is_processed = False
+            self.db.commit()
+            
+            # 获取向量化服务
+            from src.shared.vectorization import get_vectorization_service
+            vectorization_service = get_vectorization_service()
+            
+            # 构造完整文件路径
+            from src.shared.config import settings
+            from pathlib import Path
+            storage_path = file_record.physical_file.storage_path
+            full_file_path = str(Path(settings.storage_data_dir) / storage_path)
+            
+            try:
+                # 处理文件
+                result = vectorization_service.process_file(file_record, full_file_path)
+                
+                # 更新成功状态
+                file_record.processing_status = "completed"
+                file_record.is_processed = True
+                file_record.processed_at = datetime.utcnow()
+                file_record.chunk_count = result.get("chunks_created", 0)
+                self.db.commit()
+                
+                return {
+                    "file_id": file_id,
+                    "status": "completed",
+                    "chunk_count": result.get("chunks_created", 0),
+                    "processing_time": result.get("processing_time", 0),
+                    "message": "文件向量化完成"
+                }
+                
+            except Exception as e:
+                # 更新失败状态
+                file_record.processing_status = "failed"
+                file_record.processing_error = str(e)
+                self.db.commit()
+                raise ValidationServiceException(f"文件向量化失败: {str(e)}", ErrorCodes.PROCESSING_ERROR)
+            
+        except (NotFoundServiceException, AccessDeniedServiceException, ValidationServiceException):
+            raise
+        except Exception as e:
+            raise ValidationServiceException(f"向量化处理异常: {str(e)}", ErrorCodes.PROCESSING_ERROR)
+    
+    def vectorize_course_files(self, course_id: int, user_id: int) -> Dict[str, Any]:
+        """批量向量化课程文件"""
+        try:
+            # 导入相关模型
+            from src.course.models import Course
+            from src.storage.models import File
+            from src.auth.models import User
+            
+            # 验证用户和课程权限
+            user = self.db.query(User).filter(User.id == user_id).first()
+            if not user:
+                raise NotFoundServiceException("用户不存在", ErrorCodes.USER_NOT_FOUND)
+            
+            course = self.db.query(Course).filter(Course.id == course_id).first()
+            if not course:
+                raise NotFoundServiceException("课程不存在", ErrorCodes.COURSE_NOT_FOUND)
+            
+            # 权限检查：课程所有者或管理员
+            if course.user_id != user_id and user.role != "admin":
+                raise AccessDeniedServiceException("无权限访问该课程", ErrorCodes.ACCESS_DENIED)
+            
+            # 获取课程下的所有未处理文件
+            files = self.db.query(File).filter(
+                File.course_id == course_id,
+                File.processing_status.in_(["pending", "failed"])
+            ).all()
+            
+            if not files:
+                return {
+                    "course_id": course_id,
+                    "message": "没有需要处理的文件",
+                    "processed_count": 0,
+                    "failed_count": 0
+                }
+            
+            # 批量处理文件
+            processed_count = 0
+            failed_count = 0
+            
+            for file_record in files:
+                try:
+                    self.vectorize_file(file_record.id, user_id)
+                    processed_count += 1
+                except Exception as e:
+                    self.logger.warning(f"处理文件 {file_record.id} 失败: {e}")
+                    failed_count += 1
+            
+            return {
+                "course_id": course_id,
+                "total_files": len(files),
+                "processed_count": processed_count,
+                "failed_count": failed_count,
+                "message": f"批量处理完成，成功{processed_count}个，失败{failed_count}个"
+            }
+            
+        except (NotFoundServiceException, AccessDeniedServiceException):
+            raise
+        except Exception as e:
+            raise ValidationServiceException(f"批量向量化失败: {str(e)}", ErrorCodes.PROCESSING_ERROR)
+    
+    def vectorize_global_files(self, admin_user_id: int) -> Dict[str, Any]:
+        """批量向量化全局文件（管理员专用）"""
+        try:
+            # 导入相关模型
+            from src.storage.models import File
+            from src.auth.models import User
+            
+            # 验证管理员权限
+            user = self.db.query(User).filter(User.id == admin_user_id).first()
+            if not user:
+                raise NotFoundServiceException("用户不存在", ErrorCodes.USER_NOT_FOUND)
+            
+            if user.role != "admin":
+                raise AccessDeniedServiceException("需要管理员权限", ErrorCodes.ADMIN_REQUIRED)
+            
+            # 获取所有未处理的全局文件
+            files = self.db.query(File).filter(
+                File.scope == 'global',
+                File.processing_status.in_(["pending", "failed"])
+            ).all()
+            
+            if not files:
+                return {
+                    "message": "没有需要处理的全局文件",
+                    "processed_count": 0,
+                    "failed_count": 0
+                }
+            
+            # 批量处理文件
+            processed_count = 0
+            failed_count = 0
+            
+            for file_record in files:
+                try:
+                    self.vectorize_file(file_record.id, admin_user_id)
+                    processed_count += 1
+                except Exception as e:
+                    self.logger.warning(f"处理全局文件 {file_record.id} 失败: {e}")
+                    failed_count += 1
+            
+            return {
+                "total_files": len(files),
+                "processed_count": processed_count,
+                "failed_count": failed_count,
+                "message": f"批量处理完成，成功{processed_count}个，失败{failed_count}个"
+            }
+            
+        except (NotFoundServiceException, AccessDeniedServiceException):
+            raise
+        except Exception as e:
+            raise ValidationServiceException(f"批量向量化全局文件失败: {str(e)}", ErrorCodes.PROCESSING_ERROR)
+    
+    def get_vectorization_status(self, file_id: int, user_id: int) -> Dict[str, Any]:
+        """获取文件向量化状态"""
+        try:
+            # 导入Storage相关模型
+            from src.storage.models import File
+            from src.auth.models import User
+            
+            # 验证文件是否存在
+            file_record = self.db.query(File).filter(File.id == file_id).first()
+            if not file_record:
+                raise NotFoundServiceException("文件不存在", ErrorCodes.FILE_NOT_FOUND)
+            
+            # 验证权限
+            user = self.db.query(User).filter(User.id == user_id).first()
+            if not user:
+                raise NotFoundServiceException("用户不存在", ErrorCodes.USER_NOT_FOUND)
+            
+            if file_record.user_id != user_id and user.role != "admin":
+                raise AccessDeniedServiceException("无权限访问该文件", ErrorCodes.ACCESS_DENIED)
+            
+            # 返回状态信息
+            return {
+                "file_id": file_id,
+                "filename": file_record.original_name,
+                "processing_status": file_record.processing_status,
+                "is_processed": file_record.is_processed,
+                "chunk_count": file_record.chunk_count,
+                "processing_error": file_record.processing_error,
+                "processed_at": file_record.processed_at.isoformat() if file_record.processed_at else None,
+                "created_at": file_record.created_at.isoformat()
+            }
+            
+        except (NotFoundServiceException, AccessDeniedServiceException):
+            raise
+        except Exception as e:
+            raise ValidationServiceException(f"获取状态失败: {str(e)}", ErrorCodes.DATABASE_ERROR)

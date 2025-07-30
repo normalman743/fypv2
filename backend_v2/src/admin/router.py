@@ -83,6 +83,7 @@ async def get_invite_codes(
     summary="获取邀请码详情",
     description="获取指定邀请码的详细信息",
     operation_id="get_invite_code",
+    include_in_schema=False  # 如果不希望在API文档中显示，可以设置为False
 ))
 @service_api_handler(AdminService, 'get_invite_code')
 async def get_invite_code(
@@ -106,6 +107,7 @@ async def get_invite_code(
     summary="更新邀请码",
     description="更新邀请码的描述、过期时间或启用状态",
     operation_id="update_invite_code",
+    include_in_schema=False  # 如果不希望在API文档中显示，可以设置为False
 ))
 @service_api_handler(AdminService, 'update_invite_code')
 async def update_invite_code(
@@ -155,6 +157,7 @@ async def delete_invite_code(
     summary="获取系统配置",
     description="获取系统配置信息，包含应用信息、功能开关和系统统计",
     operation_id="get_system_config",
+    include_in_schema=False  # 如果不希望在API文档中显示，可以设置为False
 ))
 @service_api_handler(AdminService, 'get_system_config')
 async def get_system_config(
@@ -179,6 +182,7 @@ async def get_system_config(
     summary="获取审计日志",
     description="分页查询审计日志，支持按用户、操作类型、实体类型和时间范围过滤",
     operation_id="get_audit_logs",
+    include_in_schema=False  # 如果不希望在API文档中显示，可以设置为False
 ))
 @service_api_handler(AdminService, 'get_audit_logs')
 async def get_audit_logs(

@@ -233,7 +233,21 @@ def setup_exception_handlers(app) -> None:
                 )
             ).model_dump()
         )
-    
+
+    @app.exception_handler(BaseServiceException)
+    async def service_exception_handler(request: Request, exc: BaseServiceException):
+        """Service层异常处理"""
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=ErrorResponse(
+                error=ErrorDetail(
+                    code=exc.error_code,
+                    message=exc.message,
+                    details=exc.details
+                )
+            ).model_dump()
+        )
+
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):
         """全局异常处理"""

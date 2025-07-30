@@ -11,10 +11,11 @@ from fastapi import UploadFile
 from src.shared.exceptions import (
     BaseServiceException, NotFoundServiceException, 
     ConflictServiceException, ValidationServiceException, AccessDeniedServiceException,
-    handle_service_exceptions
+    BadRequestServiceException, handle_service_exceptions
 )
 from src.shared.error_codes import ErrorCodes
 from src.shared.base_service import BaseService
+from src.shared.config import settings
 from .models import PhysicalFile, Folder, File, DocumentChunk, FileShare, FileAccessLog, FileGroup, FileGroupMember, TemporaryFile
 from .schemas import CreateFolderRequest, UpdateFolderRequest, CreateFileShareRequest
 from .file_storage import get_file_storage
@@ -119,6 +120,7 @@ class FolderService(BaseService):
     def update_folder(self, folder_id: int, folder_data: UpdateFolderRequest, user_id: int) -> Folder:
         """更新文件夹"""
         try:
+            from src.course.models import Course
             # 获取文件夹并验证权限
             folder = self.db.query(Folder)\
                 .join(Folder.course)\
@@ -162,6 +164,8 @@ class FolderService(BaseService):
     def delete_folder(self, folder_id: int, user_id: int) -> None:
         """删除文件夹"""
         try:
+            from src.course.models import Course
+            
             # 获取文件夹并验证权限
             folder = self.db.query(Folder)\
                 .join(Folder.course)\
@@ -211,8 +215,8 @@ class FileService(BaseService):
     
     METHOD_EXCEPTIONS = {
         "get_folder_files": {NotFoundServiceException, AccessDeniedServiceException, ValidationServiceException},
-        "upload_file": {NotFoundServiceException, AccessDeniedServiceException, ValidationServiceException},
-        "upload_file_async": {NotFoundServiceException, AccessDeniedServiceException, ValidationServiceException},
+        "upload_file": {NotFoundServiceException, AccessDeniedServiceException, BadRequestServiceException, ValidationServiceException},
+        "upload_file_async": {NotFoundServiceException, AccessDeniedServiceException, BadRequestServiceException, ValidationServiceException},
         "download_file": {NotFoundServiceException, AccessDeniedServiceException, ValidationServiceException},
         "delete_file": {NotFoundServiceException, AccessDeniedServiceException, ValidationServiceException},
         "get_or_create_physical_file": {ValidationServiceException},
@@ -223,8 +227,10 @@ class FileService(BaseService):
         super().__init__(db)
     
     def get_folder_files(self, folder_id: int, user_id: int) -> List[File]:
-        """获取文件夹中的所有文件"""
+        """获取文件夹中的所有文件 not used ，use asyn instead"""
         try:
+            from src.course.models import Course
+            
             # 验证用户权限
             folder = self.db.query(Folder)\
                 .join(Folder.course)\
@@ -250,9 +256,11 @@ class FileService(BaseService):
         except Exception as e:
             raise ValidationServiceException(f"获取文件列表失败: {str(e)}", ErrorCodes.DATABASE_ERROR)
     
-    async def upload_file_async(self, file_data, course_id: int, folder_id: int, user_id: int, description: Optional[str] = None) -> File:
+    async def upload_file_async(self, file_data, course_id: int, folder_id: int, user_id: int, description: Optional[str] = None, strict: bool = True) -> File:
         """异步上传文件"""
         try:
+            from src.course.models import Course
+            
             # 验证权限
             folder = self.db.query(Folder)\
                 .join(Folder.course)\
@@ -265,10 +273,24 @@ class FileService(BaseService):
             if not folder:
                 raise NotFoundServiceException("文件夹不存在或无权限访问", ErrorCodes.FOLDER_NOT_FOUND)
             
+            # 第一层验证：文件类型检查（扩展名）
+            self._validate_file_extension(file_data.filename, scope="course", strict=strict)
+            
             # 异步读取文件内容
             import asyncio
             loop = asyncio.get_event_loop()
             file_content = await loop.run_in_executor(None, file_data.file.read)
+            
+            # 文件大小限制检查
+            self._validate_file_limits(
+                file_size=len(file_content),
+                course_id=course_id,
+                user_id=user_id
+            )
+            
+            # 第二层验证：尝试解析文件内容
+            self._validate_file_parsing(file_content, file_data.filename)
+            
             file_hash = self.calculate_file_hash(file_content)
             
             # 获取或创建物理文件
@@ -295,6 +317,9 @@ class FileService(BaseService):
             self.db.commit()
             self.db.refresh(file_record)
             
+            # 启动异步RAG处理
+            await self._trigger_async_vectorization(file_record.id, user_id)
+            
             return file_record
             
         except (NotFoundServiceException, ConflictServiceException):
@@ -305,8 +330,13 @@ class FileService(BaseService):
             raise ValidationServiceException(f"文件上传失败: {str(e)}", ErrorCodes.UPLOAD_ERROR)
     
     def upload_file(self, file_data, course_id: int, folder_id: int, user_id: int, description: Optional[str] = None) -> File:
-        """上传文件"""
+        """上传文件
+        
+        @deprecated: 已弃用，请使用 upload_file_async 异步版本
+        """
         try:
+            from src.course.models import Course
+            
             # 验证权限
             folder = self.db.query(Folder)\
                 .join(Folder.course)\
@@ -319,8 +349,22 @@ class FileService(BaseService):
             if not folder:
                 raise NotFoundServiceException("文件夹不存在或无权限访问", ErrorCodes.FOLDER_NOT_FOUND)
             
+            # 第一层验证：文件类型检查（扩展名）
+            self._validate_file_extension(file_data.filename, scope="course")
+            
             # 读取文件内容和计算哈希
             file_content = file_data.file.read()
+            
+            # 文件大小限制检查
+            self._validate_file_limits(
+                file_size=len(file_content),
+                course_id=course_id,
+                user_id=user_id
+            )
+            
+            # 第二层验证：尝试解析文件内容
+            self._validate_file_parsing(file_content, file_data.filename)
+            
             file_hash = self.calculate_file_hash(file_content)
             
             # 获取或创建物理文件
@@ -511,13 +555,164 @@ class FileService(BaseService):
     def calculate_file_hash(self, file_content: bytes) -> str:
         """计算文件SHA256哈希值"""
         return hashlib.sha256(file_content).hexdigest()
+    
+    def _validate_file_limits(self, file_size: int, course_id: int = None, user_id: int = None) -> None:
+        """统一的文件限制检查"""
+        
+        # 1. 单文件大小检查
+        if file_size > settings.max_file_size:  # 50MB
+            raise BadRequestServiceException(
+                f"文件大小超过限制，最大允许{settings.max_file_size // 1024 // 1024}MB", 
+                ErrorCodes.FILE_TOO_LARGE
+            )
+        
+        # 2. Course文件：检查课程存储限制
+        if course_id:
+            course_usage = self._get_course_storage_usage(course_id)
+            if course_usage + file_size > settings.max_course_size:  # 200MB
+                raise BadRequestServiceException(
+                    f"课程存储空间不足，已使用{course_usage // 1024 // 1024}MB，限制{settings.max_course_size // 1024 // 1024}MB", 
+                    ErrorCodes.STORAGE_LIMIT_EXCEEDED
+                )
+        
+        # 3. 用户总存储检查（Course + Temp）
+        if user_id:
+            user_usage = self._get_user_storage_usage(user_id)
+            if user_usage + file_size > settings.max_user_storage:  # 1GB
+                raise BadRequestServiceException(
+                    f"个人存储空间不足，已使用{user_usage // 1024 // 1024}MB，限制{settings.max_user_storage // 1024 // 1024}MB", 
+                    ErrorCodes.STORAGE_LIMIT_EXCEEDED
+                )
+    
+    def _validate_file_extension(self, filename: str, scope: str = "course", strict: bool = True) -> None:
+        """第一层验证：文件扩展名检查（仅在严格模式下执行）"""
+        if not strict:
+            return  # 非严格模式：跳过第一层验证
+        
+        import os
+        file_ext = os.path.splitext(filename)[1].lower()
+        
+        if scope == "temp":
+            # 临时文件：文档 + 图片
+            allowed_extensions = settings.allowed_temp_extensions_list
+            scope_desc = "临时"
+        else:
+            # 课程和全局文件：仅文档
+            allowed_extensions = settings.allowed_document_extensions_list
+            scope_desc = "课程/全局"
+        
+        if file_ext not in allowed_extensions:
+            allowed_str = ", ".join(allowed_extensions)
+            raise BadRequestServiceException(
+                f"不支持的文件类型 {file_ext}。{scope_desc}文件支持的类型: {allowed_str}",
+                ErrorCodes.INVALID_FILE_EXTENSION
+            )
+    
+    def _validate_file_parsing(self, file_content: bytes, filename: str) -> None:
+        """第二层验证：尝试解析文件内容（严格和非严格模式都执行）"""
+        # 第二层验证总是执行，无论是否严格模式
+        
+        import os
+        file_ext = os.path.splitext(filename)[1].lower()
+        
+        # 跳过图片类型的解析验证
+        if file_ext in settings.allowed_image_extensions_list:
+            return
+        
+        # 尝试文本解析
+        try:
+            # 尝试UTF-8解码
+            content = file_content.decode('utf-8')
+            if len(content.strip()) < 10:  # 内容太短认为无效
+                raise BadRequestServiceException(
+                    f"文件内容过短或无效，无法用于RAG处理",
+                    ErrorCodes.PROCESSING_ERROR
+                )
+        except UnicodeDecodeError:
+            # 尝试其他编码
+            try:
+                content = file_content.decode('gbk')
+                if len(content.strip()) < 10:
+                    raise BadRequestServiceException(
+                        f"文件内容过短或无效，无法用于RAG处理",
+                        ErrorCodes.PROCESSING_ERROR
+                    )
+            except UnicodeDecodeError:
+                # 对于二进制文件（如PDF），这里应该检查文件头
+                if file_ext == '.pdf' and file_content.startswith(b'%PDF'):
+                    return  # PDF文件有效
+                elif file_ext in ['.docx', '.doc'] and b'PK' in file_content[:10]:
+                    return  # Office文件有效
+                else:
+                    raise BadRequestServiceException(
+                        f"无法解析文件内容，请确保文件格式正确",
+                        ErrorCodes.PROCESSING_ERROR
+                    )
+    
+    def _get_course_storage_usage(self, course_id: int) -> int:
+        """获取课程当前存储使用量"""
+        from sqlalchemy import func
+        result = self.db.query(func.sum(File.file_size))\
+            .filter(File.course_id == course_id, File.scope == 'course')\
+            .scalar()
+        return result or 0
+    
+    def _get_user_storage_usage(self, user_id: int) -> int:
+        """获取用户总存储使用量"""
+        from sqlalchemy import func
+        
+        # Course文件大小
+        course_size = self.db.query(func.sum(File.file_size))\
+            .filter(File.user_id == user_id, File.scope == 'course')\
+            .scalar() or 0
+            
+        # 临时文件大小
+        temp_size = self.db.query(func.sum(TemporaryFile.file_size))\
+            .filter(TemporaryFile.user_id == user_id)\
+            .scalar() or 0
+            
+        return course_size + temp_size
+    
+    async def _trigger_async_vectorization(self, file_id: int, user_id: int) -> None:
+        """触发异步RAG向量化处理"""
+        try:
+            # 导入AI Service
+            from src.ai.service import AIService
+            
+            # 在线程池中运行向量化处理，避免阻塞
+            import asyncio
+            loop = asyncio.get_event_loop()
+            
+            def run_vectorization():
+                # 创建新的数据库会话用于后台处理
+                from src.shared.database import SessionLocal
+                bg_db = SessionLocal()
+                try:
+                    ai_service = AIService(bg_db)
+                    result = ai_service.vectorize_file(file_id, user_id)
+                    self.logger.info(f"文件 {file_id} RAG处理完成: {result}")
+                    return result
+                except Exception as e:
+                    self.logger.error(f"文件 {file_id} RAG处理失败: {e}")
+                    return {"status": "failed", "error": str(e)}
+                finally:
+                    bg_db.close()
+            
+            # 在后台线程中执行，不等待结果
+            loop.run_in_executor(None, run_vectorization)
+            self.logger.info(f"已启动文件 {file_id} 的异步RAG处理")
+            
+        except Exception as e:
+            self.logger.warning(f"启动异步RAG处理失败 (file_id: {file_id}): {e}")
+            # 不抛出异常，避免影响文件上传流程
 
 
 class TemporaryFileService(BaseService):
     """临时文件管理服务"""
     
     METHOD_EXCEPTIONS = {
-        "upload_temporary_file": {ValidationServiceException},
+        "upload_temporary_file": {BadRequestServiceException, ValidationServiceException},
+        "upload_temporary_file_async": {BadRequestServiceException, ValidationServiceException},
         "download_temporary_file": {NotFoundServiceException, ValidationServiceException},
         "delete_temporary_file": {NotFoundServiceException, ValidationServiceException},
         "cleanup_expired_files": {ValidationServiceException},
@@ -525,13 +720,19 @@ class TemporaryFileService(BaseService):
     
     def __init__(self, db: Session):
         super().__init__(db)
+        # 使用FileService中的通用方法
+        self._file_service = FileService(db)
+    
     
     @handle_service_exceptions
-    async def upload_temporary_file_async(self, file_data: UploadFile, user_id: int, expiry_hours: int = 24, purpose: Optional[str] = None) -> TemporaryFile:
+    async def upload_temporary_file_async(self, file_data: UploadFile, user_id: int, expiry_hours: int = 24, purpose: Optional[str] = None, strict: bool = True) -> TemporaryFile:
         """异步上传临时文件"""
         try:
             # 计算过期时间
             expires_at = datetime.utcnow() + timedelta(hours=expiry_hours)
+            
+            # 第一层验证：文件类型检查（扩展名）
+            self._file_service._validate_file_extension(file_data.filename, scope="temp", strict=strict)
             
             # 异步读取文件内容
             import asyncio
@@ -539,6 +740,12 @@ class TemporaryFileService(BaseService):
             file_data.file.seek(0)
             file_content = await loop.run_in_executor(None, file_data.file.read)
             file_data.file.seek(0)
+            
+            # 文件大小限制检查（临时文件只检查用户限制）
+            self._file_service._validate_file_limits(
+                file_size=len(file_content),
+                user_id=user_id
+            )
             
             # 获取文件存储实例并保存临时文件
             file_storage = get_file_storage()
@@ -571,15 +778,27 @@ class TemporaryFileService(BaseService):
     
     @handle_service_exceptions
     def upload_temporary_file(self, file_data: UploadFile, user_id: int, expiry_hours: int = 24, purpose: Optional[str] = None) -> TemporaryFile:
-        """上传临时文件"""
+        """上传临时文件
+        
+        @deprecated: 已弃用，请使用 upload_temporary_file_async 异步版本
+        """
         try:
             # 计算过期时间
             expires_at = datetime.utcnow() + timedelta(hours=expiry_hours)
+            
+            # 第一层验证：文件类型检查（扩展名）
+            self._file_service._validate_file_extension(file_data.filename, scope="temp")
             
             # 读取文件内容
             file_data.file.seek(0)
             file_content = file_data.file.read()
             file_data.file.seek(0)
+            
+            # 文件大小限制检查（临时文件只检查用户限制）
+            self._file_service._validate_file_limits(
+                file_size=len(file_content),
+                user_id=user_id
+            )
             
             # 获取文件存储实例并保存临时文件
             file_storage = get_file_storage()
@@ -730,11 +949,30 @@ class GlobalFileService(BaseService):
         super().__init__(db)
         self.file_storage = get_file_storage()
     
+    def _validate_file_extension(self, filename: str, scope: str = "global", strict: bool = True) -> None:
+        """第一层验证：文件扩展名检查（仅在严格模式下执行）"""
+        if not settings.strict_file_validation:
+            return  # 非严格模式：跳过第一层验证
+        
+        import os
+        file_ext = os.path.splitext(filename)[1].lower()
+        
+        # 全局文件只允许文档类型
+        allowed_extensions = settings.allowed_document_extensions_list
+        
+        if file_ext not in allowed_extensions:
+            allowed_str = ", ".join(allowed_extensions)
+            raise BadRequestServiceException(
+                f"不支持的文件类型 {file_ext}。全局文件支持的类型: {allowed_str}",
+                ErrorCodes.INVALID_FILE_EXTENSION
+            )
+    
     async def upload_global_file_async(
         self, 
         file: UploadFile, 
         admin_user_id: int,
-        description: Optional[str] = None
+        description: Optional[str] = None,
+        strict: bool = True
     ) -> File:
         """异步上传全局文件（管理员专用）"""
         try:
@@ -746,6 +984,9 @@ class GlobalFileService(BaseService):
             ).first()
             if not admin:
                 raise AccessDeniedServiceException("需要管理员权限", ErrorCodes.ADMIN_REQUIRED)
+
+            # 第一层验证：文件类型检查（扩展名） - 全局文件只允许文档类型
+            self._validate_file_extension(file.filename, scope="global", strict=strict)
 
             # 异步保存文件并获取哈希值
             import asyncio
@@ -794,6 +1035,9 @@ class GlobalFileService(BaseService):
             self.db.commit()
             self.db.refresh(global_file)
 
+            # 启动异步RAG处理
+            await self._trigger_async_vectorization(global_file.id, admin_user_id)
+
             return global_file
 
         except (AccessDeniedServiceException, ValidationServiceException):
@@ -808,7 +1052,10 @@ class GlobalFileService(BaseService):
         admin_user_id: int,
         description: Optional[str] = None
     ) -> File:
-        """上传全局文件（管理员专用）"""
+        """上传全局文件（管理员专用）
+        
+        @deprecated: 已弃用，请使用 upload_global_file_async 异步版本
+        """
         try:
             # 验证管理员权限
             from src.auth.models import User
@@ -818,6 +1065,9 @@ class GlobalFileService(BaseService):
             ).first()
             if not admin:
                 raise AccessDeniedServiceException("需要管理员权限", ErrorCodes.ADMIN_REQUIRED)
+
+            # 第一层验证：文件类型检查（扩展名） - 全局文件只允许文档类型
+            self._validate_file_extension(file.filename, scope="global")
 
             # 保存文件并获取哈希值
             storage_path, file_content, file_hash = self.file_storage.save_upload_file(file)
@@ -968,3 +1218,36 @@ class GlobalFileService(BaseService):
             return "image"
         else:
             return "document"
+    
+    async def _trigger_async_vectorization(self, file_id: int, user_id: int) -> None:
+        """触发异步RAG向量化处理"""
+        try:
+            # 导入AI Service
+            from src.ai.service import AIService
+            
+            # 在线程池中运行向量化处理，避免阻塞
+            import asyncio
+            loop = asyncio.get_event_loop()
+            
+            def run_vectorization():
+                # 创建新的数据库会话用于后台处理
+                from src.shared.database import SessionLocal
+                bg_db = SessionLocal()
+                try:
+                    ai_service = AIService(bg_db)
+                    result = ai_service.vectorize_file(file_id, user_id)
+                    self.logger.info(f"全局文件 {file_id} RAG处理完成: {result}")
+                    return result
+                except Exception as e:
+                    self.logger.error(f"全局文件 {file_id} RAG处理失败: {e}")
+                    return {"status": "failed", "error": str(e)}
+                finally:
+                    bg_db.close()
+            
+            # 在后台线程中执行，不等待结果
+            loop.run_in_executor(None, run_vectorization)
+            self.logger.info(f"已启动全局文件 {file_id} 的异步RAG处理")
+            
+        except Exception as e:
+            self.logger.warning(f"启动异步RAG处理失败 (global file_id: {file_id}): {e}")
+            # 不抛出异常，避免影响文件上传流程

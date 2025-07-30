@@ -25,7 +25,6 @@ router = APIRouter(prefix="/auth", tags=["认证/Authentication"])
     },
     summary="用户注册"
 )
-
 @service_api(AuthService, 'register')
 async def register(user_data: UserRegister, db: Session = Depends(get_db)):
     """用户注册"""

@@ -5,13 +5,7 @@ import json
 import uuid
 from typing import List, Dict, Any, Optional, Union, TYPE_CHECKING
 
-if TYPE_CHECKING:
-    try:
-        from langchain.schema import Document
-        from langchain_community.vectorstores import Chroma
-    except ImportError:
-        Document = Any
-        Chroma = Any
+# 移除TYPE_CHECKING条件导入，统一在下面处理
 from datetime import datetime
 from sqlalchemy.orm import Session
 from .error_codes import ErrorCodes
@@ -51,63 +45,100 @@ class VectorizationServiceException(BaseServiceException):
 
 
 class OpenAIEmbeddingsWrapper:
-    """OpenAI Embeddings包装器 - 自动降级到Mock"""
+    """OpenAI Embeddings包装器 - 要求有效的OpenAI API密钥"""
     
     def __init__(self, model: str = "text-embedding-ada-002"):
         self.model = model
-        self.client = None
         self.logger = get_logger(self.__class__.__name__)
         
-        if OPENAI_AVAILABLE and settings.openai_api_key and settings.openai_api_key != "sk-test-key":
-            try:
-                self.client = OpenAI(api_key=settings.openai_api_key)
-                # 测试API连接
-                self.client.embeddings.create(model=self.model, input=["test"])
-                self.logger.info("OpenAI Embeddings initialized successfully")
-            except Exception as e:
-                self.logger.warning(f"OpenAI API initialization failed: {e}")
-                self.logger.info("Falling back to Mock Embeddings")
-                self.client = None
+        # 检查OpenAI是否可用
+        if not OPENAI_AVAILABLE:
+            raise VectorizationServiceException("OpenAI未安装，无法使用嵌入服务", ErrorCodes.DEPENDENCY_ERROR)
+        
+        # 检查API密钥
+        if not settings.openai_api_key or settings.openai_api_key == "sk-test-key":
+            raise VectorizationServiceException("OpenAI API密钥未配置，无法使用嵌入服务", ErrorCodes.CONFIGURATION_ERROR)
+        
+        # 初始化OpenAI客户端
+        try:
+            self.client = OpenAI(api_key=settings.openai_api_key)
+            # 测试API连接
+            self.client.embeddings.create(model=self.model, input=["test"])
+            self.logger.info("OpenAI Embeddings initialized successfully")
+        except Exception as e:
+            raise VectorizationServiceException(f"OpenAI API初始化失败: {str(e)}", ErrorCodes.API_CONNECTION_ERROR)
     
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         """为文档列表生成嵌入向量"""
-        if self.client:
-            try:
-                response = self.client.embeddings.create(
-                    model=self.model,
-                    input=texts
+        from src.shared.async_utils import async_retry
+        import asyncio
+        
+        async def _embed_documents_async():
+            @async_retry(max_attempts=3, delay=2.0, backoff=2.0)
+            async def _call_api():
+                loop = asyncio.get_event_loop()
+                return await loop.run_in_executor(
+                    None,
+                    lambda: self.client.embeddings.create(
+                        model=self.model,
+                        input=texts
+                    )
                 )
+            
+            try:
+                response = await _call_api()
                 return [embedding.embedding for embedding in response.data]
             except Exception as e:
-                self.logger.warning(f"OpenAI API call failed: {e}")
-                self.logger.info("Falling back to Mock Embeddings")
+                self.logger.error(f"OpenAI API调用失败: {e}")
+                raise VectorizationServiceException(f"生成文档嵌入向量失败: {str(e)}", ErrorCodes.API_CALL_ERROR)
         
-        return self._mock_embeddings(texts)
+        # 在同步环境中运行异步重试
+        try:
+            loop = asyncio.get_running_loop()
+            # 如果已有事件循环，在线程池中运行
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(asyncio.run, _embed_documents_async())
+                return future.result()
+        except RuntimeError:
+            # 没有运行中的事件循环，直接运行
+            return asyncio.run(_embed_documents_async())
     
     def embed_query(self, text: str) -> List[float]:
         """为查询生成嵌入向量"""
-        if self.client:
-            try:
-                response = self.client.embeddings.create(
-                    model=self.model,
-                    input=[text]
+        from src.shared.async_utils import async_retry
+        import asyncio
+        
+        async def _embed_query_async():
+            @async_retry(max_attempts=3, delay=2.0, backoff=2.0)
+            async def _call_api():
+                loop = asyncio.get_event_loop()
+                return await loop.run_in_executor(
+                    None,
+                    lambda: self.client.embeddings.create(
+                        model=self.model,
+                        input=[text]
+                    )
                 )
+            
+            try:
+                response = await _call_api()
                 return response.data[0].embedding
             except Exception as e:
-                self.logger.warning(f"OpenAI API call failed: {e}")
-                self.logger.info("Falling back to Mock Embeddings")
+                self.logger.error(f"OpenAI API调用失败: {e}")
+                raise VectorizationServiceException(f"生成查询嵌入向量失败: {str(e)}", ErrorCodes.API_CALL_ERROR)
         
-        return self._mock_embeddings([text])[0]
-    
-    def _mock_embeddings(self, texts: List[str]) -> List[List[float]]:
-        """Mock embeddings作为备用"""
-        import random
-        embeddings = []
-        for text in texts:
-            random.seed(hash(text) % 10000)
-            embedding = [random.uniform(-1, 1) for _ in range(1536)]
-            embeddings.append(embedding)
-        return embeddings
+        # 在同步环境中运行异步重试
+        try:
+            loop = asyncio.get_running_loop()
+            # 如果已有事件循环，在线程池中运行
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(asyncio.run, _embed_query_async())
+                return future.result()
+        except RuntimeError:
+            # 没有运行中的事件循环，直接运行
+            return asyncio.run(_embed_query_async())
 
 
 class RAGSource:
@@ -385,10 +416,10 @@ class VectorizationService(BaseService):
     
     def _is_supported_document(self, filename: str) -> bool:
         """检查是否为支持的文档类型"""
-        # 简化的文件类型验证
-        supported_extensions = {'.pdf', '.docx', '.doc', '.md', '.txt', '.py', '.js', '.html', '.css', '.json'}
+        # 使用配置中的文档扩展名列表
+        from .config import settings
         file_ext = os.path.splitext(filename)[1].lower()
-        return file_ext in supported_extensions
+        return file_ext in settings.allowed_document_extensions_list
     
     def _get_collection_name(self, file_obj) -> str:
         """获取集合名称"""
@@ -430,7 +461,7 @@ class VectorizationService(BaseService):
         
         return None
     
-    def _save_chunks_to_db(self, chunks: List[Document], file_obj) -> None:
+    def _save_chunks_to_db(self, chunks: List[Any], file_obj) -> None:
         """将文档切片保存到关系数据库"""
         try:
             from src.storage.models import DocumentChunk

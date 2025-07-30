@@ -61,6 +61,8 @@ class ErrorCodes:
     
     FILE_NOT_FOUND = "FILE_NOT_FOUND"                  # 文件不存在
     FILE_MISSING = "FILE_MISSING"                      # 文件丢失
+    FILE_TOO_LARGE = "FILE_TOO_LARGE"                  # 文件过大
+    STORAGE_LIMIT_EXCEEDED = "STORAGE_LIMIT_EXCEEDED"  # 存储空间超限
     UPLOAD_ERROR = "UPLOAD_ERROR"                      # 上传错误
     STORAGE_ERROR = "STORAGE_ERROR"                    # 存储错误
     ACCESS_DENIED = "ACCESS_DENIED"                    # 访问被拒绝
@@ -87,12 +89,16 @@ class ErrorCodes:
     RATE_CHECK_ERROR = "RATE_CHECK_ERROR"              # 频率检查错误
     DEPENDENCY_ERROR = "DEPENDENCY_ERROR"              # 依赖错误
     UNSUPPORTED_FILE_TYPE = "UNSUPPORTED_FILE_TYPE"    # 不支持的文件类型
+    INVALID_FILE_EXTENSION = "INVALID_FILE_EXTENSION"  # 无效的文件扩展名
     PROCESSING_ERROR = "PROCESSING_ERROR"              # 处理错误
     RETRIEVAL_ERROR = "RETRIEVAL_ERROR"                # 检索错误
     DELETION_ERROR = "DELETION_ERROR"                  # 删除错误
     STATS_ERROR = "STATS_ERROR"                        # 统计错误
     NETWORK_ERROR = "NETWORK_ERROR"                    # 网络错误
     BULK_SEND_ERROR = "BULK_SEND_ERROR"                # 批量发送错误
+    API_CONNECTION_ERROR = "API_CONNECTION_ERROR"      # API连接错误
+    API_CALL_ERROR = "API_CALL_ERROR"                  # API调用错误
+    CONFIGURATION_ERROR = "CONFIGURATION_ERROR"        # 配置错误
     
     # === 系统相关 ===
     RATE_LIMIT_EXCEEDED = "RATE_LIMIT_EXCEEDED"        # 请求频率超限

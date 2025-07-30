@@ -184,11 +184,12 @@ async def upload_file(
     file: UploadFile = File(...),
     course_id: int = Form(...),
     folder_id: int = Form(...),
-    description: Optional[str] = Form(None)
+    description: Optional[str] = Form(None),
+    strict: bool = Form(True, description="是否启用严格文件类型验证")
 ):
     """上传文件到指定文件夹"""
     service = FileService(db)
-    file_record = await service.upload_file_async(file, course_id, folder_id, current_user.id, description)
+    file_record = await service.upload_file_async(file, course_id, folder_id, current_user.id, description, strict)
     
     file_response = FileResponse.model_validate(file_record)
     
@@ -260,11 +261,12 @@ async def upload_temporary_file(
     db: DbDep,
     file: UploadFile = File(...),
     expiry_hours: int = Form(24, description="过期时间（小时）"),
-    purpose: Optional[str] = Form(None, description="用途说明")
+    purpose: Optional[str] = Form(None, description="用途说明"),
+    strict: bool = Form(True, description="是否启用严格文件类型验证")
 ):
     """上传临时文件"""
     service = TemporaryFileService(db)
-    temp_file = await service.upload_temporary_file_async(file, current_user.id, expiry_hours, purpose)
+    temp_file = await service.upload_temporary_file_async(file, current_user.id, expiry_hours, purpose, strict)
     
     temp_file_response = TemporaryFileResponse.model_validate(temp_file)
     
@@ -332,11 +334,12 @@ async def upload_global_file(
     admin_user: AdminUserDep,
     db: DbDep,
     file: UploadFile = File(...),
-    description: Optional[str] = Form(None)
+    description: Optional[str] = Form(None),
+    strict: bool = Form(True, description="是否启用严格文件类型验证")
 ):
     """上传全局文件（管理员专用）"""
     service = GlobalFileService(db)
-    file_record = await service.upload_global_file_async(file, admin_user.id, description)
+    file_record = await service.upload_global_file_async(file, admin_user.id, description, strict)
 
     file_response = FileResponse.model_validate(file_record)
     return UploadFileResponse(

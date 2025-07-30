@@ -25,7 +25,7 @@ router = APIRouter(prefix="/auth")
     AuthService, 'register', RegisterResponse, 
     success_status=201,
     summary="用户注册",
-    description="使用邀请码注册新用户账户，注册成功后会发送验证邮件到用户邮箱进行验证",
+    description="使用邀请码注册新用户账户",
     operation_id="register_user"
 ))
 @service_api_handler(AuthService, 'register')
@@ -130,6 +130,7 @@ async def logout(current_user: UserDep, db: DbDep):
     summary="验证邮箱",
     description="使用验证码验证用户邮箱地址",
     operation_id="verify_user_email",
+    include_in_schema=False  # 如果不需要在API文档中显示，可以设置为False
 ))
 @service_api_handler(AuthService, 'verify_email')
 async def verify_email(
@@ -152,6 +153,7 @@ async def verify_email(
     summary="重发验证码",
     description="重新发送邮箱验证码",
     operation_id="resend_verification_code",
+    include_in_schema=False  # 如果不需要在API文档中显示，可以设置为False
 ))
 @service_api_handler(AuthService, 'resend_verification')
 async def resend_verification(
@@ -176,6 +178,7 @@ async def resend_verification(
     summary="修改密码",
     description="修改当前用户密码，需要提供当前密码验证",
     operation_id="change_user_password",
+    include_in_schema=False  # 如果不需要在API文档中显示，可以设置为False
 ))
 @service_api_handler(AuthService, 'change_password')
 async def change_password(
@@ -199,6 +202,7 @@ async def change_password(
     summary="忘记密码",
     description="发送密码重置邮件到用户注册邮箱",
     operation_id="forgot_password",
+    include_in_schema=False  # 如果不需要在API文档中显示，可以设置为False
 ))
 @service_api_handler(AuthService, 'forgot_password')
 async def forgot_password(
@@ -221,6 +225,7 @@ async def forgot_password(
     summary="重置密码",
     description="使用重置令牌重置用户密码",
     operation_id="reset_password",
+    include_in_schema=False  # 如果不需要在API文档中显示，可以设置为False
 ))
 @service_api_handler(AuthService, 'reset_password')
 async def reset_password(

@@ -58,7 +58,8 @@ async def get_semesters(
     success_status=201,
     summary="创建学期",
     description="创建新学期（管理员专用）",
-    operation_id="create_semester"
+    operation_id="create_semester",
+    include_in_schema=False  # 如果不希望在API文档中显示，可以设置为False
 ))
 @service_api_handler(SemesterService, 'create_semester')
 async def create_semester(
