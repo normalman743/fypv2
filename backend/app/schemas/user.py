@@ -76,8 +76,8 @@ class UserResponse(BaseModel):
 class UserUpdate(BaseModel):
     username: Optional[str] = None
     email: Optional[EmailStr] = None
-    preferred_language: Optional[str] = None
-    preferred_theme: Optional[str] = None
+    preferred_language: Literal["zh_CN", "en_US"] = "zh_CN"
+    preferred_theme: Literal["light", "dark", "system"] = "light"
     last_opened_semester_id: Optional[int] = None
 
 class EmailVerificationRequest(BaseModel):
