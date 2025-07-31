@@ -75,7 +75,11 @@ class UnifiedFileService:
         # 3. 检查是否已存在相同文件
         existing_file = self._check_existing_file(file_hash, user_id, scope, course_id)
         if existing_file:
-            return existing_file
+            from app.core.exceptions import BadRequestError
+            raise BadRequestError(
+                f"文件已存在: {existing_file.original_name} (ID: {existing_file.id})，您可以直接使用该文件",
+                "FILE_ALREADY_EXISTS"
+            )
         
         # 4. 获取或创建 PhysicalFile
         physical_file = self._get_or_create_physical_file(file_info, file_content, scope)
