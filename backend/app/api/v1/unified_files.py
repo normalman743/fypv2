@@ -39,6 +39,20 @@ async def upload_file(
     - personal: 个人文件
     """
     try:
+        # 文件大小检查
+        from app.core.config import settings
+        file_content = await file.read()
+        file_size = len(file_content)
+        
+        if file_size > settings.max_file_size:
+            raise HTTPException(
+                status_code=413,
+                detail=f"文件大小超过限制 ({file_size} bytes > {settings.max_file_size} bytes)"
+            )
+        
+        # 重置文件指针
+        file.file.seek(0)
+        
         # 解析 tags
         tags_list = json.loads(tags) if tags else []
         

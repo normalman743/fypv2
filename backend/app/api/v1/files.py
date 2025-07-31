@@ -79,6 +79,20 @@ async def upload_file(
     import logging
     logging.info(f"[API] Upload request - course_id: {course_id}, folder_id: {folder_id}")
     
+    # 文件大小检查
+    from app.core.config import settings
+    file_content = await file.read()
+    file_size = len(file_content)
+    
+    if file_size > settings.max_file_size:
+        raise HTTPException(
+            status_code=413,
+            detail=f"文件大小超过限制 ({file_size} bytes > {settings.max_file_size} bytes)"
+        )
+    
+    # 重置文件指针
+    file.file.seek(0)
+    
     service = FileService(db)
     file_record = service.upload_file(file, course_id, folder_id, current_user.id)
     
