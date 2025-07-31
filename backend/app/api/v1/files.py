@@ -76,8 +76,13 @@ async def upload_file(
     db: Session = Depends(get_db)
 ):
     """Upload file to folder"""
+    import logging
+    logging.info(f"[API] Upload request - course_id: {course_id}, folder_id: {folder_id}")
+    
     service = FileService(db)
     file_record = service.upload_file(file, course_id, folder_id, current_user.id)
+    
+    logging.info(f"[API] File uploaded - file_id: {file_record.id}, actual_folder_id: {file_record.folder_id}")
     
     # Convert to response format
     file_data = FileResponse(

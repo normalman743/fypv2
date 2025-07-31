@@ -68,14 +68,14 @@ async def create_folder(
         }
     )
 
-
-@router.post("/folders", response_model=CreateFolderResponse)
+"""
+@router.post("/folders", response_model=CreateFolderResponse,include_in_schema=False)
 async def create_general_folder(
     folder_data: CreateFolderRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Create a general folder (personal or course)"""
+    
     service = FolderService(db)
     
     # If it's a course folder, use the course-specific method
@@ -94,7 +94,7 @@ async def create_general_folder(
             }
         }
     )
-
+"""
 
 @router.delete("/folders/{folder_id}", response_model=SuccessResponse)
 async def delete_folder(

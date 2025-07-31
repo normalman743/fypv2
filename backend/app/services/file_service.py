@@ -43,12 +43,16 @@ class FileService:
 
     def upload_file(self, file: UploadFile, course_id: int, folder_id: int, user_id: int) -> File:
         """Upload file to folder (check course ownership)"""
+        import logging
+        logging.info(f"[FileUpload] Starting upload - course_id: {course_id}, folder_id: {folder_id}, user_id: {user_id}, filename: {file.filename}")
+        
         # Check if course exists and user has access
         course = self.db.query(Course).filter(
             Course.id == course_id,
             Course.user_id == user_id
         ).first()
         if not course:
+            logging.error(f"[FileUpload] Course {course_id} not found or user {user_id} has no access")
             raise NotFoundError("Course not found or access denied", "COURSE_NOT_FOUND")
 
         # Check if folder exists and belongs to the course
@@ -57,6 +61,10 @@ class FileService:
             Folder.course_id == course_id
         ).first()
         if not folder:
+            logging.error(f"[FileUpload] Folder {folder_id} not found or does not belong to course {course_id}")
+            # Log available folders for debugging
+            available_folders = self.db.query(Folder.id, Folder.name).filter(Folder.course_id == course_id).all()
+            logging.info(f"[FileUpload] Available folders for course {course_id}: {available_folders}")
             raise NotFoundError("Folder not found or does not belong to course", "FOLDER_NOT_FOUND")
 
         # 上传到本地存储
@@ -122,9 +130,11 @@ class FileService:
                 processing_status="pending"
             )
             
+            logging.info(f"[FileUpload] Creating file record with folder_id: {folder_id}")
             self.db.add(file_record)
             self.db.commit()
             self.db.refresh(file_record)
+            logging.info(f"[FileUpload] File record created - id: {file_record.id}, folder_id: {file_record.folder_id}")
             
             # Load physical file relationship
             self.db.refresh(physical_file)
