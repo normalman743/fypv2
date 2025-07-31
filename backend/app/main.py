@@ -99,8 +99,8 @@ async def timeout_middleware(request: Request, call_next):
     """添加请求超时控制"""
     try:
         start_time = time.time()
-        # 设置30秒超时
-        response = await asyncio.wait_for(call_next(request), timeout=30.0)
+        # 设置74秒超时
+        response = await asyncio.wait_for(call_next(request), timeout=74.0)
         process_time = time.time() - start_time
         response.headers["X-Process-Time"] = str(process_time)
         return response
