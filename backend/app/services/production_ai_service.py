@@ -5,6 +5,7 @@ Production AI Service - Pure RAG + OpenAI Implementation
 
 import os
 import random
+import time
 from typing import Dict, List, Any, Optional
 from openai import OpenAI
 from app.services.ai_service import AIResponse
@@ -176,6 +177,9 @@ class ProductionAIService:
                 # 非搜索模型可以使用 temperature
                 api_params["temperature"] = 0.7
             
+            # Record start time
+            start_time = time.time()
+            
             if stream:
                 # 流式响应
                 api_params.update({
@@ -187,10 +191,14 @@ class ProductionAIService:
                 response = self.openai_client.chat.completions.create(**api_params)
                 
                 # 返回generator用于流式响应
-                return self._handle_stream_response(response, model_config, rag_sources)
+                return self._handle_stream_response(response, model_config, rag_sources, start_time)
             else:
                 # 非流式响应
                 response = self.openai_client.chat.completions.create(**api_params)
+                
+                # Calculate response time
+                end_time = time.time()
+                response_time_ms = int((end_time - start_time) * 1000)
                 
                 content = response.choices[0].message.content
                 
@@ -210,13 +218,14 @@ class ProductionAIService:
                     cost=total_cost,
                     rag_sources=rag_sources,
                     input_tokens=input_tokens,
-                    output_tokens=output_tokens
+                    output_tokens=output_tokens,
+                    response_time_ms=response_time_ms
                 )
             
         except Exception as e:
             raise RuntimeError(f"OpenAI API call failed: {e}")
     
-    def _handle_stream_response(self, response, model_config, rag_sources):
+    def _handle_stream_response(self, response, model_config, rag_sources, start_time):
         """处理流式响应"""
         content = ""
         input_tokens = 0
@@ -238,6 +247,10 @@ class ProductionAIService:
                 output_tokens = chunk.usage.completion_tokens
                 total_tokens = chunk.usage.total_tokens
                 
+                # Calculate response time
+                end_time = time.time()
+                response_time_ms = int((end_time - start_time) * 1000)
+                
                 # 计算成本
                 input_cost = (input_tokens / 1_000_000) * model_config["input_cost_per_million"]
                 output_cost = (output_tokens / 1_000_000) * model_config["output_cost_per_million"]
@@ -251,7 +264,8 @@ class ProductionAIService:
                     "input_tokens": input_tokens,
                     "output_tokens": output_tokens,
                     "cost": total_cost,
-                    "rag_sources": rag_sources
+                    "rag_sources": rag_sources,
+                    "response_time_ms": response_time_ms
                 }
         
         # 添加调试信息：打印接收到的所有chunk信息
@@ -260,6 +274,10 @@ class ProductionAIService:
         # 如果没有收到usage信息，发送一个没有usage的完成信号
         if input_tokens == 0 and output_tokens == 0:
             print("⚠️ No usage information received from OpenAI stream")
+            # Calculate response time even without usage info
+            end_time = time.time()
+            response_time_ms = int((end_time - start_time) * 1000)
+            
             yield {
                 "type": "usage",
                 "content": content,
@@ -267,7 +285,8 @@ class ProductionAIService:
                 "input_tokens": 0,
                 "output_tokens": 0,
                 "cost": 0.0,
-                "rag_sources": rag_sources
+                "rag_sources": rag_sources,
+                "response_time_ms": response_time_ms
             }
     
     def generate_chat_title(self, first_message: str) -> str:
