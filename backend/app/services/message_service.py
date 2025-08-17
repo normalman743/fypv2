@@ -505,7 +505,8 @@ class MessageService:
                 tokens_used=ai_response.tokens_used,
                 input_tokens=ai_response.input_tokens,
                 output_tokens=ai_response.output_tokens,
-                cost=ai_response.cost
+                cost=ai_response.cost,
+                response_time_ms=ai_response.response_time_ms
             )
             self.db.add(ai_message)
             self.db.flush()
@@ -829,6 +830,7 @@ class MessageService:
                     ai_message.output_tokens = chunk["output_tokens"]
                     ai_message.cost = chunk["cost"]
                     ai_message.rag_sources = chunk["rag_sources"]
+                    ai_message.response_time_ms = chunk.get("response_time_ms")
 
                     # Update user balance
                     from decimal import Decimal

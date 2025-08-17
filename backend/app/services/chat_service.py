@@ -422,7 +422,8 @@ class ChatService:
                 tokens_used=ai_response.tokens_used,
                 input_tokens=ai_response.input_tokens,
                 output_tokens=ai_response.output_tokens,
-                cost=ai_response.cost
+                cost=ai_response.cost,
+                response_time_ms=ai_response.response_time_ms
             )
             self.db.add(ai_message)
             self.db.flush()
