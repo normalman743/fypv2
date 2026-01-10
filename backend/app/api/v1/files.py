@@ -78,25 +78,59 @@ async def upload_file(
     """Upload file to folder"""
     import logging
     logging.info(f"[API] Upload request - course_id: {course_id}, folder_id: {folder_id}")
+    logging.info(f"[API] *** BILLING LOGIC STARTING *** - user_id: {current_user.id}")
     
-    # 文件大小检查
+    # 文件大小检查 - 使用流式处理避免内存溢出
     from app.core.config import settings
-    file_content = await file.read()
-    file_size = len(file_content)
+    from app.utils.file_stream_utils import check_file_size_limit
     
-    if file_size > settings.max_file_size:
+    is_valid, file_size = check_file_size_limit(file.file, settings.max_file_size)
+    
+    if not is_valid:
         raise HTTPException(
             status_code=413,
             detail=f"文件大小超过限制 ({file_size} bytes > {settings.max_file_size} bytes)"
         )
     
-    # 重置文件指针
-    file.file.seek(0)
+    # 计算文件上传费用并验证用户余额
+    # 计费规则: 1 MB ≈ 0.0283 USD
+    from decimal import Decimal
     
-    service = FileService(db)
-    file_record = service.upload_file(file, course_id, folder_id, current_user.id)
+    # 计算费用: 文件大小(MB) * 单价
+    file_size_mb = Decimal(str(file_size)) / Decimal('1048576')  # bytes to MB
+    upload_cost = file_size_mb * Decimal('0.0283')
     
-    logging.info(f"[API] File uploaded - file_id: {file_record.id}, actual_folder_id: {file_record.folder_id}")
+    logging.info(f"[API] File upload billing - size: {file_size} bytes ({file_size_mb} MB), cost: ${upload_cost}")
+    
+    # 检查用户余额是否足够
+    if current_user.balance < upload_cost:
+        raise HTTPException(
+            status_code=402,
+            detail=f"余额不足。文件大小: {file_size_mb:.2f} MB，需要: ${upload_cost:.4f}，当前余额: ${current_user.balance:.4f}"
+        )
+    
+    # 预扣费用
+    original_balance = current_user.balance
+    current_user.balance -= upload_cost
+    current_user.total_spent += upload_cost
+    
+    try:
+        # 提交余额变更
+        db.commit()
+        logging.info(f"[API] Balance deducted - user_id: {current_user.id}, cost: ${upload_cost}, new_balance: ${current_user.balance}")
+        
+        service = FileService(db)
+        file_record = service.upload_file(file, course_id, folder_id, current_user.id)
+        
+        logging.info(f"[API] File uploaded successfully - file_id: {file_record.id}, actual_folder_id: {file_record.folder_id}, charged: ${upload_cost}")
+        
+    except Exception as e:
+        # 上传失败，回滚余额扣除
+        logging.error(f"[API] File upload failed, rolling back balance - user_id: {current_user.id}, cost: ${upload_cost}")
+        current_user.balance = original_balance
+        current_user.total_spent -= upload_cost
+        db.commit()
+        raise e
     
     # Convert to response format
     file_data = FileResponse(

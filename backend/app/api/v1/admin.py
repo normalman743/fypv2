@@ -198,6 +198,17 @@ async def upload_global_file(
     使用统一文件服务代替原有的 GlobalFileService
     """
     try:
+        # 文件大小检查 - 使用流式处理避免内存溢出
+        from app.core.config import settings
+        from app.utils.file_stream_utils import check_file_size_limit
+        
+        is_valid, file_size = check_file_size_limit(file.file, settings.max_file_size)
+        if not is_valid:
+            raise HTTPException(
+                status_code=413,
+                detail=f"文件大小超过限制 ({file_size} bytes > {settings.max_file_size} bytes)"
+            )
+        
         # 解析tags
         tags_list = json.loads(tags) if tags else []
 
@@ -269,8 +280,18 @@ async def reprocess_file_rag(
         db.commit()
         
         if use_async:
-            # 异步处理
+            # 异步处理 - 流式读取文件内容
             from app.tasks.file_processing import process_file_rag_task
+            from app.core.config import settings
+            
+            # 检查文件大小
+            file_size = os.path.getsize(full_path)
+            if file_size > settings.max_file_size:
+                raise HTTPException(
+                    status_code=413, 
+                    detail=f"文件太大无法重新处理 ({file_size} bytes > {settings.max_file_size} bytes)"
+                )
+            
             with open(full_path, 'rb') as f:
                 file_content = f.read()
             

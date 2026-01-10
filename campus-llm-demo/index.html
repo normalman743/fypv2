@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Campus LLM Demo</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- 顶部导航 -->
+        <header class="header">
+            <div class="header-content">
+                <h1>Campus LLM System Demo</h1>
+                <div class="user-info" id="userInfo" style="display: none;">
+                    <span id="username">用户</span>
+                    <button id="logoutBtn" class="btn btn-secondary">登出</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- 登录界面 -->
+        <div class="login-section" id="loginSection">
+            <div class="login-form">
+                <h2>登录到 Campus LLM</h2>
+                <div class="form-group">
+                    <label for="loginUsername">用户名/邮箱:</label>
+                    <input type="text" id="loginUsername" value="" placeholder="输入用户名或邮箱">
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword">密码:</label>
+                    <input type="password" id="loginPassword" value="" placeholder="输入密码">
+                </div>
+                <button id="loginBtn" class="btn btn-primary">登录</button>
+                <div id="loginStatus" class="status-message"></div>
+            </div>
+        </div>
+
+        <!-- 主应用界面 -->
+        <div class="main-app" id="mainApp" style="display: none;">
+            <!-- 模式选择 -->
+            <div class="mode-selector">
+                <button id="generalChatBtn" class="mode-btn active">General Chat</button>
+                <button id="courseChatBtn" class="mode-btn">Course Chat</button>
+            </div>
+
+            <!-- General Chat 模式 -->
+            <div class="chat-mode" id="generalChatMode">
+                <div class="chat-config">
+                    <h3>General Chat 配置</h3>
+                    <div class="config-row">
+                        <label>AI模型:</label>
+                        <select id="generalAiModel">
+                            <option value="Star">Star</option>
+                            <option value="StarPlus">StarPlus</option>
+                            <option value="StarCode">StarCode</option>
+                        </select>
+                    </div>
+                    <div class="config-row">
+                        <label>上下文模式:</label>
+                        <select id="generalContextMode">
+                            <option value="Economy">Economy</option>
+                            <option value="Standard" selected>Standard</option>
+                            <option value="Premium">Premium</option>
+                            <option value="Max">Max</option>
+                        </select>
+                    </div>
+                    <div class="config-row">
+                        <label>搜索功能:</label>
+                        <input type="checkbox" id="generalSearchEnabled">
+                    </div>
+                    <div class="config-row">
+                        <label>流式响应:</label>
+                        <input type="checkbox" id="generalStreamEnabled" disabled>
+                        <span style="color: #6b7280; font-size: 0.75rem;">（暂不支持）</span>
+                    </div>
+                    <div class="config-row">
+                        <label>自定义Prompt:</label>
+                        <input type="text" id="generalCustomPrompt" placeholder="可选：自定义AI行为">
+                    </div>
+                </div>
+                
+                <div class="chat-container">
+                    <div class="chat-messages" id="generalChatMessages"></div>
+                    <div class="chat-input-area">
+                        <input type="text" id="generalChatInput" placeholder="输入您的问题...">
+                        <button id="generalSendBtn" class="btn btn-primary">发送</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Course Chat 模式 -->
+            <div class="chat-mode" id="courseChatMode" style="display: none;">
+                <div class="course-section">
+                    <h3>课程数据</h3>
+                    <div id="courseData">
+                        <div class="loading">加载课程数据...</div>
+                    </div>
+                </div>
+                
+                <div class="chat-config">
+                    <h3>Course Chat 配置</h3>
+                    <div class="config-row">
+                        <label>AI模型:</label>
+                        <select id="courseAiModel">
+                            <option value="Star">Star</option>
+                            <option value="StarPlus">StarPlus</option>
+                            <option value="StarCode">StarCode</option>
+                        </select>
+                    </div>
+                    <div class="config-row">
+                        <label>上下文模式:</label>
+                        <select id="courseContextMode">
+                            <option value="Economy">Economy</option>
+                            <option value="Standard" selected>Standard</option>
+                            <option value="Premium">Premium</option>
+                            <option value="Max">Max</option>
+                        </select>
+                    </div>
+                    <div class="config-row">
+                        <label>搜索功能:</label>
+                        <input type="checkbox" id="courseSearchEnabled" checked>
+                    </div>
+                    <div class="config-row">
+                        <label>流式响应:</label>
+                        <input type="checkbox" id="courseStreamEnabled" disabled>
+                        <span style="color: #6b7280; font-size: 0.75rem;">（暂不支持）</span>
+                    </div>
+                </div>
+                
+                <div class="chat-container">
+                    <div class="chat-messages" id="courseChatMessages"></div>
+                    <div class="chat-input-area">
+                        <input type="text" id="courseChatInput" placeholder="输入您的问题...">
+                        <button id="courseSendBtn" class="btn btn-primary">发送</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/api-client.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

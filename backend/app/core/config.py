@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     
     # 文件上传配置
     upload_dir: str = os.getenv("UPLOAD_DIR", "./storage/uploads")
-    max_file_size: int = int(os.getenv("MAX_FILE_SIZE", str(50 * 1024 * 1024)))  # 50MB
+    max_file_size: int = int(os.getenv("MAX_FILE_SIZE", str(10 * 1024 * 1024)))  # 临时限制10MB避免内存溢出
     allowed_extensions: str = os.getenv("ALLOWED_EXTENSIONS", "pdf,doc,docx,txt,md")
     
     # 临时文件配置
