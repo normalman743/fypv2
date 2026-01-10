@@ -56,6 +56,12 @@ API documentation and development guides can be found in:
 
 CUHK Chung Chi College - Senior Seminar Project Group 2
 
+## 📂 Repository
+
+**GitHub:** [https://github.com/normalman743/fypv2](https://github.com/normalman743/fypv2)
+
+*Note: Not open source yet, but the code is available on GitHub for viewing and reference.*
+
 ---
 
 *For the best experience, please visit our [live website](https://icu.584743.xyz)*
