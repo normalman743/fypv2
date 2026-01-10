@@ -6,6 +6,11 @@ An AI-powered intelligent assistant system for CUHK Chung Chi College, developed
 
 Intelligent CU is a campus-oriented AI assistant that leverages Large Language Models to provide intelligent support for CUHK Chung Chi College students and faculty.
 
+## 📂 Repository
+
+**GitHub:** [https://github.com/normalman743/fypv2](https://github.com/normalman743/fypv2)
+
+
 ## ✨ Key Features
 
 ### 🤖 AI-Powered Chat Assistant
@@ -55,12 +60,6 @@ API documentation and development guides can be found in:
 ## 👥 Team
 
 CUHK Chung Chi College - Senior Seminar Project Group 2
-
-## 📂 Repository
-
-**GitHub:** [https://github.com/normalman743/fypv2](https://github.com/normalman743/fypv2)
-
-*Note: Not open source yet, but the code is available on GitHub for viewing and reference.*
 
 ---
 
