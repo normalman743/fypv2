@@ -13,7 +13,7 @@ class User(Base):
     role = Column(String(20), default="user", index=True)  # user, admin
     
     # 用户余额和消费
-    balance = Column(DECIMAL(10, 2), default=1.00)
+    balance = Column(DECIMAL(10, 2), default=0.10)
     total_spent = Column(DECIMAL(10, 2), default=0.00)
     
     # 用户偏好设置

@@ -43,12 +43,16 @@ class FileService:
 
     def upload_file(self, file: UploadFile, course_id: int, folder_id: int, user_id: int) -> File:
         """Upload file to folder (check course ownership)"""
+        import logging
+        logging.info(f"[FileUpload] Starting upload - course_id: {course_id}, folder_id: {folder_id}, user_id: {user_id}, filename: {file.filename}")
+        
         # Check if course exists and user has access
         course = self.db.query(Course).filter(
             Course.id == course_id,
             Course.user_id == user_id
         ).first()
         if not course:
+            logging.error(f"[FileUpload] Course {course_id} not found or user {user_id} has no access")
             raise NotFoundError("Course not found or access denied", "COURSE_NOT_FOUND")
 
         # Check if folder exists and belongs to the course
@@ -57,6 +61,10 @@ class FileService:
             Folder.course_id == course_id
         ).first()
         if not folder:
+            logging.error(f"[FileUpload] Folder {folder_id} not found or does not belong to course {course_id}")
+            # Log available folders for debugging
+            available_folders = self.db.query(Folder.id, Folder.name).filter(Folder.course_id == course_id).all()
+            logging.info(f"[FileUpload] Available folders for course {course_id}: {available_folders}")
             raise NotFoundError("Folder not found or does not belong to course", "FOLDER_NOT_FOUND")
 
         # 上传到本地存储
@@ -65,19 +73,12 @@ class FileService:
         except Exception as e:
             raise BadRequestError(f"Failed to upload file to local storage: {e}", "LOCAL_UPLOAD_FAILED")
 
-        # Read file content for processing (reset file pointer)
-        file.file.seek(0)
-        file_content = file.file.read()
-        file_size = len(file_content)
-        
-        # Reset file pointer for potential future reads
-        file.file.seek(0)
+        # 获取文件大小和哈希 - 使用流式处理避免内存溢出
+        from app.utils.file_stream_utils import get_file_size_and_hash
+        file_size, file_hash = get_file_size_and_hash(file.file)
 
         # Determine file type based on content and extension
         file_type = self._determine_file_type(file.filename, file.content_type)
-        
-        # Calculate file hash for deduplication
-        file_hash = hashlib.sha256(file_content).hexdigest()
 
         try:
             # Use database-level row locking to prevent race conditions
@@ -122,16 +123,18 @@ class FileService:
                 processing_status="pending"
             )
             
+            logging.info(f"[FileUpload] Creating file record with folder_id: {folder_id}")
             self.db.add(file_record)
             self.db.commit()
             self.db.refresh(file_record)
+            logging.info(f"[FileUpload] File record created - id: {file_record.id}, folder_id: {file_record.folder_id}")
             
             # Load physical file relationship
             self.db.refresh(physical_file)
             file_record.physical_file = physical_file
             
             # 内测阶段直接同步处理RAG（10人左右，无需异步）
-            self._process_file_with_rag_sync(file_record, file_content)
+            self._process_file_with_rag_sync(file_record, local_path)
             
             return file_record
         except IntegrityError:
@@ -140,13 +143,15 @@ class FileService:
             local_file_storage.delete_file(file_path)
             raise BadRequestError("Failed to upload file", "FILE_UPLOAD_FAILED")
 
-    def _start_async_rag_processing(self, file_record: File, file_content: bytes) -> str:
+    def _start_async_rag_processing(self, file_record: File, file_path: str) -> str:
         """启动异步RAG处理任务"""
         try:
             # 尝试导入Celery任务
             from app.tasks.file_processing import process_file_rag_task
             
-            # 启动异步任务
+            # 启动异步任务 - 读取文件内容（异步处理需要内容传递）
+            with open(file_path, 'rb') as f:
+                file_content = f.read()
             task = process_file_rag_task.delay(file_record.id, file_content)
             
             print(f"🚀 Started async RAG processing for file {file_record.id}, task ID: {task.id}")
@@ -155,15 +160,15 @@ class FileService:
         except ImportError:
             print("⚠️ Celery not available, falling back to synchronous processing")
             # 降级到同步处理
-            self._process_file_with_rag_sync(file_record, file_content)
+            self._process_file_with_rag_sync(file_record, file_path)
             return "sync_processing"
         except Exception as e:
             print(f"❌ Failed to start async task: {e}")
             # 降级到同步处理
-            self._process_file_with_rag_sync(file_record, file_content)
+            self._process_file_with_rag_sync(file_record, file_path)
             return "sync_fallback"
     
-    def _process_file_with_rag_sync(self, file_record: File, file_content: bytes):
+    def _process_file_with_rag_sync(self, file_record: File, file_path: str):
         """同步RAG处理（备用方案）"""
         try:
             # Update status to processing
@@ -177,20 +182,12 @@ class FileService:
                 self.db.commit()
                 return
             
-            # Create temporary file for RAG processing
-            with tempfile.NamedTemporaryFile(
-                suffix=f"_{file_record.original_name}", 
-                delete=False
-            ) as temp_file:
-                temp_file.write(file_content)
-                temp_file_path = temp_file.name
-            
             try:
-                # Process with RAG service (传递数据库会话)
+                # Process with RAG service directly using the saved file path
                 print(f"🔧 正在创建RAG服务，数据库会话: {self.db}")
                 rag_service = ProductionRAGService(db_session=self.db)
-                print(f"🔧 RAG服务创建成功，开始处理文件...")
-                result = rag_service.process_file(file_record, temp_file_path)
+                print(f"🔧 RAG服务创建成功，开始处理文件: {file_path}")
+                result = rag_service.process_file(file_record, file_path)
                 
                 print(f"✅ RAG processing completed: {result}")
                 
@@ -203,11 +200,6 @@ class FileService:
                 print(f"❌ RAG processing failed: {e}")
                 file_record.processing_status = "failed"
                 self.db.commit()
-                
-            finally:
-                # Clean up temporary file
-                if os.path.exists(temp_file_path):
-                    os.unlink(temp_file_path)
                     
         except Exception as e:
             print(f"❌ File processing error: {e}")

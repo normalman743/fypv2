@@ -46,25 +46,7 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
             ).model_dump()
         )
     
-    # 检查邮箱域名限制
-    if settings.registration_email_verification and settings.allowed_email_domains_list:
-
-        email_domain = user_data.email.split('@')[-1] if '@' in user_data.email else ""
-        email_domain_valid = any(
-            email_domain == domain or email_domain.endswith(f".{domain}")
-            for domain in settings.allowed_email_domains_list
-        )
-        if not email_domain_valid:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=ErrorResponse(
-                    success=False,
-                    error={
-                        "code": "INVALID_EMAIL_DOMAIN",
-                        "message": f"邮箱域名必须是: {', '.join(settings.allowed_email_domains_list)}"
-                    }
-                ).model_dump()
-            )
+    # 邮箱域名验证已移至 UserRegister schema 中
     
     # 检查邀请码（如果启用）
 
@@ -231,7 +213,7 @@ async def logout(current_user: User = Depends(get_current_user)):
         data={"message": "已成功登出"}
     )
 
-@router.post("/verify-email", response_model=SuccessResponse)
+@router.post("/verify-email", response_model=SuccessResponse,include_in_schema=settings.registration_email_verification)
 async def verify_email(
     request: EmailVerificationRequest,
     db: Session = Depends(get_db)
@@ -257,7 +239,7 @@ async def verify_email(
         }
     )
 
-@router.post("/resend-verification", response_model=SuccessResponse)
+@router.post("/resend-verification", response_model=SuccessResponse, include_in_schema=settings.registration_email_verification)
 async def resend_verification(
     request: ResendVerificationRequest,
     db: Session = Depends(get_db)

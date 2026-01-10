@@ -57,28 +57,31 @@ class UnifiedFileService:
         if not valid:
             raise HTTPException(status_code=400, detail=error_msg)
         
-        # 3. 读取和处理文件内容
-        file_content = file.file.read()
-        file_hash = hashlib.sha256(file_content).hexdigest()
-        file.file.seek(0)
+        # 3. 读取和处理文件内容 - 使用流式处理避免内存溢出
+        from app.utils.file_stream_utils import get_file_size_and_hash
+        file_size, file_hash = get_file_size_and_hash(file.file)
         
         # 调试信息
-        print(f"File upload: {file.filename}, size: {len(file_content)}, hash: {file_hash}")
+        print(f"File upload: {file.filename}, size: {file_size}, hash: {file_hash}")
         
         file_info = {
             'original_name': file.filename,
             'mime_type': file.content_type or "application/octet-stream",
-            'file_size': len(file_content),
+            'file_size': file_size,
             'file_hash': file_hash
         }
         
         # 3. 检查是否已存在相同文件
         existing_file = self._check_existing_file(file_hash, user_id, scope, course_id)
         if existing_file:
-            return existing_file
+            from app.core.exceptions import BadRequestError
+            raise BadRequestError(
+                f"文件已存在: {existing_file.original_name} (ID: {existing_file.id})，您可以直接使用该文件",
+                "FILE_ALREADY_EXISTS"
+            )
         
-        # 4. 获取或创建 PhysicalFile
-        physical_file = self._get_or_create_physical_file(file_info, file_content, scope)
+        # 4. 获取或创建 PhysicalFile - 传递文件对象而非内容
+        physical_file = self._get_or_create_physical_file(file_info, file.file, scope)
         
         # 5. 创建 File 记录
         file_record = self._create_file_record(
@@ -159,7 +162,7 @@ class UnifiedFileService:
     def _get_or_create_physical_file(
         self, 
         file_info: dict, 
-        file_content: bytes, 
+        file_obj, 
         scope: str
     ) -> PhysicalFile:
         """获取或创建 PhysicalFile 记录"""
@@ -182,9 +185,12 @@ class UnifiedFileService:
         # 确保目录存在
         os.makedirs(full_path.parent, exist_ok=True)
         
-        # 保存文件
+        # 保存文件 - 使用流式写入避免内存溢出
+        import shutil
         with open(full_path, "wb") as f:
-            f.write(file_content)
+            file_obj.seek(0)
+            shutil.copyfileobj(file_obj, f)  # 流式复制，不占用大量内存
+            file_obj.seek(0)  # 重置文件指针
         
         # 创建数据库记录
         physical_file = PhysicalFile(
@@ -481,22 +487,21 @@ class UnifiedFileService:
         if not valid:
             raise HTTPException(status_code=400, detail=error_msg)
         
-        # 2. 读取和处理文件内容（复用普通文件逻辑）
-        file_content = file.file.read()
-        file_hash = hashlib.sha256(file_content).hexdigest()
-        file.file.seek(0)
+        # 2. 读取和处理文件内容 - 使用流式处理避免内存溢出
+        from app.utils.file_stream_utils import get_file_size_and_hash
+        file_size, file_hash = get_file_size_and_hash(file.file)
         
-        print(f"Temporary file upload: {file.filename}, size: {len(file_content)}, hash: {file_hash}")
+        print(f"Temporary file upload: {file.filename}, size: {file_size}, hash: {file_hash}")
         
         file_info = {
             'original_name': file.filename,
             'mime_type': file.content_type or "application/octet-stream",
-            'file_size': len(file_content),
+            'file_size': file_size,
             'file_hash': file_hash
         }
         
-        # 3. 获取或创建 PhysicalFile（复用现有方法）
-        physical_file = self._get_or_create_physical_file(file_info, file_content, scope='temporary')
+        # 3. 获取或创建 PhysicalFile - 传递文件对象而非内容
+        physical_file = self._get_or_create_physical_file(file_info, file.file, scope='temporary')
         
         # 4. 生成唯一token
         token = secrets.token_urlsafe(32)

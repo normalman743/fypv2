@@ -100,11 +100,17 @@ async def create_chat(
         )
     else:
         # 非流式响应
-        result = service.create_chat_with_first_message(chat_data, current_user.id)
-        return ChatCreateResponse(
-            success=True,
-            data=result
-        )
+        import logging
+        try:
+            logging.info(f"[Chat] Creating chat - type: {chat_data.chat_type}, course_id: {chat_data.course_id}, temp_tokens: {len(chat_data.temporary_file_tokens or [])}")
+            result = service.create_chat_with_first_message(chat_data, current_user.id)
+            return ChatCreateResponse(
+                success=True,
+                data=result
+            )
+        except Exception as e:
+            logging.error(f"[Chat] Error creating chat: {type(e).__name__}: {e}")
+            raise
 
 
 @router.put("/{chat_id}", response_model=ChatUpdateResponse)

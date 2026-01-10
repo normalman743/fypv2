@@ -84,17 +84,95 @@ class ChatService:
         return unique_files, unique_file_ids
 
     def _get_file_contents_for_ai(self, files: List[File]) -> str:
-        """获取文件内容用于AI上下文"""
+        """获取文件内容用于AI上下文 - 直接从磁盘读取，与临时文件处理保持一致"""
         if not files:
             return ""
         
         context_parts = []
         for file in files:
-            # 只处理已处理的文件
-            if file.is_processed and file.content_preview:
-                context_parts.append(f"文件名: {file.original_name}\n内容预览:\n{file.content_preview}\n")
+            try:
+                # 获取物理文件路径
+                if file.physical_file and file.physical_file.storage_path:
+                    from app.core.config import settings
+                    full_path = os.path.join(settings.upload_dir, file.physical_file.storage_path)
+                    
+                    if os.path.exists(full_path):
+                        # 使用与RAG服务相同的文件解析逻辑
+                        file_ext = os.path.splitext(file.original_name)[1].lower()
+                        content_preview = self._extract_file_content(full_path, file_ext, file.original_name)
+                        
+                        context_parts.append(
+                            f"文件: {file.original_name}\n"
+                            f"类型: 正式文件\n"
+                            f"内容:\n{content_preview}\n"
+                        )
+                    else:
+                        # 文件不存在，回退到使用数据库中的预览
+                        if file.is_processed and file.content_preview:
+                            context_parts.append(f"文件名: {file.original_name}\n内容预览:\n{file.content_preview}\n")
+                else:
+                    # 没有物理文件路径，回退到使用数据库中的预览
+                    if file.is_processed and file.content_preview:
+                        context_parts.append(f"文件名: {file.original_name}\n内容预览:\n{file.content_preview}\n")
+            except Exception as e:
+                logger.error(f"无法读取文件内容: {file.original_name}, 错误: {str(e)}")
+                # 回退到使用数据库中的预览
+                if file.is_processed and file.content_preview:
+                    context_parts.append(f"文件名: {file.original_name}\n内容预览:\n{file.content_preview}\n")
         
-        return "\n" + "="*50 + "\n".join(context_parts) if context_parts else ""
+        return "\n---\n".join(context_parts) if context_parts else ""
+
+    def _extract_file_content(self, file_path: str, file_ext: str, original_name: str) -> str:
+        """使用与RAG服务相同的文件解析逻辑提取文件内容"""
+        try:
+            # 导入RAG服务的文档加载器
+            from langchain_community.document_loaders import (
+                PyPDFLoader, 
+                Docx2txtLoader, 
+                TextLoader,
+                UnstructuredMarkdownLoader
+            )
+            
+            # 与RAG服务相同的专门解析器配置
+            specialized_loaders = {
+                '.pdf': PyPDFLoader,
+                '.docx': Docx2txtLoader,
+                '.doc': Docx2txtLoader,
+                '.md': UnstructuredMarkdownLoader,
+            }
+            
+            # 选择合适的解析器
+            if file_ext in specialized_loaders:
+                loader_class = specialized_loaders[file_ext]
+                logger.info(f"使用专门解析器: {loader_class.__name__} for {file_ext}")
+            else:
+                loader_class = TextLoader
+                logger.info(f"使用通用TextLoader for {file_ext}")
+            
+            # 加载文档内容
+            loader = loader_class(file_path)
+            documents = loader.load()
+            
+            # 合并所有文档内容并限制长度
+            full_content = "\n\n".join([doc.page_content for doc in documents])
+            
+            # 限制内容长度（与临时文件处理保持一致）
+            if len(full_content) > 2000:
+                content_preview = full_content[:2000] + "\n\n[内容已截断...]"
+            else:
+                content_preview = full_content
+                
+            return content_preview
+            
+        except Exception as e:
+            logger.error(f"使用专门解析器失败 {original_name}: {e}")
+            # 回退到简单的文本读取
+            try:
+                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    return f.read(2000)
+            except Exception as fallback_e:
+                logger.error(f"回退文本读取也失败 {original_name}: {fallback_e}")
+                return f"[无法读取文件内容: {str(fallback_e)}]"
 
     def _prepare_images_for_ai(self, temporary_files: List[TemporaryFile]) -> List[Dict[str, Any]]:
         """
@@ -238,11 +316,23 @@ class ChatService:
             if user.balance <= 0:
                 raise InsufficientBalanceError("余额不足，请充值后继续使用AI模型")
             
+            # 如果是课程相关聊天，检查课程权限
+            if chat_data.chat_type == 'course' and chat_data.course_id:
+                course = self.db.query(Course).filter(
+                    Course.id == chat_data.course_id,
+                    Course.user_id == user_id
+                ).first()
+                if not course:
+                    raise BadRequestError("Course not found or access denied", "COURSE_NOT_FOUND")
+            
+            # 对于general类型聊天，course_id应该为None
+            course_id = chat_data.course_id if chat_data.chat_type == 'course' and chat_data.course_id != 0 else None
+            
             # Create chat with temporary title
             chat = Chat(
                 title="新聊天",  # Will be updated after AI response
                 chat_type=chat_data.chat_type,
-                course_id=chat_data.course_id,
+                course_id=course_id,
                 user_id=user_id,
                 custom_prompt=chat_data.custom_prompt,
                 ai_model=chat_data.ai_model,

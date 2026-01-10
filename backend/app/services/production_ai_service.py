@@ -274,7 +274,7 @@ class ProductionAIService:
         """根据用户的第一条消息生成聊天标题"""
         try:
             response = self.openai_client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-4o",
                 messages=[
                     {
                         "role": "system", 
