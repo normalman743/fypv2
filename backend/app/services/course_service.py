@@ -138,3 +138,8 @@ class CourseService:
             "file_count": 0,
             "chat_count": 0
         }
+
+    def get_batch_course_stats(self, course_ids: list) -> dict:
+        """Get stats for multiple courses without re-querying each course (避免 N+1)"""
+        # 目前 stats 还是返回固定值，但避免了每个 course 多一次 get_course_by_id 查询
+        return {cid: {"file_count": 0, "chat_count": 0} for cid in course_ids}

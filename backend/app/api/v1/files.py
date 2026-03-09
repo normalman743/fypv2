@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 import io
 
-from app.dependencies import get_db, get_current_user
+from app.dependencies import get_db, get_current_user, invalidate_user_cache
 from app.services.file_service import FileService
 from app.schemas.file import (
     FileListResponse,
@@ -38,9 +38,9 @@ async def upload_temporary_file(
     - 通过唯一token访问
     - 适用于聊天上传、预览等临时用途
     """
-    from app.services.unified_file_service import UnifiedFileService
+    from app.services.file_service import FileService
     
-    service = UnifiedFileService(db)
+    service = FileService(db)
     temp_file = service.upload_temporary_file(
         file=file,
         user_id=current_user.id,
@@ -102,6 +102,9 @@ async def upload_file(
     
     logging.info(f"[API] File upload billing - size: {file_size} bytes ({file_size_mb} MB), cost: ${upload_cost}")
     
+    # 刷新用户数据，确保余额是最新的（避免缓存导致的过期数据）
+    db.refresh(current_user)
+    
     # 检查用户余额是否足够
     if current_user.balance < upload_cost:
         raise HTTPException(
@@ -123,6 +126,8 @@ async def upload_file(
         file_record = service.upload_file(file, course_id, folder_id, current_user.id)
         
         logging.info(f"[API] File uploaded successfully - file_id: {file_record.id}, actual_folder_id: {file_record.folder_id}, charged: ${upload_cost}")
+        # 余额已变更，使用户缓存失效
+        invalidate_user_cache(current_user.id)
         
     except Exception as e:
         # 上传失败，回滚余额扣除
@@ -282,15 +287,17 @@ async def download_file(
 ):
     """Download file"""
     service = FileService(db)
-    file_record, file_content = service.download_file(file_id, current_user.id)
+    file_record, file_path = service.download_file(file_id, current_user.id)
     
     # Encode filename properly for Content-Disposition header
     from urllib.parse import quote
     encoded_filename = quote(file_record.original_name.encode('utf-8'))
     
-    return StreamingResponse(
-        io.BytesIO(file_content),
+    from fastapi.responses import FileResponse as FastAPIFileResponse
+    return FastAPIFileResponse(
+        path=str(file_path),
         media_type=file_record.physical_file.mime_type if file_record.physical_file else "application/octet-stream",
+        filename=file_record.original_name,
         headers={
             "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
         }
@@ -307,18 +314,18 @@ async def download_temporary_file(
     
     通过token访问临时文件，不需要登录验证
     """
-    from app.services.unified_file_service import UnifiedFileService
-    
-    service = UnifiedFileService(db)
-    temp_file, content = service.download_temporary_file(token)
+    service = FileService(db)
+    temp_file, file_path = service.download_temporary_file(token)
     
     # Encode filename properly for Content-Disposition header
     from urllib.parse import quote
     encoded_filename = quote(temp_file.original_name.encode('utf-8'))
     
-    return StreamingResponse(
-        io.BytesIO(content),
+    from fastapi.responses import FileResponse as FastAPIFileResponse
+    return FastAPIFileResponse(
+        path=file_path,
         media_type=temp_file.mime_type,
+        filename=temp_file.original_name,
         headers={
             "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
         }
@@ -336,18 +343,8 @@ async def delete_temporary_file(
     
     只能删除自己上传的临时文件
     """
-    from app.services.unified_file_service import UnifiedFileService
-    
-    service = UnifiedFileService(db)
-    temp_file = service.get_temporary_file_by_id(file_id, current_user.id)
-    
-    if not temp_file:
-        raise HTTPException(status_code=404, detail="文件不存在或已过期")
-    
-    success = service.delete_temporary_file(temp_file)
-    if not success:
-        raise HTTPException(status_code=500, detail="删除文件失败")
-    
+    service = FileService(db)
+    service.delete_temporary_file(file_id, current_user.id)
     return SuccessResponse(success=True)
 
 

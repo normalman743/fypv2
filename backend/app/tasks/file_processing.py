@@ -8,7 +8,6 @@ from app.celery_app import celery_app
 from app.models.database import SessionLocal
 from app.models.file import File
 from sqlalchemy.orm import Session
-import tempfile
 import os
 import time
 from typing import Dict, Any
@@ -22,13 +21,13 @@ except ImportError:
 
 
 @celery_app.task(bind=True, name="process_file_rag")
-def process_file_rag_task(self, file_id: int, file_content: bytes) -> Dict[str, Any]:
+def process_file_rag_task(self, file_id: int, file_path: str) -> Dict[str, Any]:
     """
     异步处理文件RAG
     
     Args:
         file_id: 文件ID
-        file_content: 文件内容字节
+        file_path: 文件在磁盘上的绝对路径
         
     Returns:
         处理结果
@@ -65,13 +64,12 @@ def process_file_rag_task(self, file_id: int, file_content: bytes) -> Dict[str, 
                 "file_id": file_id
             }
         
-        # 创建临时文件
-        with tempfile.NamedTemporaryFile(
-            suffix=f"_{file_record.original_name}", 
-            delete=False
-        ) as temp_file:
-            temp_file.write(file_content)
-            temp_file_path = temp_file.name
+        # 确认文件存在
+        if not os.path.exists(file_path):
+            file_record.processing_status = "failed"
+            file_record.processing_error = f"File not found: {file_path}"
+            db.commit()
+            return {"status": "error", "message": f"File not found: {file_path}"}
         
         try:
             # 更新进度
@@ -89,7 +87,7 @@ def process_file_rag_task(self, file_id: int, file_content: bytes) -> Dict[str, 
             )
             
             start_time = time.time()
-            result = rag_service.process_file(file_record, temp_file_path)
+            result = rag_service.process_file(file_record, file_path)
             processing_time = time.time() - start_time
             
             # 更新进度
@@ -130,11 +128,6 @@ def process_file_rag_task(self, file_id: int, file_content: bytes) -> Dict[str, 
                 "error": str(e),
                 "file_id": file_id
             }
-            
-        finally:
-            # 清理临时文件
-            if os.path.exists(temp_file_path):
-                os.unlink(temp_file_path)
                 
     except Exception as e:
         print(f"❌ Task execution failed for file {file_id}: {e}")

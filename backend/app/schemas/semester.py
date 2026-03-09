@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Any
 from datetime import datetime
 
 from app.schemas.common import BaseResponse
@@ -33,13 +33,28 @@ class SemesterResponse(SemesterBase):
         from_attributes = True
 
 
-class SemesterListResponse(BaseResponse):
-    data: dict  # {"semesters": List[SemesterResponse]}
+class SemesterListData(BaseModel):
+    semesters: List[SemesterResponse]
 
+class SemesterListResponse(BaseResponse):
+    data: SemesterListData
+
+class SemesterCreateInner(BaseModel):
+    id: int
+    created_at: Any
+
+class SemesterCreateData(BaseModel):
+    semester: SemesterCreateInner
 
 class SemesterCreateResponse(BaseResponse):
-    data: dict  # {"semester": {"id": int, "created_at": datetime}}
+    data: SemesterCreateData
 
+class SemesterUpdateInner(BaseModel):
+    id: int
+    updated_at: Any
+
+class SemesterUpdateData(BaseModel):
+    semester: SemesterUpdateInner
 
 class SemesterUpdateResponse(BaseResponse):
-    data: dict  # {"semester": {"id": int, "updated_at": datetime}}
+    data: SemesterUpdateData

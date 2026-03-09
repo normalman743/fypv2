@@ -1,3 +1,5 @@
+import time
+import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
@@ -25,13 +27,23 @@ async def get_courses(
 ):
     """Get course list"""
     service = CourseService(db)
+    
+    t0 = time.perf_counter()
     courses = service.get_courses(user_id=current_user.id, semester_id=semester_id)
+    t1 = time.perf_counter()
+    logging.info(f"⏱️ [Courses] Query: {(t1 - t0) * 1000:.1f}ms ({len(courses)} rows)")
+    
+    # 批量获取 stats（避免 N+1）
+    t_stats = time.perf_counter()
+    course_ids = [course.id for course in courses]
+    stats_map = service.get_batch_course_stats(course_ids)
+    t_stats_done = time.perf_counter()
+    logging.info(f"⏱️ [Courses] Batch stats ({len(courses)} courses): {(t_stats_done - t_stats) * 1000:.1f}ms")
     
     # Convert to response format with semester info and stats
     course_list = []
     for course in courses:
-        # Get course statistics
-        stats = service.get_course_stats(course.id, course.user_id)
+        stats = stats_map.get(course.id, {"file_count": 0, "chat_count": 0})
         
         course_data = {
             "id": course.id,

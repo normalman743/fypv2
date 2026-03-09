@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Any
 from datetime import datetime
 from app.schemas.common import SuccessResponse
 
@@ -15,15 +15,25 @@ class FolderResponse(BaseModel):
     created_at: datetime
     stats: FolderStats
 
+class FolderListData(BaseModel):
+    folders: List[FolderResponse]
+
 class FolderListResponse(SuccessResponse):
-    data: dict  # {"folders": List[FolderResponse]}
+    data: FolderListData
 
 class CreateFolderRequest(BaseModel):
     name: str
     folder_type: str
 
+class CreateFolderInner(BaseModel):
+    id: int
+    created_at: Any
+
+class CreateFolderData(BaseModel):
+    folder: CreateFolderInner
+
 class CreateFolderResponse(SuccessResponse):
-    data: dict  # {"folder": {"id": int, "created_at": datetime}}
+    data: CreateFolderData
 
 class UpdateFolderRequest(BaseModel):
     name: Optional[str] = None

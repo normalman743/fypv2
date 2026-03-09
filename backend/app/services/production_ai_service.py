@@ -5,8 +5,8 @@ Production AI Service - Pure RAG + OpenAI Implementation
 
 import os
 import random
-from typing import Dict, List, Any, Optional
-from openai import OpenAI
+from typing import Dict, List, Any, Optional, AsyncGenerator
+from openai import AsyncOpenAI
 from app.services.ai_service import AIResponse
 
 # Import RAG service
@@ -18,7 +18,7 @@ except ImportError:
 
 # Import OpenAI
 try:
-    from openai import OpenAI
+    from openai import AsyncOpenAI
     OPENAI_AVAILABLE = True
 except ImportError:
     OPENAI_AVAILABLE = False
@@ -54,18 +54,16 @@ class ProductionAIService:
         except Exception as e:
             raise RuntimeError(f"Failed to initialize RAG service: {e}")
         
-        # 初始化OpenAI客户端
+        # 初始化OpenAI客户端（异步）
         try:
-            self.openai_client = OpenAI(api_key=api_key)
-            # 测试连接
-            self.openai_client.models.list()
-            print("🚀 OpenAI Client initialized")
+            self.openai_client = AsyncOpenAI(api_key=api_key)
+            print("🚀 AsyncOpenAI Client initialized")
         except Exception as e:
             raise RuntimeError(f"Failed to initialize OpenAI client: {e}")
         
         print("✅ Production AI Service ready")
     
-    def generate_response(self, message: str, chat_type: str = "general", course_id: int = None, 
+    async def generate_response(self, message: str, chat_type: str = "general", course_id: int = None, 
                          file_context: str = "", ai_model: str = "Star", search_enabled: bool = False,
                          conversation_history: list = None, stream: bool = False, images: list = None, 
                          custom_prompt: str = None) -> AIResponse:
@@ -158,7 +156,7 @@ class ProductionAIService:
         print(f"📝 Current User Message: {message}")
         print(f"📊 Total Messages to AI: {len(messages)} (1 system + {len(conversation_history or [])} history + 1 current)")
         
-        # 调用OpenAI API
+        # 调用OpenAI API (异步)
         try:
             # 为搜索预览模型准备特殊参数
             api_params = {
@@ -184,13 +182,13 @@ class ProductionAIService:
                         "include_usage": True
                     }
                 })
-                response = self.openai_client.chat.completions.create(**api_params)
+                response = await self.openai_client.chat.completions.create(**api_params)
                 
-                # 返回generator用于流式响应
+                # 返回async generator用于流式响应
                 return self._handle_stream_response(response, model_config, rag_sources)
             else:
                 # 非流式响应
-                response = self.openai_client.chat.completions.create(**api_params)
+                response = await self.openai_client.chat.completions.create(**api_params)
                 
                 content = response.choices[0].message.content
                 
@@ -216,13 +214,13 @@ class ProductionAIService:
         except Exception as e:
             raise RuntimeError(f"OpenAI API call failed: {e}")
     
-    def _handle_stream_response(self, response, model_config, rag_sources):
-        """处理流式响应"""
+    async def _handle_stream_response(self, response, model_config, rag_sources):
+        """处理流式响应（异步生成器）"""
         content = ""
         input_tokens = 0
         output_tokens = 0
         
-        for chunk in response:
+        async for chunk in response:
             print(f"🔍 Received chunk: {chunk}")  # 调试信息
             if hasattr(chunk, 'choices') and chunk.choices and chunk.choices[0].delta.content:
                 # 流式内容
@@ -270,10 +268,10 @@ class ProductionAIService:
                 "rag_sources": rag_sources
             }
     
-    def generate_chat_title(self, first_message: str) -> str:
+    async def generate_chat_title(self, first_message: str) -> str:
         """根据用户的第一条消息生成聊天标题"""
         try:
-            response = self.openai_client.chat.completions.create(
+            response = await self.openai_client.chat.completions.create(
                 model="gpt-4o",
                 messages=[
                     {
@@ -353,3 +351,13 @@ def create_ai_service() -> ProductionAIService:
         RuntimeError: 如果无法初始化Production服务
     """
     return ProductionAIService()
+
+
+_ai_service_instance: ProductionAIService = None
+
+def get_ai_service() -> ProductionAIService:
+    """获取全局单例AI服务，避免重复初始化RAG/OpenAI客户端"""
+    global _ai_service_instance
+    if _ai_service_instance is None:
+        _ai_service_instance = ProductionAIService()
+    return _ai_service_instance

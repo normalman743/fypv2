@@ -1,3 +1,5 @@
+import time
+import logging
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -27,10 +29,17 @@ async def get_semesters(
 ):
     """Get semester list"""
     service = SemesterService(db)
+    
+    t0 = time.perf_counter()
     semesters = service.get_semesters()
+    t1 = time.perf_counter()
+    logging.info(f"⏱️ [Semesters] Query: {(t1 - t0) * 1000:.1f}ms ({len(semesters)} rows)")
     
     # Convert to response format
+    t2 = time.perf_counter()
     semester_list = [SemesterResponse.model_validate(semester) for semester in semesters]
+    t3 = time.perf_counter()
+    logging.info(f"⏱️ [Semesters] Serialize: {(t3 - t2) * 1000:.1f}ms")
     
     return SemesterListResponse(
         success=True,
@@ -120,11 +129,14 @@ async def get_semester_courses(
     course_service = CourseService(db)
     courses = course_service.get_courses(user_id=current_user.id, semester_id=semester_id)
     
+    # 批量获取 stats（避免 N+1）
+    course_ids = [course.id for course in courses]
+    stats_map = course_service.get_batch_course_stats(course_ids)
+    
     # Convert to response format with semester info and stats
     course_list = []
     for course in courses:
-        # Get course statistics
-        stats = course_service.get_course_stats(course.id, course.user_id)
+        stats = stats_map.get(course.id, {"file_count": 0, "chat_count": 0})
         
         course_data = {
             "id": course.id,

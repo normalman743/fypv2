@@ -1,10 +1,12 @@
-from typing import List, Optional
-from sqlalchemy.orm import Session, joinedload
+from typing import List, Optional, Dict
+from sqlalchemy.orm import Session, joinedload, subqueryload
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func as sa_func
 
 from app.models.folder import Folder
 from app.models.course import Course
 from app.models.file import File
+from app.models.physical_file import PhysicalFile
 from app.schemas.folder import CreateFolderRequest, UpdateFolderRequest
 from app.core.exceptions import NotFoundError, ForbiddenError, BadRequestError
 
@@ -24,6 +26,83 @@ class FolderService:
             raise NotFoundError("Course not found or access denied", "COURSE_NOT_FOUND")
 
         return self.db.query(Folder).filter(Folder.course_id == course_id).all()
+
+    def get_batch_folder_stats(self, folder_ids: list) -> Dict[int, dict]:
+        """批量获取文件夹统计（一条 SQL 替代 N 条）"""
+        if not folder_ids:
+            return {}
+        rows = (
+            self.db.query(File.folder_id, sa_func.count(File.id))
+            .filter(File.folder_id.in_(folder_ids))
+            .group_by(File.folder_id)
+            .all()
+        )
+        stats = {fid: {"file_count": cnt} for fid, cnt in rows}
+        # 没有文件的文件夹也要返回 0
+        for fid in folder_ids:
+            if fid not in stats:
+                stats[fid] = {"file_count": 0}
+        return stats
+
+    def get_course_folders_with_files(self, course_id: int, user_id: int) -> List[dict]:
+        """一次性获取课程所有文件夹及其文件（替代 N+1 请求）"""
+        # 校验课程权限
+        course = self.db.query(Course).filter(
+            Course.id == course_id,
+            Course.user_id == user_id
+        ).first()
+        if not course:
+            raise NotFoundError("Course not found or access denied", "COURSE_NOT_FOUND")
+
+        # 一次查出所有文件夹
+        folders = self.db.query(Folder).filter(Folder.course_id == course_id).all()
+        folder_ids = [f.id for f in folders]
+
+        # 一次查出所有文件（JOIN physical_file）
+        files = []
+        if folder_ids:
+            files = (
+                self.db.query(File)
+                .options(joinedload(File.physical_file))
+                .filter(File.folder_id.in_(folder_ids))
+                .all()
+            )
+
+        # 按 folder_id 分组
+        files_by_folder: Dict[int, list] = {fid: [] for fid in folder_ids}
+        for f in files:
+            if f.folder_id in files_by_folder:
+                files_by_folder[f.folder_id].append(f)
+
+        result = []
+        for folder in folders:
+            folder_files = files_by_folder.get(folder.id, [])
+            result.append({
+                "id": folder.id,
+                "name": folder.name,
+                "folder_type": folder.folder_type,
+                "course_id": folder.course_id,
+                "is_default": folder.is_default,
+                "created_at": folder.created_at,
+                "stats": {"file_count": len(folder_files)},
+                "files": [
+                    {
+                        "id": file.id,
+                        "original_name": file.original_name,
+                        "file_type": file.file_type,
+                        "file_size": file.physical_file.file_size if file.physical_file else 0,
+                        "mime_type": file.physical_file.mime_type if file.physical_file else "unknown",
+                        "course_id": file.course_id,
+                        "folder_id": file.folder_id,
+                        "user_id": file.user_id,
+                        "is_processed": file.is_processed,
+                        "processing_status": file.processing_status,
+                        "created_at": file.created_at,
+                    }
+                    for file in folder_files
+                ]
+            })
+        return result
 
     def create_folder(self, course_id: int, folder_data: CreateFolderRequest, user_id: int) -> Folder:
         """Create new folder in course"""

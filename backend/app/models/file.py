@@ -59,10 +59,6 @@ class File(Base):
     folder = relationship("Folder", back_populates="files")
     course = relationship("Course", back_populates="files")
     user = relationship("User", back_populates="files")
-    
-    # 新增关系
-    shares = relationship("FileShare", back_populates="file", cascade="all, delete-orphan")
-    access_logs = relationship("FileAccessLog", back_populates="file", cascade="all, delete-orphan")
     document_chunks = relationship("DocumentChunk", back_populates="file", cascade="all, delete-orphan")
     
     @property

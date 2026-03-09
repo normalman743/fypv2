@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 from app.models.temporary_file import TemporaryFile
 from app.models.physical_file import PhysicalFile
+from app.utils.ai_context_utils import extract_file_content
 # from app.tasks.cleanup_tasks import cleanup_single_temporary_file
 import logging
 import os
@@ -100,7 +101,7 @@ class FileProcessingUtils:
                                             f"说明: 这是一个图像文件，用户可能希望你分析或讨论其内容。"
                         else:
                             # 文本文件：使用与RAG服务相同的解析逻辑
-                            content_preview = FileProcessingUtils._extract_text_content(full_path, file_ext, temp_file.original_name)
+                            content_preview = extract_file_content(full_path, file_ext, temp_file.original_name)
                         
                         contents.append(
                             f"文件: {temp_file.original_name}\n"
@@ -117,56 +118,3 @@ class FileProcessingUtils:
                     contents.append(f"文件: {temp_file.original_name} (读取失败: {str(e)})\n")
         
         return "\n---\n".join(contents) if contents else ""
-    
-    @staticmethod
-    def _extract_text_content(file_path: str, file_ext: str, original_name: str) -> str:
-        """使用与RAG服务相同的文件解析逻辑提取文本内容"""
-        try:
-            # 导入RAG服务的文档加载器
-            from langchain_community.document_loaders import (
-                PyPDFLoader, 
-                Docx2txtLoader, 
-                TextLoader,
-                UnstructuredMarkdownLoader
-            )
-            
-            # 与RAG服务相同的专门解析器配置
-            specialized_loaders = {
-                '.pdf': PyPDFLoader,
-                '.docx': Docx2txtLoader,
-                '.doc': Docx2txtLoader,
-                '.md': UnstructuredMarkdownLoader,
-            }
-            
-            # 选择合适的解析器
-            if file_ext in specialized_loaders:
-                loader_class = specialized_loaders[file_ext]
-                logger.info(f"临时文件使用专门解析器: {loader_class.__name__} for {file_ext}")
-            else:
-                loader_class = TextLoader
-                logger.info(f"临时文件使用通用TextLoader for {file_ext}")
-            
-            # 加载文档内容
-            loader = loader_class(file_path)
-            documents = loader.load()
-            
-            # 合并所有文档内容并限制长度
-            full_content = "\n\n".join([doc.page_content for doc in documents])
-            
-            # 限制内容长度
-            if len(full_content) > 2000:
-                content_preview = full_content[:2000] + "\n\n[内容已截断...]"
-            else:
-                content_preview = full_content
-                
-            return content_preview
-            
-        except Exception as e:
-            logger.error(f"临时文件专门解析器失败 {original_name}: {e}")
-            # 回退到简单的文本读取
-            try:
-                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                    return f.read(2000)
-            except Exception as fallback_e:
-                logger.error(f"临时文件回退文本读取也失败 {original_name}: {fallback_e}")
-                return f"[无法读取文件内容: {str(fallback_e)}]"

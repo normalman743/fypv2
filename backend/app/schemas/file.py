@@ -28,18 +28,24 @@ class FileResponse(BaseModel):
     created_at: datetime
     folder: Optional[FolderInfo] = None
 
+class FileListData(BaseModel):
+    files: List[FileResponse]
+
 class FileListResponse(SuccessResponse):
-    data: dict  # {"files": List[FileResponse]}
+    data: FileListData
 
 class FilePreviewResponse(SuccessResponse):
-    data: dict  # FileResponse fields
+    data: dict
 
 class UploadFileRequest(BaseModel):
     course_id: int
     folder_id: int
 
+class UploadFileData(BaseModel):
+    file: dict
+
 class UploadFileResponse(SuccessResponse):
-    data: dict  # {"file": FileResponse}
+    data: UploadFileData
 
 class TemporaryFileResponse(BaseModel):
     id: int
@@ -52,5 +58,8 @@ class TemporaryFileResponse(BaseModel):
     purpose: Optional[str] = None
     created_at: datetime
 
+class UploadTemporaryFileData(BaseModel):
+    file: dict
+
 class UploadTemporaryFileResponse(SuccessResponse):
-    data: dict  # {"file": TemporaryFileResponse} 
+    data: UploadTemporaryFileData

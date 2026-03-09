@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Any
 from datetime import datetime
 from app.schemas.common import SuccessResponse
 
@@ -24,21 +24,38 @@ class MessageResponse(BaseModel):
     file_attachments: List[FileAttachment] = []
     rag_sources: Optional[List[RAGSource]] = []
 
+class MessageListData(BaseModel):
+    messages: List[dict]
+
 class MessageListResponse(SuccessResponse):
-    data: dict  # {"messages": List[MessageResponse]}
+    data: MessageListData
 
 class SendMessageRequest(BaseModel):
     content: str
     file_ids: Optional[List[int]] = []
     folder_ids: Optional[List[int]] = []
-    temporary_file_tokens: Optional[List[str]] = []  # 临时文件通过token引用
-    stream: bool = False  # 是否启用streaming模式
+    temporary_file_tokens: Optional[List[str]] = []
+    stream: bool = False
 
 class EditMessageRequest(BaseModel):
     content: str
 
+class MessageSendData(BaseModel):
+    user_message: dict
+    ai_message: dict
+    chat_title_updated: bool = False
+    new_chat_title: Optional[str] = None
+
 class MessageSendResponse(SuccessResponse):
-    data: dict  # {"user_message": MessageResponse, "ai_message": MessageResponse, "chat_title_updated": bool, "new_chat_title": str}
+    data: MessageSendData
+
+class MessageUpdateInner(BaseModel):
+    id: int
+    content: str
+    created_at: Any
+
+class MessageUpdateData(BaseModel):
+    message: MessageUpdateInner
 
 class MessageUpdateResponse(SuccessResponse):
-    data: dict  # {"message": {"id": int, "content": str, "updated_at": datetime}} 
+    data: MessageUpdateData
