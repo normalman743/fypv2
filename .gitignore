@@ -153,3 +153,11 @@ debug_data/
 
 # reports
 reports/
+
+**/.claude/
+
+**/.github/
+
+/backend_v2/
+
+.DS_Store
