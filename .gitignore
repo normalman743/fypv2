@@ -156,8 +156,10 @@ reports/
 
 **/.claude/
 
-**/.github/
+backend_v2/
+campus-llm-demo/
+files/
+frontend/
+frontendtest/
 
-/backend_v2/
-
-.DS_Store
+**/.DS_Store
