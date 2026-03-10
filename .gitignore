@@ -150,7 +150,7 @@ scripts/debug_*.py
 # Local testing data
 test_data/
 debug_data/
-test/
+
 # reports
 reports/
 
@@ -163,3 +163,4 @@ frontend/
 frontendtest/
 
 **/.DS_Store
+test/

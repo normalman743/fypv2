@@ -34,17 +34,10 @@ class RateLimiter:
         self.requests = defaultdict(list)
         self.max_requests = 100  # 每分钟最多100个请求
         self.window = timedelta(minutes=1)
-        self._last_cleanup = datetime.now()
-        self._cleanup_interval = timedelta(minutes=5)
     
     def is_allowed(self, client_ip: str) -> bool:
         now = datetime.now()
-        
-        # 定期全局清理，防止内存泄漏
-        if now - self._last_cleanup > self._cleanup_interval:
-            self._global_cleanup(now)
-        
-        # 清理当前IP过期的请求记录
+        # 清理过期的请求记录
         self.requests[client_ip] = [
             req_time for req_time in self.requests[client_ip]
             if now - req_time < self.window
@@ -55,16 +48,6 @@ class RateLimiter:
         # 记录新请求
         self.requests[client_ip].append(now)
         return True
-    
-    def _global_cleanup(self, now: datetime):
-        """清理所有过期IP记录，防止内存无限增长"""
-        expired_ips = [
-            ip for ip, times in self.requests.items()
-            if not times or (now - max(times)) > self.window
-        ]
-        for ip in expired_ips:
-            del self.requests[ip]
-        self._last_cleanup = now
 
 rate_limiter = RateLimiter()
 
@@ -189,32 +172,14 @@ async def root():
     }
 
 # 导入路由
-from app.api.v1 import auth, semesters, courses, folders, files, chats, messages, admin
-
-# 启动时预热连接池 + AI服务
-@app.on_event("startup")
-async def startup_event():
-    import logging
-    import asyncio
-    from app.models.database import warmup_pool, test_db_latency
-    # 异步预热连接池（放到线程池避免阻塞事件循环）
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, warmup_pool)
-    # 测试数据库单次往返延迟
-    await loop.run_in_executor(None, test_db_latency)
-    # 预热 AI 服务（避免第一次请求延迟初始化）
-    try:
-        from app.services.production_ai_service import get_ai_service
-        get_ai_service()
-        logging.info("启动预热完成")
-    except Exception as e:
-        logging.warning(f"AI服务预热失败（不影响其他功能）: {e}")
+from app.api.v1 import auth, semesters, courses, folders, files, chats, messages, admin, unified_files
 
 # 注册路由
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(semesters.router, prefix="/api/v1")
 app.include_router(courses.router, prefix="/api/v1")
 app.include_router(folders.router, prefix="/api/v1")
+app.include_router(unified_files.router, prefix="/api/v1")  # 统一文件管理 (优先级高)
 app.include_router(files.router, prefix="/api/v1")
 app.include_router(chats.router, prefix="/api/v1")
 app.include_router(messages.router, prefix="/api/v1")

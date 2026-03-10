@@ -17,10 +17,14 @@ from .folder import Folder
 from .file import File
 from .physical_file import PhysicalFile
 from .document_chunk import DocumentChunk
+from .file_share import FileShare, FileAccessLog, FileGroup, FileGroupMember  # 新增文件共享模型
 from .chat import Chat
 from .message import Message
-from .message_reference import MessageFileReference, MessageRAGSource
-from .temporary_file import TemporaryFile
+from .permission import Permission, Role, SubjectRole  # 权限系统模型
+from .message_reference import MessageFileReference, MessageRAGSource  # 消息关联模型
+from .audit_log import AuditLog  # 审计日志模型
+from .system_config import SystemConfig  # 系统配置模型
+from .temporary_file import TemporaryFile  # 临时文件模型
 
 # Export all models
 __all__ = [
@@ -41,6 +45,10 @@ __all__ = [
     'File',
     'PhysicalFile',
     'DocumentChunk',
+    'FileShare',
+    'FileAccessLog', 
+    'FileGroup',
+    'FileGroupMember',
     
     # Chat system
     'Chat',
@@ -48,6 +56,13 @@ __all__ = [
     'MessageFileReference',
     'MessageRAGSource',
     
-    # Temporary files
+    # Permission system
+    'Permission',
+    'Role', 
+    'SubjectRole',
+    
+    # System management
+    'AuditLog',
+    'SystemConfig',
     'TemporaryFile',
 ]

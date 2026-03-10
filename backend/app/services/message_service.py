@@ -13,13 +13,9 @@ from app.models.user import User
 from app.models.message_reference import MessageFileReference, MessageRAGSource
 from app.models.temporary_file import TemporaryFile
 from app.schemas.message import SendMessageRequest, EditMessageRequest
-from app.services.production_ai_service import get_ai_service
+from app.services.production_ai_service import create_ai_service
 from app.core.exceptions import NotFoundError, ForbiddenError, BadRequestError
-from app.utils.ai_context_utils import (
-    get_files_from_folders_and_files,
-    get_file_contents_for_ai,
-    prepare_images_for_ai,
-)
+from app.utils.image_utils import image_to_base64, get_image_mime_type, is_image_file
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +23,218 @@ logger = logging.getLogger(__name__)
 class MessageService:
     def __init__(self, db: Session):
         self.db = db
-        self.ai_service = get_ai_service()
+        self.ai_service = create_ai_service()
+
+    def _get_files_from_folders_and_files(self, file_ids: List[int], folder_ids: List[int], user_id: int) -> tuple[List[File], List[int]]:
+        """获取文件夹中的文件和直接指定的文件，合并去重"""
+        all_files = []
+        all_file_ids = []
+        
+        # 处理直接指定的文件
+        if file_ids:
+            files = self.db.query(File).filter(File.id.in_(file_ids)).all()
+            if len(files) != len(file_ids):
+                raise BadRequestError("Some files not found", "FILE_NOT_FOUND")
+            all_files.extend(files)
+            all_file_ids.extend(file_ids)
+        
+        # 处理文件夹中的文件
+        if folder_ids:
+            folders = self.db.query(Folder).filter(Folder.id.in_(folder_ids)).all()
+            if len(folders) != len(folder_ids):
+                raise BadRequestError("Some folders not found", "FOLDER_NOT_FOUND")
+            
+            # 验证文件夹权限
+            for folder in folders:
+                course = self.db.query(Course).filter(
+                    Course.id == folder.course_id,
+                    Course.user_id == user_id
+                ).first()
+                if not course:
+                    raise ForbiddenError("Access denied to some folders")
+            
+            # 获取文件夹中的文件
+            for folder_id in folder_ids:
+                folder_files = self.db.query(File).filter(File.folder_id == folder_id).all()
+                all_files.extend(folder_files)
+                all_file_ids.extend([f.id for f in folder_files])
+        
+        # 去重
+        unique_file_ids = list(set(all_file_ids))
+        unique_files = []
+        seen_ids = set()
+        
+        for file in all_files:
+            if file.id not in seen_ids:
+                unique_files.append(file)
+                seen_ids.add(file.id)
+        
+        # 验证所有文件的权限
+        for file in unique_files:
+            if file.course_id:
+                course = self.db.query(Course).filter(
+                    Course.id == file.course_id,
+                    Course.user_id == user_id
+                ).first()
+                if not course:
+                    raise ForbiddenError("Access denied to some files")
+        
+        return unique_files, unique_file_ids
+
+    def _get_file_contents_for_ai(self, files: List[File]) -> str:
+        """获取文件内容用于AI上下文 - 直接从磁盘读取，与临时文件处理保持一致"""
+        if not files:
+            return ""
+        
+        context_parts = []
+        for file in files:
+            try:
+                # 获取物理文件路径
+                if file.physical_file and file.physical_file.storage_path:
+                    from app.core.config import settings
+                    full_path = os.path.join(settings.upload_dir, file.physical_file.storage_path)
+                    
+                    if os.path.exists(full_path):
+                        # 使用与RAG服务相同的文件解析逻辑
+                        file_ext = os.path.splitext(file.original_name)[1].lower()
+                        content_preview = self._extract_file_content(full_path, file_ext, file.original_name)
+                        
+                        context_parts.append(
+                            f"文件: {file.original_name}\n"
+                            f"类型: 正式文件\n"
+                            f"内容:\n{content_preview}\n"
+                        )
+                    else:
+                        # 文件不存在，回退到使用数据库中的预览
+                        if file.is_processed and file.content_preview:
+                            context_parts.append(f"文件名: {file.original_name}\n内容预览:\n{file.content_preview}\n")
+                else:
+                    # 没有物理文件路径，回退到使用数据库中的预览
+                    if file.is_processed and file.content_preview:
+                        context_parts.append(f"文件名: {file.original_name}\n内容预览:\n{file.content_preview}\n")
+            except Exception as e:
+                logger.error(f"无法读取文件内容: {file.original_name}, 错误: {str(e)}")
+                # 回退到使用数据库中的预览
+                if file.is_processed and file.content_preview:
+                    context_parts.append(f"文件名: {file.original_name}\n内容预览:\n{file.content_preview}\n")
+        
+        return "\n---\n".join(context_parts) if context_parts else ""
+
+    def _extract_file_content(self, file_path: str, file_ext: str, original_name: str) -> str:
+        """使用与RAG服务相同的文件解析逻辑提取文件内容"""
+        try:
+            # 导入RAG服务的文档加载器
+            from langchain_community.document_loaders import (
+                PyPDFLoader, 
+                Docx2txtLoader, 
+                TextLoader,
+                UnstructuredMarkdownLoader
+            )
+            
+            # 与RAG服务相同的专门解析器配置
+            specialized_loaders = {
+                '.pdf': PyPDFLoader,
+                '.docx': Docx2txtLoader,
+                '.doc': Docx2txtLoader,
+                '.md': UnstructuredMarkdownLoader,
+            }
+            
+            # 选择合适的解析器
+            if file_ext in specialized_loaders:
+                loader_class = specialized_loaders[file_ext]
+                logger.info(f"使用专门解析器: {loader_class.__name__} for {file_ext}")
+            else:
+                loader_class = TextLoader
+                logger.info(f"使用通用TextLoader for {file_ext}")
+            
+            # 加载文档内容
+            loader = loader_class(file_path)
+            documents = loader.load()
+            
+            # 合并所有文档内容并限制长度
+            full_content = "\n\n".join([doc.page_content for doc in documents])
+            
+            # 限制内容长度（与临时文件处理保持一致）
+            if len(full_content) > 2000:
+                content_preview = full_content[:2000] + "\n\n[内容已截断...]"
+            else:
+                content_preview = full_content
+                
+            return content_preview
+            
+        except Exception as e:
+            logger.error(f"使用专门解析器失败 {original_name}: {e}")
+            # 回退到简单的文本读取
+            try:
+                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    return f.read(2000)
+            except Exception as fallback_e:
+                logger.error(f"回退文本读取也失败 {original_name}: {fallback_e}")
+                return f"[无法读取文件内容: {str(fallback_e)}]"
+
+    def _prepare_images_for_ai(self, temporary_files: List[TemporaryFile]) -> List[Dict[str, Any]]:
+        """
+        准备图片文件用于AI处理
+        
+        Args:
+            temporary_files: 临时文件列表
+            
+        Returns:
+            图片数据列表，格式适合AI API调用
+        """
+        images = []
+        image_count = 0
+        
+        for temp_file in temporary_files:
+            if is_image_file(temp_file.original_name):
+                image_count += 1
+                # 获取物理文件路径
+                if temp_file.physical_file and temp_file.physical_file.storage_path:
+                    storage_path = temp_file.physical_file.storage_path
+                    logger.info(f"   原始存储路径: {storage_path}")
+                    
+                    # 如果路径是相对路径，拼接完整路径
+                    if not os.path.isabs(storage_path):
+                        from app.services.local_file_storage import local_file_storage
+                        base_dir = str(local_file_storage.base_dir)
+                        logger.info(f"   Base目录: {base_dir}")
+                        
+                        # 检查是否已经包含base_dir路径，避免重复拼接
+                        if storage_path.startswith('storage/uploads/'):
+                            # 去掉前缀，直接使用当前工作目录拼接
+                            file_path = os.path.join(os.getcwd(), storage_path)
+                        else:
+                            file_path = os.path.join(base_dir, storage_path)
+                    else:
+                        file_path = storage_path
+                        
+                    logger.info(f"   最终文件路径: {file_path}")
+                    logger.info(f"   文件是否存在: {os.path.exists(file_path)}")
+                    
+                    # 转换为base64
+                    base64_image = image_to_base64(file_path)
+                    if base64_image:
+                        mime_type = get_image_mime_type(temp_file.original_name)
+                        images.append({
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{mime_type};base64,{base64_image}"
+                            }
+                        })
+                        # 添加base64数据调试日志
+                        logger.info(f"🖼️ 准备图片 {image_count}: {temp_file.original_name} ({mime_type})")
+                        logger.info(f"   Base64长度: {len(base64_image)} 字符")
+                        logger.info(f"   Base64前缀: {base64_image[:50]}...")
+                        logger.info(f"   完整URL: data:{mime_type};base64,{base64_image[:100]}...")
+                    else:
+                        logger.warning(f"❌ 图片 {image_count}: {temp_file.original_name} 转换base64失败")
+                else:
+                    logger.warning(f"❌ 图片 {image_count}: {temp_file.original_name} 物理文件路径缺失")
+        
+        if image_count > 0:
+            logger.info(f"📊 图片处理总结: 发现 {image_count} 个图片文件，成功准备 {len(images)} 个")
+        
+        return images
 
     def get_chat_messages(self, chat_id: int, user_id: int) -> List[Message]:
         """Get all messages in a chat (check chat ownership)"""
@@ -44,7 +251,7 @@ class MessageService:
             joinedload(Message.rag_sources_tracked)
         ).filter(Message.chat_id == chat_id).order_by(Message.created_at.asc()).all()
 
-    async def send_message(self, chat_id: int, message_data: SendMessageRequest, user_id: int) -> dict:
+    def send_message(self, chat_id: int, message_data: SendMessageRequest, user_id: int) -> dict:
         """Send message and get AI response"""
         
         logger.info(f"📨 发送消息到聊天 {chat_id}，用户 {user_id}")
@@ -59,8 +266,7 @@ class MessageService:
             raise NotFoundError("Chat not found", "CHAT_NOT_FOUND")
 
         # 处理文件夹和文件ID，合并去重
-        files, unique_file_ids = get_files_from_folders_and_files(
-            self.db,
+        files, unique_file_ids = self._get_files_from_folders_and_files(
             message_data.file_ids or [], 
             message_data.folder_ids or [], 
             user_id
@@ -96,7 +302,7 @@ class MessageService:
                 temporary_files.append(temp_file)
         
         # 获取文件内容用于AI上下文（包括临时文件）
-        file_context = get_file_contents_for_ai(files)
+        file_context = self._get_file_contents_for_ai(files)
         
         # 从历史消息中提取临时文件（如果当前消息没有临时文件）
         historical_temporary_files, historical_expired_files = self._extract_temporary_files_from_history(chat_id, temporary_files)
@@ -267,12 +473,12 @@ class MessageService:
             logger.info(f"📚 历史对话({chat.context_mode}模式): {len(conversation_history)} 条消息 (限制:{message_limit})")
             
             # Prepare images for AI
-            images = prepare_images_for_ai(all_temporary_files)
+            images = self._prepare_images_for_ai(all_temporary_files)
             
             # Generate AI response with file context
             logger.info(f"🤖 调用AI服务生成回复...")
             logger.info(f"   模型: {chat.ai_model} (搜索: {chat.search_enabled})")
-            ai_response = await self.ai_service.generate_response(
+            ai_response = self.ai_service.generate_response(
                 message=message_data.content,
                 chat_type=chat.chat_type,
                 course_id=chat.course_id,
@@ -321,7 +527,7 @@ class MessageService:
             # If this is the first user message and chat has default title, update it
             if message_count == 1 and chat.title == "新聊天":
                 logger.info(f"🏷️ 生成聊天标题...")
-                new_chat_title = await self.ai_service.generate_chat_title(message_data.content)
+                new_chat_title = self.ai_service.generate_chat_title(message_data.content)
                 chat.title = new_chat_title
                 chat_title_updated = True
                 logger.info(f"   新标题: {new_chat_title}")
@@ -371,7 +577,7 @@ class MessageService:
             self.db.rollback()
             raise BadRequestError("Failed to send message", "MESSAGE_SEND_FAILED")
 
-    async def send_message_stream(self, chat_id: int, message_data: SendMessageRequest, user_id: int):
+    def send_message_stream(self, chat_id: int, message_data: SendMessageRequest, user_id: int):
         """流式发送消息和获取AI回复"""
         
         logger.info(f"📨 流式发送消息到聊天 {chat_id}，用户 {user_id}")
@@ -391,8 +597,7 @@ class MessageService:
             raise InsufficientBalanceError("余额不足，请充值后继续使用AI模型")
 
         # 处理文件夹和文件ID，合并去重
-        files, unique_file_ids = get_files_from_folders_and_files(
-            self.db,
+        files, unique_file_ids = self._get_files_from_folders_and_files(
             message_data.file_ids or [], 
             message_data.folder_ids or [], 
             user_id
@@ -419,7 +624,7 @@ class MessageService:
                 temporary_files.append(temp_file)
 
         # 获取文件内容用于AI上下文
-        file_context = get_file_contents_for_ai(files)
+        file_context = self._get_file_contents_for_ai(files)
         
         # 从历史消息中提取临时文件（如果当前消息没有临时文件）
         historical_temporary_files, historical_expired_files = self._extract_temporary_files_from_history(chat_id, temporary_files)
@@ -577,10 +782,10 @@ class MessageService:
             }
 
             # Prepare images for AI
-            images = prepare_images_for_ai(all_temporary_files)
+            images = self._prepare_images_for_ai(all_temporary_files)
             
             # Generate AI response with streaming
-            ai_stream = await self.ai_service.generate_response(
+            ai_stream = self.ai_service.generate_response(
                 message=message_data.content,
                 chat_type=chat.chat_type,
                 course_id=chat.course_id,
@@ -608,7 +813,7 @@ class MessageService:
 
             # Process stream
             full_content = ""
-            async for chunk in ai_stream:
+            for chunk in ai_stream:
                 if chunk["type"] == "content":
                     full_content += chunk["content"]
                     yield {
@@ -640,7 +845,7 @@ class MessageService:
                     chat_title_updated = False
                     new_chat_title = None
                     if message_count == 1 and chat.title == "新聊天":
-                        new_chat_title = await self.ai_service.generate_chat_title(message_data.content)
+                        new_chat_title = self.ai_service.generate_chat_title(message_data.content)
                         chat.title = new_chat_title
                         chat_title_updated = True
 

@@ -52,9 +52,9 @@ async def send_message(
     
     if message_data.stream:
         # 流式响应
-        async def generate_stream():
+        def generate_stream():
             try:
-                async for chunk in service.send_message_stream(chat_id, message_data, current_user.id):
+                for chunk in service.send_message_stream(chat_id, message_data, current_user.id):
                     yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
                 yield "data: [DONE]\n\n"
             except Exception as e:
@@ -73,7 +73,7 @@ async def send_message(
         )
     else:
         # 非流式响应
-        result = await service.send_message(chat_id, message_data, current_user.id)
+        result = service.send_message(chat_id, message_data, current_user.id)
         return MessageSendResponse(
             success=True,
             data=result

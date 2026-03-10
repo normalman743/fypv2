@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, List, Any
+from typing import Optional
 from datetime import datetime
 
 from app.schemas.common import BaseResponse
@@ -44,28 +44,12 @@ class CourseResponse(CourseBase):
         from_attributes = True
 
 
-class CourseListData(BaseModel):
-    courses: List[CourseResponse]
-
 class CourseListResponse(BaseResponse):
-    data: CourseListData
+    data: dict  # {"courses": List[CourseResponse]}
 
-class CourseCreateInner(BaseModel):
-    id: int
-    created_at: Any
-
-class CourseCreateData(BaseModel):
-    course: CourseCreateInner
 
 class CourseCreateResponse(BaseResponse):
-    data: CourseCreateData
-
-class CourseUpdateInner(BaseModel):
-    id: int
-    updated_at: Any
-
-class CourseUpdateData(BaseModel):
-    course: CourseUpdateInner
+    data: dict  # {"course": {"id": int, "created_at": datetime}}
 
 class CourseUpdateResponse(BaseResponse):
-    data: CourseUpdateData
+    data: dict  # {"course": {"id": int, "updated_at": datetime}}

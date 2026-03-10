@@ -1,5 +1,3 @@
-import time
-import logging
 from fastapi import APIRouter, Depends, Path
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -30,18 +28,7 @@ async def get_chats(
 ):
     """Get user's chat list"""
     service = ChatService(db)
-    
-    t0 = time.perf_counter()
     chats = service.get_user_chats(current_user.id)
-    t1 = time.perf_counter()
-    logging.info(f"⏱️ [Chats] Query chats: {(t1 - t0) * 1000:.1f}ms ({len(chats)} rows)")
-    
-    # 批量查询所有 chat 的 message_count（单条 SQL，避免 N+1）
-    t_stats = time.perf_counter()
-    chat_ids = [chat.id for chat in chats]
-    stats_map = service.get_batch_chat_stats(chat_ids)
-    t_stats_done = time.perf_counter()
-    logging.info(f"⏱️ [Chats] Batch stats ({len(chats)} chats): {(t_stats_done - t_stats) * 1000:.1f}ms")
     
     # Convert to response format
     chat_list = []
@@ -55,7 +42,8 @@ async def get_chats(
                 code=chat.course.code
             )
         
-        stats = stats_map.get(chat.id, {"message_count": 0})
+        # Get chat stats
+        stats = service.get_chat_stats(chat)
         
         chat_data = ChatResponse(
             id=chat.id,
@@ -91,9 +79,9 @@ async def create_chat(
     
     if chat_data.stream:
         # 流式响应
-        async def generate_stream():
+        def generate_stream():
             try:
-                async for chunk in service.create_chat_with_first_message_stream(chat_data, current_user.id):
+                for chunk in service.create_chat_with_first_message_stream(chat_data, current_user.id):
                     yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
                 yield "data: [DONE]\n\n"
             except Exception as e:
@@ -115,7 +103,7 @@ async def create_chat(
         import logging
         try:
             logging.info(f"[Chat] Creating chat - type: {chat_data.chat_type}, course_id: {chat_data.course_id}, temp_tokens: {len(chat_data.temporary_file_tokens or [])}")
-            result = await service.create_chat_with_first_message(chat_data, current_user.id)
+            result = service.create_chat_with_first_message(chat_data, current_user.id)
             return ChatCreateResponse(
                 success=True,
                 data=result

@@ -21,7 +21,7 @@ from app.schemas.invite_code import (
 from app.schemas.system import SystemConfigResponse, AuditLogsResponse
 from app.schemas.common import SuccessResponse
 from app.core.exceptions import NotFoundError, BadRequestError
-from app.services.file_service import FileService
+from app.services.unified_file_service import UnifiedFileService
 
 router = APIRouter(tags=["管理员"])
 
@@ -188,15 +188,17 @@ async def get_audit_logs(
 async def upload_global_file(
     file: UploadFile = File(...),
     description: str = Form(None),
-    tags: str = Form(None),
-    visibility: str = Form('public'),
+    tags: str = Form(None),  # 建议前端传json字符串
+    visibility: str = Form('public'),  # 新增可见性控制
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
     """
     上传全局文件（管理员专用）
+    使用统一文件服务代替原有的 GlobalFileService
     """
     try:
+        # 文件大小检查 - 使用流式处理避免内存溢出
         from app.core.config import settings
         from app.utils.file_stream_utils import check_file_size_limit
         
@@ -207,12 +209,14 @@ async def upload_global_file(
                 detail=f"文件大小超过限制 ({file_size} bytes > {settings.max_file_size} bytes)"
             )
         
+        # 解析tags
         tags_list = json.loads(tags) if tags else []
 
-        file_service = FileService(db)
-        file_record = file_service.upload_global_file(
+        service = UnifiedFileService(db)
+        file_record = service.upload_file(
             file=file,
             user_id=current_user.id,
+            scope='global',
             description=description,
             tags=tags_list,
             visibility=visibility
@@ -276,7 +280,7 @@ async def reprocess_file_rag(
         db.commit()
         
         if use_async:
-            # 异步处理 - 传递文件路径而非文件内容（避免内存爆炸）
+            # 异步处理 - 流式读取文件内容
             from app.tasks.file_processing import process_file_rag_task
             from app.core.config import settings
             
@@ -288,7 +292,10 @@ async def reprocess_file_rag(
                     detail=f"文件太大无法重新处理 ({file_size} bytes > {settings.max_file_size} bytes)"
                 )
             
-            task = process_file_rag_task.delay(file_id, str(full_path))
+            with open(full_path, 'rb') as f:
+                file_content = f.read()
+            
+            task = process_file_rag_task.delay(file_id, file_content)
             
             return SuccessResponse(
                 data={
@@ -332,15 +339,24 @@ async def reprocess_file_rag(
 async def get_global_files(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
-    visibility: Optional[str] = Query(None),
+    visibility: Optional[str] = Query(None),  # 可根据可见性过滤
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
     """获取全局文件列表（管理员专用）"""
     try:
-        file_service = FileService(db)
-        files = file_service.get_global_files(visibility=visibility)
+        service = UnifiedFileService(db)
+        files = service.get_accessible_files(
+            user_id=current_user.id,
+            scope='global',
+            include_shared=True
+        )
         
+        # 按可见性过滤
+        if visibility:
+            files = [f for f in files if f.visibility == visibility]
+        
+        # 分页
         total = len(files)
         files_page = files[skip:skip + limit]
         
@@ -383,22 +399,21 @@ async def delete_global_file(
 ):
     """删除全局文件（管理员专用）"""
     try:
-        from app.models.file import File as FileModel
-        file_record = db.query(FileModel).filter(FileModel.id == file_id).first()
+        # 验证文件确实是全局文件
+        from app.models.file import File
+        file_record = db.query(File).filter(File.id == file_id).first()
         if not file_record:
             raise HTTPException(status_code=404, detail="File not found")
         
         if file_record.scope != 'global':
             raise HTTPException(status_code=400, detail="This is not a global file")
         
-        file_service = FileService(db)
-        success = file_service.delete_global_file(file_id)
+        service = UnifiedFileService(db)
+        success = service.delete_file(file_id, current_user.id)
         
         if success:
             return SuccessResponse(data={"message": "Global file deleted successfully"})
         else:
             raise HTTPException(status_code=500, detail="Failed to delete global file")
-    except HTTPException:
-        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
